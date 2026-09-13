@@ -10,9 +10,18 @@
 <p>The 0.6.0 pre-generation (pre-gen) track explores shared simulation and visualization systems before their public API is fixed. Media below is test-generated proof from verified development runs, not final product footage.</p>
 <p>Only the latest image and video are retained for each category. A newer proof replaces the previous one to keep the public site small.</p>
 <h3 id="water-and-shared-physics">Water and shared physics</h3>
-<p><img loading="lazy" src="./previews/0.6.0/test-generated-videos/water/latest.png" alt="Generated stone entering a bounded water chamber during an internal 0.6.0 verification run"></p>
-<p><a href="./previews/0.6.0/test-generated-videos/water/latest.mp4">Watch the latest water test video</a></p>
-<p>Current proof covers a generated stone, shared 3D rigid-body and liquid state, gravity at <code>-9.82 m/s²</code>, two low rebounds, rest and a chamber-wide connected water surface. It does not represent a released feature or final splash model.</p>
+<figure class="readme-video"><video controls playsinline preload="metadata" poster="./previews/0.6.0/test-generated-videos/water/latest.png" aria-label="Generated stone and water test — 10 second slowed playback"><source src="./previews/0.6.0/test-generated-videos/water/latest.mp4" type="video/mp4"></video><figcaption>Generated stone and water test — 10 second slowed playback</figcaption></figure>
+<p>Current proof covers a generated stone, shared 3D rigid-body and liquid state, gravity at <code>-9.82 m/s²</code>, two low rebounds, rest and a chamber-wide connected water surface. Playback is deliberately slowed to ten seconds so the fall, contact and water response remain visible. It does not represent a released feature or final splash model.</p>
+<h3 id="generated-stones">Generated stones</h3>
+<p><img loading="lazy" src="./previews/0.6.0/test-generated-images/stones/latest.png" alt="Five generated stones resting on exact multi-support contacts without mesh overlap"></p>
+<p>This proof uses five current generated stone meshes and the shared rigid-contact model. Every retained contact is checked against the triangles; intersecting placements do not pass the proof.</p>
+<h3 id="tree-generation">Tree generation</h3>
+<p><img loading="lazy" src="./previews/0.6.0/test-generated-images/tree/latest.png" alt="Portrait capture of a generated tree with a denser recursively branching crown"></p>
+<p>The current tree proof uses four supporting crown sections, recursively divided branches and a common bark field across the whole woody network. Bark includes high-frequency spatial variation. Roughness changes continuously with radius, so thinner branches become smoother without a material jump at a fork. Retained leaves use hard contact and elastic petiole bending rather than visible overlap.</p>
+<h3 id="stanford-bunny-and-planar-mirrors">Stanford Bunny and planar mirrors</h3>
+<p><img loading="lazy" src="./previews/0.6.0/test-generated-images/stanford-bunny-mirror/latest.png" alt="Stanford Bunny lit by circulating red and green lights above a planar mirror"></p>
+<p>This is the current red-and-green-light Stanford Bunny scene rendered by the same developing 3D pipeline. A planar mirror reflects the camera across its plane, uses the mirror rectangle as an off-axis viewing aperture, clips geometry behind the plane, renders the reflected scene into a texture, then samples that texture on the mirror surface. The bunny and lights are not duplicated scene objects. Curved mirrors will require a different mapping and are not claimed by this proof.</p>
+<p>The Stanford Bunny mesh comes from the Stanford Computer Graphics Laboratory and is used here for non-commercial research and educational development.</p>
 <h3 id="sand">Sand</h3>
 <p>Sand is an active 0.6.0 category. Its public image and video will appear when the current dense-grain surface proof meets the verification bar. Older coarse or reflective prototypes are not presented as current work.</p>
 <h3 id="later-categories">Later categories</h3>

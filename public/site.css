@@ -76,6 +76,15 @@ select:focus-visible, textarea:focus-visible {
 .readme :is(h1, h2, h3, h4) { scroll-margin-top: 24px; }
 .readme p { margin: 1em 0; }
 .readme img { max-width: 100%; height: auto; }
+.readme-video { margin: 1.25rem 0; }
+.readme-video video {
+  display: block;
+  width: 100%;
+  max-height: min(75vh, 760px);
+  border-radius: 10px;
+  background: #05070b;
+}
+.readme-video figcaption { margin-top: .45rem; color: var(--muted); font-size: .88rem; }
 .readme blockquote {
   margin-left: 0;
   border-left: 4px solid var(--rule);
@@ -99,8 +108,8 @@ select:focus-visible, textarea:focus-visible {
 .readme th { white-space: nowrap; }
 .readme tr:nth-child(2n) { background: #f6f8fa; }
 .benchmark-table table { width: max-content; min-width: max(100%, 62rem); }
-.benchmark-table th, .benchmark-table td { min-width: 8rem; vertical-align: top; }
-.benchmark-table th:first-child, .benchmark-table td:first-child { min-width: 18rem; }
+.benchmark-table th, .benchmark-table td { min-width: 8rem; vertical-align: top; white-space: nowrap; }
+.benchmark-table th:first-child, .benchmark-table td:first-child { width: 18rem; min-width: 18rem; }
 
 .readme-example { margin: 16px 0; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
 .readme-example-bar {
