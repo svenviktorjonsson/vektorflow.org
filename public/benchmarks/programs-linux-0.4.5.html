@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="description" content="Vektor Flow: a few powerful principles for calculations, data and visual programs. Try supported examples in your browser."><title>VKF 0.4.5 documented-program proof · Vektor Flow</title><link rel="canonical" href="https://vektorflow.org/benchmarks/programs-linux-0.4.5.html"><link rel="stylesheet" href="../site.css"></head><body><a class="skip-link" href="#readme-documentation">Skip to content</a><header class="site-nav"><a class="wordmark" href="../index.html">Vektor Flow</a><nav aria-label="Main navigation"><a href="../guide.html">Guide</a><a href="../reference.html">Syntax</a><a href="../standard-library.html">Std lib</a><a href="../performance.html">Performance</a><a href="../install.html">Download</a></nav><label class="release-selector" for="vkf-release-version">Release <select id="vkf-release-version" data-latest="0.4.5" aria-label="VKF release version"><option value="0.4.5" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.5/vkf-shared-compiler.wasm?sha256=0146e4996ebb505f9fc4808f4825282ad5783ee9021e738a19ad568aaf3e366c" selected>0.4.5</option><option value="0.4.4" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.4/vkf-shared-compiler.wasm?sha256=6d783e8cd1ee9f2459d4d1980d0de6e92da92c781ef83f5d94018e773273ab06">0.4.4</option><option value="0.4.3" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.3/vkf-shared-compiler.wasm?sha256=0317b212c0ca899f27cce30c4dca08c49145903030f2e95fcabc2a422d36252d">0.4.3</option><option value="0.4.0" data-browser-wasm="">0.4.0</option></select></label></header><main class="documentation"><article id="readme-documentation" class="readme"><h1 id="vkf-045-documented-program-proof">VKF 0.4.5 documented-program proof</h1>
+<p>Generated 2026-09-13T07:04:12.208Z. Every example was compiled from 10 fresh paths and executed in 10 fresh operating-system processes.</p>
+<h2 id="conditions">Conditions</h2>
+<ul><li>OS: <code>linux 6.17.0-1022-azure</code></li><li>Architecture: <code>x64</code></li><li>CPU: AMD EPYC 7763 64-Core Processor (4 logical CPUs)</li><li>Native compiler: 6634744 bytes, SHA-256 <code>38333edb7995cf549348c64c16c11e279e545fdbf18e7d4fa99e2ed61679e3a0</code></li><li>Compile verification: 10 fresh source paths per example.</li><li>Runtime verification: 10 fresh-process runs per example.</li><li>Working directory: one isolated temporary directory per example, reused across its runs.</li></ul>
+<h2 id="output-stability">Output stability</h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table><thead><tr><th scope="col">Example</th><th scope="col">Source bytes</th><th scope="col">Source SHA-256</th><th scope="col">Output</th></tr></thead><tbody><tr><td><code>core/01-bindings.vkf</code></td><td>68</td><td><code>1a692e29ebcfe2cbdb3486cc44bf390ff39e4b0f11732942a86b218aeb265324</code></td><td>10/10 identical</td></tr><tr><td><code>core/02-bind-expression.vkf</code></td><td>24</td><td><code>3053708ebf0df7c8eb9a3304dca3c081224269beba850fb61f5ec0185c9f1000</code></td><td>10/10 identical</td></tr><tr><td><code>core/03-blocks.vkf</code></td><td>280</td><td><code>f729c4f80d516f738b6c81d5a57e5a63620aa50b147ceb88f6ecd9cd5788fe49</code></td><td>10/10 identical</td></tr><tr><td><code>core/04-output-assert.vkf</code></td><td>214</td><td><code>6133307be018524d3d6e9d346644bc6d633197a981c5a29630a445215087022b</code></td><td>10/10 identical</td></tr><tr><td><code>core/05-assertion-tests.vkf</code></td><td>100</td><td><code>58659c7860d2e812f8f246888531031e4895c236af5f24054ec40805d9a4b197</code></td><td>10/10 identical</td></tr><tr><td><code>core/06-primitives.vkf</code></td><td>165</td><td><code>9db213eba249a00f60296ac68f37168fe191cda643089a27bbd267f32cd5aedf</code></td><td>10/10 identical</td></tr><tr><td><code>core/07-reflection.vkf</code></td><td>101</td><td><code>77521b190822276fc9da8b34e2cd93d062c8b31d7863957fcc992b07c6912bd8</code></td><td>10/10 identical</td></tr><tr><td><code>core/08-strings.vkf</code></td><td>229</td><td><code>cac592d6dbef73c0ee610d897d940ef9554e32ebac482a7e732598dbaeac6b65</code></td><td>10/10 identical</td></tr><tr><td><code>core/09-tuples-records.vkf</code></td><td>133</td><td><code>0f3e3ed467848ffd14b84adbc15dd88c6d007757c5eedeb1fa648c981ceea7bd</code></td><td>10/10 identical</td></tr><tr><td><code>core/11-vectors.vkf</code></td><td>119</td><td><code>91ba75d0c02154ddf7ec7041b1421c95ee3f83238d0da6d202ef37db6244e7a9</code></td><td>10/10 identical</td></tr><tr><td><code>core/11b-multidimensional-indexing.vkf</code></td><td>251</td><td><code>b33f27a8ca29d12b0eee52a4f24b747407720db2542def34d36636be948f3937</code></td><td>10/10 identical</td></tr><tr><td><code>core/12-vector-concat.vkf</code></td><td>94</td><td><code>6ec65ae4b634d2b85562d3e0b5d9a7f5ca7d781cd1c04ce2c590457eccf1b722</code></td><td>10/10 identical</td></tr><tr><td><code>core/12b-container-stress.vkf</code></td><td>290</td><td><code>bf3c965556890065ef1fe81d6b8166dd5ce685a436546991236b4b1c5d7d7efb</code></td><td>10/10 identical</td></tr><tr><td><code>core/13-updates-aliases.vkf</code></td><td>271</td><td><code>8ccd577e29054c40404ad032afa2ee093381dcd44ef8fb64a1b4c81a3652a596</code></td><td>10/10 identical</td></tr><tr><td><code>core/14-multisets.vkf</code></td><td>118</td><td><code>8dd5f741ac6308aaa8c8970ec3693dd0fa0abae94ad5045e186f16d758178387</code></td><td>10/10 identical</td></tr><tr><td><code>core/15-ranges.vkf</code></td><td>29</td><td><code>d0bade9480353ce3267722d323c8f402b4f78c7193d632087aafb5574f11a6c2</code></td><td>10/10 identical</td></tr><tr><td><code>core/16-complex.vkf</code></td><td>37</td><td><code>69e222aee88f9423ab9f56b71081077f7428da7f70ba87abeb2b013286426fca</code></td><td>10/10 identical</td></tr><tr><td><code>core/17-equality.vkf</code></td><td>59</td><td><code>72aed102ae5056895331aad9a9b3724886654f712c12392f356651a2a152d325</code></td><td>10/10 identical</td></tr><tr><td><code>core/18-functions.vkf</code></td><td>120</td><td><code>167cc9055ffb0c16cebaed677cbc92bebb03317be462ba19ecd9333261946321</code></td><td>10/10 identical</td></tr><tr><td><code>core/19-call-arguments.vkf</code></td><td>139</td><td><code>3cab3ee2dce888d362ea449b6326761a50814f7ce0314782b53a1bf0113ad10a</code></td><td>10/10 identical</td></tr><tr><td><code>core/20-recursion-closures.vkf</code></td><td>219</td><td><code>a87292281f84e72801d7ac887bd350bc4d5cdfef0f5c20f1b3c0176b204c7e7f</code></td><td>10/10 identical</td></tr><tr><td><code>core/21-lambdas.vkf</code></td><td>191</td><td><code>3259192f9d957e21db61bfb66b74a4231454fa5aee601e280dec7e1bff7cd752</code></td><td>10/10 identical</td></tr><tr><td><code>core/22-variadics-spreads.vkf</code></td><td>283</td><td><code>be46ca658c33fa2c75db14201b4575876637b7413fa9f721b3a4889566f4dc2d</code></td><td>10/10 identical</td></tr><tr><td><code>core/22b-literal-spreads.vkf</code></td><td>49</td><td><code>8132a06e57a169e7f1ab019ce632c654bd653d5db4f2d2f6541ef1daa8b91d8f</code></td><td>10/10 identical</td></tr><tr><td><code>core/23-shape-parameters.vkf</code></td><td>98</td><td><code>0f45ab27e53bb269311b6ab5c741577069baa4177349841ab20ca320ac478149</code></td><td>10/10 identical</td></tr><tr><td><code>core/24-open-any.vkf</code></td><td>136</td><td><code>0cb1ba44763160750756dd7b5b9844977af81830b793e69ba568f35b3c80e32e</code></td><td>10/10 identical</td></tr><tr><td><code>core/25-structural-compatibility.vkf</code></td><td>86</td><td><code>fac28a35734ce3674204629f8c04d07c9a6ba0ac792149bf71120f12c9124710</code></td><td>10/10 identical</td></tr><tr><td><code>core/26-structural-conversions.vkf</code></td><td>72</td><td><code>c6b8cbd1b0ecc0a0f8e0d8a6ed9fc07093dd5426264d89669382dfe14f191072</code></td><td>10/10 identical</td></tr><tr><td><code>core/27-structural-recursion.vkf</code></td><td>137</td><td><code>29509002b289765897e97d417f5f257607779edb503b0e2ef3417a25493c57d2</code></td><td>10/10 identical</td></tr><tr><td><code>core/28-structural-records.vkf</code></td><td>95</td><td><code>65edf8c60ec57176a6c5c9e8255e6e2b5695b82aba787c356d078b2b273786a5</code></td><td>10/10 identical</td></tr><tr><td><code>core/29-structural-exact-match.vkf</code></td><td>88</td><td><code>925f350b82a1254d740016f808beea34b2630644508805664d1152e3f3902aca</code></td><td>10/10 identical</td></tr><tr><td><code>core/30-math-structural.vkf</code></td><td>129</td><td><code>ae69a2867ce49f9b7f3bd2d11815a0fc00c911d52f41f02ab0bb02503bded644</code></td><td>10/10 identical</td></tr><tr><td><code>core/31-conditionals.vkf</code></td><td>83</td><td><code>04878c1f51acb3b4e2af4e45503b835e38c82f74237d82e401f7b17bd47266bf</code></td><td>10/10 identical</td></tr><tr><td><code>core/32-match.vkf</code></td><td>150</td><td><code>bd02267c4033d780fa49db68f9ec98acd9d365050d3681adf8ac6f3cde89a5a6</code></td><td>10/10 identical</td></tr><tr><td><code>core/33-loops.vkf</code></td><td>271</td><td><code>7a27f1ac8b63ede227f0690005eec0523ebef10aee6b1c5bdfbe9a55ac8da3ae</code></td><td>10/10 identical</td></tr><tr><td><code>core/34-errors.vkf</code></td><td>97</td><td><code>3373c890f6e39682fd9b54acf5fa4778a41b3b6ae77cc137dc8cbd5e2edc25c3</code></td><td>10/10 identical</td></tr><tr><td><code>core/35-pipes.vkf</code></td><td>75</td><td><code>dfff52f9d9f51c5739f09c4b5ab93ca20971d93b0112bb842c7180be3ca1cc0b</code></td><td>10/10 identical</td></tr><tr><td><code>core/36-pipe-blocks.vkf</code></td><td>79</td><td><code>698e3a016927b20f0a94512a50e2670bceace0c2c71f1b2a0657519b6bec777c</code></td><td>10/10 identical</td></tr><tr><td><code>core/36b-pipe-assignment.vkf</code></td><td>107</td><td><code>2b5b7a746079ef5b6dcca90393711be73a4c5f0a0cb31d406f47cddc19e914d5</code></td><td>10/10 identical</td></tr><tr><td><code>core/37-operators.vkf</code></td><td>77</td><td><code>0d68eaedc20c2c30e6fe95fddebec88c87c9d079bfca6cb19a8dd9e3cccd39bd</code></td><td>10/10 identical</td></tr><tr><td><code>core/38-absolute-norm.vkf</code></td><td>20</td><td><code>e4e29d93d9e886e007965e7fe290ec3196b59023c2c65ab9c7ec3fd25429be66</code></td><td>10/10 identical</td></tr><tr><td><code>core/39-overloads.vkf</code></td><td>174</td><td><code>239a436a9f0ae2b70c7f96335ec0393c136757533b05a095756a96f32ce17153</code></td><td>10/10 identical</td></tr><tr><td><code>core/40-fixed-shapes.vkf</code></td><td>92</td><td><code>5ea529ea1088f52a5eccaf05db3fe50b4411b5d6086aae6a60caaa1403cf2260</code></td><td>10/10 identical</td></tr><tr><td><code>core/41-indexing.vkf</code></td><td>104</td><td><code>4beb9d01a8d0f2434ff6eebd94caa12fe617bee1c02d05f7abc06b81d7964165</code></td><td>10/10 identical</td></tr><tr><td><code>core/42-axes.vkf</code></td><td>202</td><td><code>34d1ac6f1cf4afd3dbaa8f9009e22936df9f9ebcab80b14c42c60db0e2279054</code></td><td>10/10 identical</td></tr><tr><td><code>core/43-modules.vkf</code></td><td>45</td><td><code>88c88a727af79c8ad4ee03833db0158d700dc330d75fc15e77d67e8eefa01b58</code></td><td>10/10 identical</td></tr><tr><td><code>core/44-shadowing.vkf</code></td><td>136</td><td><code>423f2dd12735fb7ab14c6303620a8c50fd4e2c87f6b40628dd10fdc6143f45e9</code></td><td>10/10 identical</td></tr><tr><td><code>core/45-overloads-dispatch.vkf</code></td><td>111</td><td><code>ddec50d82d6d27dcb4af403648d78949c2ffc41b02310dd59d095e4301bd2231</code></td><td>10/10 identical</td></tr><tr><td><code>core/46-member-reflection.vkf</code></td><td>166</td><td><code>238ff6045b325531f541ba4c38624c09760be8e2145150571a2461a51171eefa</code></td><td>10/10 identical</td></tr><tr><td><code>core/47-primitive-spill.vkf</code></td><td>16</td><td><code>2eaa791cfb4aa0b87d12028158197dbd65112ec268b80a4fbf1a396b37addb1b</code></td><td>10/10 identical</td></tr><tr><td><code>core/48-dot-overload.vkf</code></td><td>172</td><td><code>71956fe08206241b4e1259a2372fd86205eff328de903726ac91e87869e76fab</code></td><td>10/10 identical</td></tr><tr><td><code>core/49-nominal-constructors.vkf</code></td><td>382</td><td><code>833d24804bd21ab74e6da1f1b11714eab2867ecdd26b308ffe9714afd69ea7ae</code></td><td>10/10 identical</td></tr><tr><td><code>core/49-semicolon-pipes.vkf</code></td><td>135</td><td><code>e7a83488ce50b309da8cfc81f435114d9c0eb3d89b183bdc64aa19607fd204aa</code></td><td>10/10 identical</td></tr><tr><td><code>core/50-generic-types.vkf</code></td><td>259</td><td><code>39dbd3c5416f4bcdc3853c35285957c5f51608d3217ea55a58881f6aab8284d0</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/01-math.vkf</code></td><td>72</td><td><code>648f56448a3be2717fdae38bde63f532fc0fe43307f681513deefb3772e3809f</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/02-stat.vkf</code></td><td>230</td><td><code>1ecf8a7365dd728a0ef780087e1e6f542969bfc325ad715bae4fa87834c30bec</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/03-random.vkf</code></td><td>141</td><td><code>c0f6c8514b4afedc7f727ac7a45dbe83c3492a26355866a61c5d3e0a4683f9c9</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/04-time.vkf</code></td><td>169</td><td><code>51823bfc80b32b779ef5a52be6f4ca6539808ee478fb5829527147e513bec960</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/05-io.vkf</code></td><td>129</td><td><code>4acc12b3b0ae173316afd56b158a13cdc2e79a606e2282182afbd7de42df1157</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/06-collections.vkf</code></td><td>206</td><td><code>1882a6ec40607edeaa9fa54db82d6a21aa6d40e572be70e57947d6bceda0742a</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/07-errors.vkf</code></td><td>90</td><td><code>8fea9dd54b580913802ea5173fe75c6b0f401c3cd104c548a57a07180571b7ab</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/08-system.vkf</code></td><td>125</td><td><code>d8799b0ba15364abc91002d6a4fe0c2f62100dd0ddf4e3e1bbaf27a6acd76268</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/09-process.vkf</code></td><td>103</td><td><code>f11a54f8f0759cc03d369311cf188d07bf34b657563a977d03717ace236db5cc</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/10-regex.vkf</code></td><td>168</td><td><code>e5e8411698b53871f0d7035a2845f9bef69974f60caa2f47b92b8f74d21ab6d5</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/11-linalg.vkf</code></td><td>221</td><td><code>4fae95a6440fb0cd610437afb6ab13ca974475956ac66ddcb39a43f9a45c1bd3</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/11-physics.vkf</code></td><td>112</td><td><code>7809067a744ac674ea9aee4f3333d2445dde810b806a8b075823a760a3678072</code></td><td>10/10 identical</td></tr><tr><td><code>stdlib/12-symbolic.vkf</code></td><td>214</td><td><code>eae1278c5c02be549f608383dc6801ee63747a83804d37108c84af4bd5b9af93</code></td><td>10/10 identical</td></tr></tbody></table></div>
+<h2 id="exact-output">Exact output</h2>
+<h3 id="core01-bindingsvkf"><code>core/01-bindings.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 4 bytes, SHA-256 <code>be8d3637e64147183a99406d53a5dda75a3176c815aaecb299a16fa6faf06307</code></p>
+<pre><code>7
+6</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core02-bind-expressionvkf"><code>core/02-bind-expression.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 4 bytes, SHA-256 <code>1ddb914da9135a2d6dfcc0ff179d68d23e7fd1e5364c088c183234d04a41bece</code></p>
+<pre><code>3
+4</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core03-blocksvkf"><code>core/03-blocks.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 38 bytes, SHA-256 <code>4e24a6e3b4af447912730c9f9edb30801d9c961094dd5d1b1165a15990302091</code></p>
+<pre><code>hello world
+make_base(x:3, y:4)
+3
+red</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core04-output-assertvkf"><code>core/04-output-assert.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 3 bytes, SHA-256 <code>084c799cd551dd1d8d5c5f9a5d593b2e931f5e36122ee5c793c1d08a19839cc0</code></p>
+<pre><code>42</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core05-assertion-testsvkf"><code>core/05-assertion-tests.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> empty (0 bytes)</p>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core06-primitivesvkf"><code>core/06-primitives.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 18 bytes, SHA-256 <code>342b18013fbf3bfa2067ca42d1753cbdf663ec6faced38915791038bec08963c</code></p>
+<pre><code>true
+A
+1.5
+7
+null</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core07-reflectionvkf"><code>core/07-reflection.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 41 bytes, SHA-256 <code>dae7c201a079c24c1dd59dba6ddd6fe1fbf0704c1ffc88efa20c552392002892</code></p>
+<pre><code>4
+type
+[int:2]
+TypeScope(reflected:type)</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core08-stringsvkf"><code>core/08-strings.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 69 bytes, SHA-256 <code>66e1d613e7c2c2e4e7f91b9d387a9f69a8c5ddea34c04d9302b00b6d971925a7</code></p>
+<pre><code>Hej världen
+value=4.23
+sum=5 point=(x:2, y:false) cost=$5
+😀
+true</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core09-tuples-recordsvkf"><code>core/09-tuples-records.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 13 bytes, SHA-256 <code>22df7fb4569c49f5a54ea956e15d783f36161e30e7151dbcdbcf2b9936b83c7f</code></p>
+<pre><code>12
+origin
+12</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core11-vectorsvkf"><code>core/11-vectors.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 40 bytes, SHA-256 <code>431aee49009cdcec396de1b489a748450d45fa11353ce72b0f2467602a0d8715</code></p>
+<pre><code>[1, 2, 3]
+[4, 20, 6]
+[7, 7, 7, 7, 9, 9]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core11b-multidimensional-indexingvkf"><code>core/11b-multidimensional-indexing.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 38 bytes, SHA-256 <code>b91cc1937c7a27587a778ee042da2ec9077377fb6c6005168d931797516507ae</code></p>
+<pre><code>11
+11
+[1, 13, 21]
+[[2, 12], [22, 32]]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core12-vector-concatvkf"><code>core/12-vector-concat.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 20 bytes, SHA-256 <code>0fcc2904dc9d884b458eaad6f08657d3320a09f22ce30c5361d11de93357e550</code></p>
+<pre><code>[1, 2, 3]
+[1, 2, 3]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core12b-container-stressvkf"><code>core/12b-container-stress.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 9 bytes, SHA-256 <code>de6aeb89b0d91519a443ac503ea9e652f130752e5ecc78cbcffc3e0f04e4bbf0</code></p>
+<pre><code>10000000</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core13-updates-aliasesvkf"><code>core/13-updates-aliases.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 33 bytes, SHA-256 <code>140910e03ebf0902b10beebc7aafcb24adbd0fcf8af446be37c31cd09c07385d</code></p>
+<pre><code>[3, 4]
+(x:5, y:6, name:my point)</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core14-multisetsvkf"><code>core/14-multisets.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 39 bytes, SHA-256 <code>34fb1d7325fa8e102bbfe2113d88f976c63e954784b94c986ed1df0fc44c051e</code></p>
+<pre><code>{a:7, b:1, c:2}
+{a:1, b:1}
+{a:2}
+{a:1}</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core15-rangesvkf"><code>core/15-ranges.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 39 bytes, SHA-256 <code>82f3ee88f20b642514135e8ffc3f43a3d8cc97d923b41a86171d34242912d1d4</code></p>
+<pre><code>[0, 1, 2, 3]
+[3, 2, 1, 0]
+(1, 2, 3, 4)</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core16-complexvkf"><code>core/16-complex.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 15 bytes, SHA-256 <code>a218701574bbd953987115e78a008d90fb1503a81d4486846acb1c009aaef887</code></p>
+<pre><code>1 + 2i
+-3 + 4i</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core17-equalityvkf"><code>core/17-equality.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 11 bytes, SHA-256 <code>c38a31bd481ac409fd307b56ff366108d0f6b9995b07750cf5e2a0ba9f7bf33f</code></p>
+<pre><code>1
+1
+[1, 1]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core18-functionsvkf"><code>core/18-functions.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 9 bytes, SHA-256 <code>d8ec94706884766f0c6e112f4b260a23f702cd135f8fe8ce0ccfdd3960f83a52</code></p>
+<pre><code>7
+3
+null</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core19-call-argumentsvkf"><code>core/19-call-arguments.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 12 bytes, SHA-256 <code>33844f23f9a54367e3bac979ca95b24aa1cae39272755a9e746e07274d1049c5</code></p>
+<pre><code>234
+345
+345</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core20-recursion-closuresvkf"><code>core/20-recursion-closures.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 6 bytes, SHA-256 <code>de57293fb3c8cc0cea24dad81634e9fde34063f3875def931c1742c07715c57f</code></p>
+<pre><code>720
+7</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core21-lambdasvkf"><code>core/21-lambdas.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 8 bytes, SHA-256 <code>505e2046fa4404a5a7d5be40a1750ff63bd5c204ec6f371e29858d1c6330551b</code></p>
+<pre><code>10
+25
+9</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core22-variadics-spreadsvkf"><code>core/22-variadics-spreads.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 28 bytes, SHA-256 <code>3e5ae314292b12196ac3af9b504c0a8ebc963f543e5afdadb861c30db81e08f2</code></p>
+<pre><code>10
+7
+(flag:true, mode:fast)</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core22b-literal-spreadsvkf"><code>core/22b-literal-spreads.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 15 bytes, SHA-256 <code>979c6711315284d2cc9270461dd4d1423ffeb6000a0695c25b13ff3a03e761eb</code></p>
+<pre><code>[1, 2, 3, 4]
+4</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core23-shape-parametersvkf"><code>core/23-shape-parameters.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 16 bytes, SHA-256 <code>9f2d2625704e6182bdec03466c5f0a20cdf9e39a40378f2029be48c15d3fe442</code></p>
+<pre><code>[1, 2, 3, 4, 5]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core24-open-anyvkf"><code>core/24-open-any.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 4 bytes, SHA-256 <code>b3afef0e7bc7a4e8a30048b5388d63af1c62c2932c7bd15c9db71695e6b9ebc3</code></p>
+<pre><code>2
+7</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core25-structural-compatibilityvkf"><code>core/25-structural-compatibility.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 27 bytes, SHA-256 <code>dadd6c6a53d5883844331530b543e641abaaad165311384cc884c24126b6d860</code></p>
+<pre><code>[2, 4, 6]
+[[2, 4], [6, 8]]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core26-structural-conversionsvkf"><code>core/26-structural-conversions.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 13 bytes, SHA-256 <code>749f71e7de25034687c16e4a72d71fe5dcb80b140a5de551d49ab3de5681e413</code></p>
+<pre><code>[4, 1.5, -2]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core27-structural-recursionvkf"><code>core/27-structural-recursion.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 29 bytes, SHA-256 <code>6943de31c6ffa84ca24290f999a74b6004b8737eca7ae1b0339fe02d2ac360de</code></p>
+<pre><code>[(x:11, y:-8), (x:13, y:-6)]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core28-structural-recordsvkf"><code>core/28-structural-records.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 11 bytes, SHA-256 <code>08e3a5e8430e95f9e6547c835f5298bdbfce19220c5db83ea1f5f2bcf7070769</code></p>
+<pre><code>[3, 7, 11]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core29-structural-exact-matchvkf"><code>core/29-structural-exact-match.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 10 bytes, SHA-256 <code>3f5caa800a4394143041f3bcb643ee54514adcee3bab1358cfe17d4415d8c120</code></p>
+<pre><code>[2, 3, 1]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core30-math-structuralvkf"><code>core/30-math-structural.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 35 bytes, SHA-256 <code>8ce2943e922276e1b1c90ce795e13985e6a9fae05310234216d356e8d36f6db2</code></p>
+<pre><code>[[1, 4], [9, 16]]
+[[1, 2], [3, 4]]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core31-conditionalsvkf"><code>core/31-conditionals.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 6 bytes, SHA-256 <code>c4615f9cb6ce29b14379b0661cb7dd7d4d288563bb6eeb7199c52856fffdfcbe</code></p>
+<pre><code>1
+nan</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core32-matchvkf"><code>core/32-match.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 28 bytes, SHA-256 <code>3967bff2d510a247a3deeefc323563a4b45b990364a247066352f536eef174e5</code></p>
+<pre><code>exact three
+another integer</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core33-loopsvkf"><code>core/33-loops.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 5 bytes, SHA-256 <code>eba7437651bd2dabe00aba8388b552da5557f5f7b0fbe2ea2248902e7ffc9cfd</code></p>
+<pre><code>10
+2</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core34-errorsvkf"><code>core/34-errors.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 15 bytes, SHA-256 <code>09b3f54ee9735fddc87655801eae6e07d76851b8e942b198884072751a2c67bf</code></p>
+<pre><code>specific value</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core35-pipesvkf"><code>core/35-pipes.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 33 bytes, SHA-256 <code>3727de73e1b4c11ce046156d73c1659ebbcbef3dc80e3675559845d6088ef3a0</code></p>
+<pre><code>[2, 4, 6]
+(11, 12, 13)
+16
+ååAA</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core36-pipe-blocksvkf"><code>core/36-pipe-blocks.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 14 bytes, SHA-256 <code>e293556b16abdec668ba2a64a09435af60e074d72d395df1833c56c07d66a72f</code></p>
+<pre><code>[1, 20, 3, 4]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core36b-pipe-assignmentvkf"><code>core/36b-pipe-assignment.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 30 bytes, SHA-256 <code>ef0c4a8693192fbab3a5aa0f8d7e3c4a6af24f3c6416cb0b11ababb7d08adabc</code></p>
+<pre><code>[4, 3, 2, 1]
+(40, 30, 20, 10)</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core37-operatorsvkf"><code>core/37-operators.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 21 bytes, SHA-256 <code>0860c10fe896dc1349fae38653d0e6498c6e9662579530a857522beeb52c4897</code></p>
+<pre><code>14
+3
+2
+256
+true
+true</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core38-absolute-normvkf"><code>core/38-absolute-norm.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 4 bytes, SHA-256 <code>133f46e9df9c594a4bd844a0ad79a12dfa578d0d86f881d0b0d4c016068a4b90</code></p>
+<pre><code>5
+5</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core39-overloadsvkf"><code>core/39-overloads.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 24 bytes, SHA-256 <code>e1198d89f3035c2863d736ba0b73a4c4f0bb348b96819a2aff710902ddbc535c</code></p>
+<pre><code>(x:4, y:6)
+(x:-3, y:-4)</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core40-fixed-shapesvkf"><code>core/40-fixed-shapes.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 2 bytes, SHA-256 <code>f0b5c2c2211c8d67ed15e75e656c7862d086e9245420892a7de62cd9ec582a06</code></p>
+<pre><code>5</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core41-indexingvkf"><code>core/41-indexing.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 29 bytes, SHA-256 <code>e2591385af547aff82e706b0cb9e82ad909b6155381fccf54b5b931f2279e22c</code></p>
+<pre><code>20
+[10, 30]
+[10, 21, 30, 41]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core42-axesvkf"><code>core/42-axes.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 109 bytes, SHA-256 <code>a58d30503b4d7cd07d29fe311be90f7c8e302774424c1eeb3b3271e08e914209</code></p>
+<pre><code>[[1, 2, 3], [2, 4, 6], [3, 6, 9]]
+[4, 10, 18]
+[[[15, 18], [20, 24]], [[30, 36], [40, 48]]]
+[[2, 6], [6, 12]]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core43-modulesvkf"><code>core/43-modules.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 4 bytes, SHA-256 <code>a4e80b45e6335963b93bfb520655322a4ad9980e3165c3cbe80234d784c2cef1</code></p>
+<pre><code>3
+1</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core44-shadowingvkf"><code>core/44-shadowing.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 4 bytes, SHA-256 <code>452e39c241ac7c3d1fe29b5529a5e2ea849dff1f35727ab388946535f4f2f0f8</code></p>
+<pre><code>0
+4</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core45-overloads-dispatchvkf"><code>core/45-overloads-dispatch.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 13 bytes, SHA-256 <code>4ebb68e57868eb17d264f904194253b9d2ba77fa9eefc158c708598c688e6324</code></p>
+<pre><code>integer
+text</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core46-member-reflectionvkf"><code>core/46-member-reflection.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 40 bytes, SHA-256 <code>342c814d88236400b9cb3561d28996bb35c3bb030f43d6b1554ae5137edfa9ae</code></p>
+<pre><code>(x:int, y:int)
+[x, y]
+[x, y]
+{x:1, y:1}</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core47-primitive-spillvkf"><code>core/47-primitive-spill.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 3 bytes, SHA-256 <code>913f5d1da2feaf4deeccc9e55cbb350a20f12b3f507e87be85dbb77fdd3cb9bc</code></p>
+<pre><code>64</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core48-dot-overloadvkf"><code>core/48-dot-overload.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 4 bytes, SHA-256 <code>1ddb914da9135a2d6dfcc0ff179d68d23e7fd1e5364c088c183234d04a41bece</code></p>
+<pre><code>3
+4</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core49-nominal-constructorsvkf"><code>core/49-nominal-constructors.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 91 bytes, SHA-256 <code>23e62fca3a1a512ea7ab3a3aa1605aa180d2c24ad40cdadd2bdcb39acacbc00d</code></p>
+<pre><code>Point
+(x:num, y:num)
+(x:num, y:num)
+type
+[x, y]
+true
+[int:3]
+(x:num, y:num)
+integer
+number</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core49-semicolon-pipesvkf"><code>core/49-semicolon-pipes.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 14 bytes, SHA-256 <code>a656bbc90fa54978a0eac95b7c75b6791e8ed097a345cfdd352acb61b93d66a5</code></p>
+<pre><code>5
+[9, 25, 49]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="core50-generic-typesvkf"><code>core/50-generic-types.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 16 bytes, SHA-256 <code>a9fd28d8d8720a5e6d50b3bb675525a86ee5f142db7aee1591dac4dc3fb47a1e</code></p>
+<pre><code>vkf
+4
+[int:3]
+6</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib01-mathvkf"><code>stdlib/01-math.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 6 bytes, SHA-256 <code>6c8aade637e337c00bb7fb50e0085e52d398eb65839748c2af93fd0f1d6a5b96</code></p>
+<pre><code>9
+1
+3</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib02-statvkf"><code>stdlib/02-stat.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 29 bytes, SHA-256 <code>0d30b62acc1ce092e60dfdc7dc348ddcc3cf339f2dcb050435703b1dcfb9f609</code></p>
+<pre><code>5
+4
+2
+7
+21
+[5, 7, 9]
+[6, 15]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib03-randomvkf"><code>stdlib/03-random.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 39 bytes, SHA-256 <code>42355a336197258cbb3cf70a1ff3e18cd7f765fbca2b2749a461e67d5fc3f32e</code></p>
+<pre><code>0.009626434189093501
+1.791479416094478</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib04-timevkf"><code>stdlib/04-time.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 20 bytes, SHA-256 <code>506ccb700357d37bb8c599603055b3a449c9c27e853112ff1b80080a264d8fa1</code></p>
+<pre><code>1970-01-01 00:00:00</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib05-iovkf"><code>stdlib/05-io.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 12 bytes, SHA-256 <code>a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447</code></p>
+<pre><code>hello world</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib06-collectionsvkf"><code>stdlib/06-collections.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 25 bytes, SHA-256 <code>082dfaf3fdba63d854cb8d1a24ecc0fbd45a39ab10ae378fa99c01a1f74e3520</code></p>
+<pre><code>[1, 2, 3]
+origin
+10
+true</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib07-errorsvkf"><code>stdlib/07-errors.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 5 bytes, SHA-256 <code>a17fcf0a2f50e2d495e4f90ce263410edc183add6c62699a2facbccf60410f74</code></p>
+<pre><code>true</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib08-systemvkf"><code>stdlib/08-system.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 74 bytes, SHA-256 <code>1da4bb078ca5c9f1d9fc85fab42e83f623d66c7e8ebf29e776e134fd236b2855</code></p>
+<pre><code>linux
+x86_64
+4
+/tmp/vkf-readme-proof-pBsJSz/runtime/stdlib/08-system
+true</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib09-processvkf"><code>stdlib/09-process.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 23 bytes, SHA-256 <code>434751e394c24f0e8906749bc1ea54382f15b04f1e2d5f32cae265e8835d00e2</code></p>
+<pre><code>0
+git version 2.55.0
+
+</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib10-regexvkf"><code>stdlib/10-regex.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 15 bytes, SHA-256 <code>b35cd66fc9c8c1e3c8a685b872f413e55f53226466d5a9c0f827bf63696bd38a</code></p>
+<pre><code>vektor
+vkf
+101</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib11-linalgvkf"><code>stdlib/11-linalg.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 44 bytes, SHA-256 <code>6b25030ae1d32ec6fb9e4580a0280020aa61dc92ea8b1c4f60c8c4da53bba5ec</code></p>
+<pre><code>32
+[0, 0, 1]
+[[19, 22], [43, 50]]
+-2
+[2, 1]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib11-physicsvkf"><code>stdlib/11-physics.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 12 bytes, SHA-256 <code>c78510ee900aee21d5426e2aa17840f56e77190d66821d78fa93214dadb7e291</code></p>
+<pre><code>6
+[0, 0, 1]</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p>
+<h3 id="stdlib12-symbolicvkf"><code>stdlib/12-symbolic.vkf</code></h3>
+<p>Exit code: <code>0</code>. Output stability: 10/10 byte-identical verification rounds.</p>
+<p><strong>stdout:</strong> 16 bytes, SHA-256 <code>2210a65687f2911352d9000cf8fdc37cbe3d3400a26000e3ed36db05ec8812b8</code></p>
+<pre><code>4
+27
+27
+0.125
+2</code></pre>
+<p><strong>stderr:</strong> empty (0 bytes)</p></article></main><footer class="site-footer">Experimental software · <a href="../origins.html">Origins</a></footer><script type="module" src="../release-selector.mjs"></script></body></html>
