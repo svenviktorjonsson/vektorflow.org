@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Vektor Flow 0.6.0 development preview — water test video</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        background: #05070b;
+        color: #eef4ff;
+        font: 15px/1.4 system-ui, sans-serif;
+      }
+      main { width: min(100%, 560px); padding: 16px; }
+      h1 { margin: 0 2px 12px; font-size: 20px; }
+      .status {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 3px 7px;
+        border: 1px solid #a86f2a;
+        border-radius: 999px;
+        color: #ffc56f;
+        font-size: 12px;
+        vertical-align: 2px;
+      }
+      video {
+        display: block;
+        width: 100%;
+        max-height: calc(100dvh - 88px);
+        border-radius: 14px;
+        background: #000;
+      }
+      p { margin: 10px 2px 0; color: #9eabc0; }
+      a { color: #8cc8ff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Water test video <span class="status">0.6.0 · not released</span></h1>
+      <video controls autoplay muted loop playsinline preload="auto">
+        <source src="./latest.mp4" type="video/mp4">
+      </video>
+      <p>
+        Test-generated visualization from active Vektor Flow 0.6.0 water and
+        shared-physics development. Evidence 178 is an internal verification
+        run, not a released feature or final visual result. Only the latest
+        proof of concept is retained here.
+        <a href="./latest.mp4">Open MP4 directly</a>.
+      </p>
+    </main>
+  </body>
+</html>

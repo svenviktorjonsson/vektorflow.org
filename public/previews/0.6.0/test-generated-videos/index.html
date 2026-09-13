@@ -2,22 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Vektor Flow 0.6.0 development preview — water test video</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>Vektor Flow 0.6.0 test-generated videos</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         min-height: 100dvh;
-        display: grid;
-        place-items: center;
         background: #05070b;
         color: #eef4ff;
-        font: 15px/1.4 system-ui, sans-serif;
+        font: 15px/1.5 system-ui, sans-serif;
       }
-      main { width: min(100%, 560px); padding: 16px; }
-      h1 { margin: 0 2px 12px; font-size: 20px; }
+      main { width: min(100% - 32px, 720px); margin: 0 auto; padding: 40px 0; }
+      h1 { margin: 0 0 8px; font-size: 24px; }
       .status {
         display: inline-block;
         margin-left: 8px;
@@ -26,32 +25,38 @@
         border-radius: 999px;
         color: #ffc56f;
         font-size: 12px;
-        vertical-align: 2px;
+        vertical-align: 3px;
       }
-      video {
+      p { color: #9eabc0; }
+      ul { margin: 24px 0 0; padding: 0; list-style: none; }
+      a {
         display: block;
-        width: 100%;
-        max-height: calc(100dvh - 88px);
-        border-radius: 14px;
-        background: #000;
+        padding: 16px;
+        border: 1px solid #263044;
+        border-radius: 12px;
+        color: #8cc8ff;
+        text-decoration: none;
       }
-      p { margin: 10px 2px 0; color: #9eabc0; }
-      a { color: #8cc8ff; }
+      a:hover { border-color: #557198; }
+      small { display: block; margin-top: 4px; color: #9eabc0; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Water test video <span class="status">0.6.0 · not released</span></h1>
-      <video controls autoplay muted loop playsinline preload="auto">
-        <source src="./latest.mp4" type="video/mp4">
-      </video>
+      <h1>Test-generated videos <span class="status">0.6.0 · not released</span></h1>
       <p>
-        Test-generated visualization from active Vektor Flow 0.6.0 water and
-        shared-physics development. Evidence 178 is an internal verification
-        run, not a released feature or final visual result. Only the latest
-        proof of concept is retained here.
-        <a href="./latest.mp4">Open MP4 directly</a>.
+        Development proofs from active Vektor Flow 0.6.0 work. These are not
+        released features or final visual results. Each category retains only
+        its latest proof of concept.
       </p>
+      <ul>
+        <li>
+          <a href="./water/">
+            Water and shared physics
+            <small>Latest generated-stone water test</small>
+          </a>
+        </li>
+      </ul>
     </main>
   </body>
 </html>
