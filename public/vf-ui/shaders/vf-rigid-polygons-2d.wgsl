@@ -1,0 +1,605 @@
+struct Body {
+  pose_inv_mass: vec4<f32>,
+  velocity_inv_inertia: vec4<f32>,
+  material: vec4<f32>,
+  contact_geometry: vec4<f32>,
+  triangle_range: vec4<f32>,
+}
+
+struct Triangle {
+  ab: vec4<f32>,
+  c_body: vec4<f32>,
+}
+
+struct RenderSource {
+  local_z_body: vec4<f32>,
+  color: vec4<f32>,
+}
+
+struct Params {
+  world_dt: vec4<f32>,
+  gravity_counts: vec4<f32>,
+  solver: vec4<f32>,
+  padding: vec4<f32>,
+}
+
+struct Contact {
+  normal: vec2<f32>,
+  point: vec2<f32>,
+  penetration: f32,
+  hit: u32,
+  padding: vec2<f32>,
+}
+
+struct SweptVertexEdgeHit {
+  hit: u32,
+  time: f32,
+  point: vec2<f32>,
+  normal: vec2<f32>,
+}
+
+struct ToiEvent {
+  hit: u32,
+  time: f32,
+  body_a: u32,
+  body_b: u32,
+  triangle_a: u32,
+  triangle_b: u32,
+  vertex: u32,
+  edge: u32,
+}
+
+@group(0) @binding(0) var<storage, read_write> bodies: array<Body>;
+@group(0) @binding(1) var<storage, read> triangles: array<Triangle>;
+@group(0) @binding(2) var<storage, read> render_source: array<RenderSource>;
+@group(0) @binding(3) var<storage, read_write> render_vertices: array<f32>;
+@group(0) @binding(4) var<uniform> params: Params;
+
+fn rotate2(p: vec2<f32>, angle: f32) -> vec2<f32> {
+  let c = cos(angle);
+  let s = sin(angle);
+  return vec2<f32>(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+
+fn cross2(a: vec2<f32>, b: vec2<f32>) -> f32 {
+  return a.x * b.y - a.y * b.x;
+}
+
+fn angular_velocity_at(omega: f32, r: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(-omega * r.y, omega * r.x);
+}
+
+fn perpendicular(r: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(-r.y, r.x);
+}
+
+// Planar generalized impulse from the paper: delta P = (delta p, delta L).
+// xy is the linear impulse applied to B; z is an independent angular impulse.
+fn generalized_collision_impulse(
+  relative_velocity: vec2<f32>, relative_omega: f32,
+  normal: vec2<f32>, r_a: vec2<f32>, r_b: vec2<f32>,
+  inv_mass_a: f32, inv_mass_b: f32,
+  inv_inertia_a: f32, inv_inertia_b: f32,
+  restitution: f32, tangent_restitution: f32,
+  static_friction: f32, dynamic_friction: f32,
+  rolling_friction: f32, contact_radius: f32,
+  restitution_threshold: f32
+) -> vec3<f32> {
+  let tangent = perpendicular(normal);
+  let rp_a = perpendicular(r_a);
+  let rp_b = perpendicular(r_b);
+  let inv_mass_sum = inv_mass_a + inv_mass_b;
+
+  // K maps delta P to the change in generalized relative contact velocity.
+  let k_nn = inv_mass_sum +
+    inv_inertia_a * dot(rp_a, normal) * dot(rp_a, normal) +
+    inv_inertia_b * dot(rp_b, normal) * dot(rp_b, normal);
+  if (k_nn <= 1.0e-10) { return vec3<f32>(0.0); }
+  let normal_speed = dot(relative_velocity, normal);
+  if (normal_speed >= 0.0) { return vec3<f32>(0.0); }
+  let is_impact = -normal_speed > restitution_threshold;
+  let active_restitution = select(0.0, restitution, is_impact);
+  let p_n = -(1.0 + active_restitution) * normal_speed / k_nn;
+
+  let k_tt = inv_mass_sum +
+    inv_inertia_a * dot(rp_a, tangent) * dot(rp_a, tangent) +
+    inv_inertia_b * dot(rp_b, tangent) * dot(rp_b, tangent);
+  let k_tn = inv_inertia_a * dot(rp_a, tangent) * dot(rp_a, normal) +
+    inv_inertia_b * dot(rp_b, tangent) * dot(rp_b, normal);
+  let k_tl = dot(tangent, inv_inertia_a * rp_a + inv_inertia_b * rp_b);
+  let k_ln = dot(normal, inv_inertia_a * rp_a + inv_inertia_b * rp_b);
+  let k_ll = inv_inertia_a + inv_inertia_b;
+
+  // With delta p_n known, solve the coupled sticking block for
+  // (delta p_t, delta L), including every off-diagonal matrix term.
+  let tangent_speed = dot(relative_velocity, tangent);
+  let tangent_after_normal = tangent_speed + k_tn * p_n;
+  let omega_after_normal = relative_omega + k_ln * p_n;
+  let determinant = k_tt * k_ll - k_tl * k_tl;
+  var p_t = 0.0;
+  var angular_impulse = 0.0;
+  var sticks = false;
+  if (determinant > 1.0e-10) {
+    let tangent_scale = select(1.0, 1.0 + tangent_restitution, is_impact);
+    let rhs_t = -tangent_scale * tangent_speed - k_tn * p_n;
+    let rhs_l = -relative_omega - k_ln * p_n;
+    let candidate_l = (k_tt * rhs_l - k_tl * rhs_t) / determinant;
+    let rolling_limit = rolling_friction * max(contact_radius, 1.0e-5) * p_n;
+    angular_impulse = clamp(candidate_l, -rolling_limit, rolling_limit);
+    let candidate_p_t = (rhs_t - k_tl * angular_impulse) / k_tt;
+    sticks = abs(candidate_p_t) <= static_friction * p_n;
+    if (sticks) {
+      p_t = candidate_p_t;
+    }
+  }
+  if (!sticks) {
+    p_t = -sign(tangent_after_normal) * dynamic_friction * p_n;
+    let rolling_limit = rolling_friction * max(contact_radius, 1.0e-5) * p_n;
+    let omega_after_sliding = omega_after_normal + k_tl * p_t;
+    let stop_rolling = abs(omega_after_sliding) / max(k_ll, 1.0e-10);
+    angular_impulse = -sign(omega_after_sliding) * min(rolling_limit, stop_rolling);
+  }
+  return vec3<f32>(p_n * normal + p_t * tangent, angular_impulse);
+}
+
+fn triangle_vertex(t: Triangle, index: u32) -> vec2<f32> {
+  if (index == 0u) { return t.ab.xy; }
+  if (index == 1u) { return t.ab.zw; }
+  return t.c_body.xy;
+}
+
+fn world_triangle(t: Triangle, body: Body) -> array<vec2<f32>, 3> {
+  var out: array<vec2<f32>, 3>;
+  let position = body.pose_inv_mass.xy;
+  let angle = body.pose_inv_mass.z;
+  out[0] = position + rotate2(t.ab.xy, angle);
+  out[1] = position + rotate2(t.ab.zw, angle);
+  out[2] = position + rotate2(t.c_body.xy, angle);
+  return out;
+}
+
+// Signed distance of a moving vertex to a moving edge. Both rigid bodies use
+// linear translation plus constant angular velocity over the event interval.
+fn swept_vertex_edge_distance(
+  vertex_local: vec2<f32>, edge_a_local: vec2<f32>, edge_b_local: vec2<f32>,
+  body_vertex: Body, body_edge: Body, time: f32
+) -> vec4<f32> {
+  let vertex = body_vertex.pose_inv_mass.xy +
+    rotate2(vertex_local, body_vertex.pose_inv_mass.z + body_vertex.velocity_inv_inertia.z * time) +
+    body_vertex.velocity_inv_inertia.xy * time;
+  let edge_a = body_edge.pose_inv_mass.xy +
+    rotate2(edge_a_local, body_edge.pose_inv_mass.z + body_edge.velocity_inv_inertia.z * time) +
+    body_edge.velocity_inv_inertia.xy * time;
+  let edge_b = body_edge.pose_inv_mass.xy +
+    rotate2(edge_b_local, body_edge.pose_inv_mass.z + body_edge.velocity_inv_inertia.z * time) +
+    body_edge.velocity_inv_inertia.xy * time;
+  let edge = edge_b - edge_a;
+  let edge_len2 = max(dot(edge, edge), 1.0e-20);
+  // Collision triangles are counter-clockwise, so the right-hand normal is
+  // the fixed outward normal. Never flip it toward the query vertex: doing so
+  // destroys the signed-distance crossing used by continuous collision tests.
+  let normal = vec2<f32>(edge.y, -edge.x) * inverseSqrt(edge_len2);
+  let segment_u = clamp(dot(vertex - edge_a, edge) / edge_len2, 0.0, 1.0);
+  return vec4<f32>(dot(vertex - edge_a, normal), segment_u, normal.x, normal.y);
+}
+
+// Bracket and bisect the first signed-distance root. This is deliberately
+// conservative: no event is accepted unless the vertex is on the finite edge.
+fn swept_vertex_edge_toi(
+  vertex_local: vec2<f32>, edge_a_local: vec2<f32>, edge_b_local: vec2<f32>,
+  body_vertex: Body, body_edge: Body, dt: f32
+) -> SweptVertexEdgeHit {
+  var result: SweptVertexEdgeHit;
+  result.hit = 0u;
+  result.time = dt;
+  result.point = vec2<f32>(0.0);
+  result.normal = vec2<f32>(1.0, 0.0);
+  let samples = 16u;
+  var previous_time = 0.0;
+  var previous = swept_vertex_edge_distance(vertex_local, edge_a_local, edge_b_local, body_vertex, body_edge, 0.0);
+  if (previous.x <= 0.0 && previous.y >= 0.0 && previous.y <= 1.0) {
+    result.hit = 1u;
+    result.time = 0.0;
+  }
+  for (var sample = 1u; sample <= samples && result.hit == 0u; sample = sample + 1u) {
+    let current_time = dt * f32(sample) / f32(samples);
+    let current = swept_vertex_edge_distance(vertex_local, edge_a_local, edge_b_local, body_vertex, body_edge, current_time);
+    if (previous.x > 0.0 && current.x <= 0.0) {
+      var lo = previous_time;
+      var hi = current_time;
+      for (var iteration = 0u; iteration < 12u; iteration = iteration + 1u) {
+        let mid = 0.5 * (lo + hi);
+        let value = swept_vertex_edge_distance(vertex_local, edge_a_local, edge_b_local, body_vertex, body_edge, mid);
+        if (value.x > 0.0) { lo = mid; } else { hi = mid; }
+      }
+      let hit_value = swept_vertex_edge_distance(vertex_local, edge_a_local, edge_b_local, body_vertex, body_edge, hi);
+      if (hit_value.y >= 0.0 && hit_value.y <= 1.0) {
+        result.hit = 1u;
+        result.time = hi;
+        result.normal = hit_value.zw;
+      }
+    }
+    previous_time = current_time;
+    previous = current;
+  }
+  return result;
+}
+
+fn swept_bounding_circles_overlap(body_a: Body, body_b: Body, dt: f32) -> bool {
+  let relative_position = body_b.pose_inv_mass.xy - body_a.pose_inv_mass.xy;
+  let relative_velocity = body_b.velocity_inv_inertia.xy - body_a.velocity_inv_inertia.xy;
+  let speed_squared = dot(relative_velocity, relative_velocity);
+  var closest_time = 0.0;
+  if (speed_squared > 1.0e-20) {
+    closest_time = clamp(-dot(relative_position, relative_velocity) / speed_squared, 0.0, dt);
+  }
+  let closest_delta = relative_position + relative_velocity * closest_time;
+  let radius = body_a.contact_geometry.z + body_b.contact_geometry.z;
+  return dot(closest_delta, closest_delta) <= radius * radius;
+}
+
+fn earliest_swept_event(dt: f32, body_count: u32) -> ToiEvent {
+  var best: ToiEvent;
+  best.hit = 0u;
+  best.time = dt;
+  best.body_a = 0u;
+  best.body_b = 0u;
+  best.triangle_a = 0u;
+  best.triangle_b = 0u;
+  best.vertex = 0u;
+  best.edge = 0u;
+  for (var ia = 0u; ia < body_count; ia = ia + 1u) {
+    let body_a = bodies[ia];
+    for (var ib = ia + 1u; ib < body_count; ib = ib + 1u) {
+      let body_b = bodies[ib];
+      if (body_a.pose_inv_mass.w + body_b.pose_inv_mass.w <= 0.0) { continue; }
+      if (!swept_bounding_circles_overlap(body_a, body_b, dt)) { continue; }
+      let start_a = u32(body_a.triangle_range.x);
+      let count_a = u32(body_a.triangle_range.y);
+      let start_b = u32(body_b.triangle_range.x);
+      let count_b = u32(body_b.triangle_range.y);
+      for (var ta = 0u; ta < count_a; ta = ta + 1u) {
+        let tri_a = triangles[start_a + ta];
+        for (var tb = 0u; tb < count_b; tb = tb + 1u) {
+          let tri_b = triangles[start_b + tb];
+          for (var vertex = 0u; vertex < 3u; vertex = vertex + 1u) {
+            for (var edge = 0u; edge < 3u; edge = edge + 1u) {
+              if ((u32(tri_b.c_body.w) & (1u << edge)) != 0u) {
+                let hit_a_into_b = swept_vertex_edge_toi(
+                  triangle_vertex(tri_a, vertex), triangle_vertex(tri_b, edge),
+                  triangle_vertex(tri_b, (edge + 1u) % 3u), body_a, body_b, dt);
+                if (hit_a_into_b.hit != 0u && hit_a_into_b.time < best.time) {
+                  best.hit = 1u;
+                  best.time = hit_a_into_b.time;
+                  best.body_a = ia;
+                  best.body_b = ib;
+                  best.triangle_a = start_a + ta;
+                  best.triangle_b = start_b + tb;
+                  best.vertex = vertex;
+                  best.edge = edge;
+                }
+              }
+              if ((u32(tri_a.c_body.w) & (1u << edge)) != 0u) {
+                let hit_b_into_a = swept_vertex_edge_toi(
+                  triangle_vertex(tri_b, vertex), triangle_vertex(tri_a, edge),
+                  triangle_vertex(tri_a, (edge + 1u) % 3u), body_b, body_a, dt);
+                if (hit_b_into_a.hit != 0u && hit_b_into_a.time < best.time) {
+                  best.hit = 1u;
+                  best.time = hit_b_into_a.time;
+                  best.body_a = ia;
+                  best.body_b = ib;
+                  best.triangle_a = start_a + ta;
+                  best.triangle_b = start_b + tb;
+                  best.vertex = vertex;
+                  best.edge = edge;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return best;
+}
+
+fn project_triangle(vertices: array<vec2<f32>, 3>, axis: vec2<f32>) -> vec2<f32> {
+  var lo = dot(vertices[0], axis);
+  var hi = lo;
+  for (var i = 1u; i < 3u; i = i + 1u) {
+    let value = dot(vertices[i], axis);
+    lo = min(lo, value);
+    hi = max(hi, value);
+  }
+  return vec2<f32>(lo, hi);
+}
+
+fn support(vertices: array<vec2<f32>, 3>, direction: vec2<f32>) -> vec2<f32> {
+  var best = vertices[0];
+  var best_projection = dot(best, direction);
+  for (var i = 1u; i < 3u; i = i + 1u) {
+    let candidate_projection = dot(vertices[i], direction);
+    if (candidate_projection > best_projection) {
+      best = vertices[i];
+      best_projection = candidate_projection;
+    }
+  }
+  return best;
+}
+
+fn triangle_centroid(vertices: array<vec2<f32>, 3>) -> vec2<f32> {
+  return (vertices[0] + vertices[1] + vertices[2]) / 3.0;
+}
+
+fn triangle_contact(
+  triangle_a: Triangle, triangle_b: Triangle,
+  a: array<vec2<f32>, 3>, b: array<vec2<f32>, 3>
+) -> Contact {
+  var result: Contact;
+  result.hit = 1u;
+  result.penetration = 1.0e30;
+  result.normal = vec2<f32>(1.0, 0.0);
+  let triangle_delta = triangle_centroid(b) - triangle_centroid(a);
+  for (var shape = 0u; shape < 2u; shape = shape + 1u) {
+    let boundary_mask = select(u32(triangle_a.c_body.w), u32(triangle_b.c_body.w), shape == 1u);
+    for (var edge = 0u; edge < 3u; edge = edge + 1u) {
+      var p0 = a[edge];
+      var p1 = a[(edge + 1u) % 3u];
+      if (shape == 1u) {
+        p0 = b[edge];
+        p1 = b[(edge + 1u) % 3u];
+      }
+      let delta = p1 - p0;
+      let length_squared = dot(delta, delta);
+      if (length_squared <= 1.0e-12) { continue; }
+      var axis = vec2<f32>(-delta.y, delta.x) * inverseSqrt(length_squared);
+      if (dot(axis, triangle_delta) < 0.0) { axis = -axis; }
+      let pa = project_triangle(a, axis);
+      let pb = project_triangle(b, axis);
+      let overlap = min(pa.y, pb.y) - max(pa.x, pb.x);
+      if (overlap <= 0.0) {
+        result.hit = 0u;
+        return result;
+      }
+      let is_boundary_edge = (boundary_mask & (1u << edge)) != 0u;
+      if (is_boundary_edge && overlap < result.penetration) {
+        result.penetration = overlap;
+        result.normal = axis;
+      }
+    }
+  }
+  if (result.penetration >= 1.0e29) {
+    result.hit = 0u;
+    return result;
+  }
+  let point_a = support(a, result.normal);
+  let point_b = support(b, -result.normal);
+  result.point = (point_a + point_b) * 0.5;
+  return result;
+}
+
+fn apply_pair_impulse(index_a: u32, index_b: u32, contact: Contact) {
+  var a = bodies[index_a];
+  var b = bodies[index_b];
+  let inv_mass_a = a.pose_inv_mass.w;
+  let inv_mass_b = b.pose_inv_mass.w;
+  let inv_mass_sum = inv_mass_a + inv_mass_b;
+  if (inv_mass_sum <= 0.0) { return; }
+
+  let r_a = contact.point - a.pose_inv_mass.xy;
+  let r_b = contact.point - b.pose_inv_mass.xy;
+  let velocity_a = a.velocity_inv_inertia.xy + angular_velocity_at(a.velocity_inv_inertia.z, r_a);
+  let velocity_b = b.velocity_inv_inertia.xy + angular_velocity_at(b.velocity_inv_inertia.z, r_b);
+  let generalized = generalized_collision_impulse(
+    velocity_b - velocity_a, b.velocity_inv_inertia.z - a.velocity_inv_inertia.z,
+    contact.normal, r_a, r_b, inv_mass_a, inv_mass_b,
+    a.velocity_inv_inertia.w, b.velocity_inv_inertia.w,
+    max(a.material.x, b.material.x),
+    max(a.material.y, b.material.y),
+    sqrt(a.material.z * b.material.z),
+    sqrt(a.material.w * b.material.w),
+    sqrt(a.contact_geometry.x * b.contact_geometry.x),
+    min(a.contact_geometry.y, b.contact_geometry.y),
+    max(a.contact_geometry.w, b.contact_geometry.w)
+  );
+  let linear_impulse = generalized.xy;
+  let angular_impulse = generalized.z;
+  a.velocity_inv_inertia.xy = a.velocity_inv_inertia.xy - linear_impulse * inv_mass_a;
+  a.velocity_inv_inertia.z = a.velocity_inv_inertia.z -
+    (cross2(r_a, linear_impulse) + angular_impulse) * a.velocity_inv_inertia.w;
+  b.velocity_inv_inertia.xy = b.velocity_inv_inertia.xy + linear_impulse * inv_mass_b;
+  b.velocity_inv_inertia.z = b.velocity_inv_inertia.z +
+    (cross2(r_b, linear_impulse) + angular_impulse) * b.velocity_inv_inertia.w;
+
+  let correction_magnitude = max(contact.penetration - params.solver.y, 0.0) *
+    params.solver.x * params.padding.x / max(inv_mass_sum, 1.0e-10);
+  let correction = correction_magnitude * contact.normal;
+  a.pose_inv_mass.xy = a.pose_inv_mass.xy - correction * inv_mass_a;
+  b.pose_inv_mass.xy = b.pose_inv_mass.xy + correction * inv_mass_b;
+  if (inv_mass_a > 0.0) { a.triangle_range.w = -1.0; }
+  if (inv_mass_b > 0.0) { b.triangle_range.w = -1.0; }
+  bodies[index_a] = a;
+  bodies[index_b] = b;
+}
+
+fn apply_wall(index: u32, point: vec2<f32>, normal: vec2<f32>, penetration: f32) {
+  var body = bodies[index];
+  let inv_mass = body.pose_inv_mass.w;
+  if (inv_mass <= 0.0 || penetration <= 0.0) { return; }
+  let r = point - body.pose_inv_mass.xy;
+  let contact_velocity = body.velocity_inv_inertia.xy + angular_velocity_at(body.velocity_inv_inertia.z, r);
+  let generalized = generalized_collision_impulse(
+    contact_velocity, body.velocity_inv_inertia.z, normal, vec2<f32>(0.0), r,
+    0.0, inv_mass, 0.0, body.velocity_inv_inertia.w,
+    body.material.x, body.material.y, body.material.z, body.material.w,
+    body.contact_geometry.x, body.contact_geometry.y, body.contact_geometry.w
+  );
+  body.velocity_inv_inertia.xy = body.velocity_inv_inertia.xy + generalized.xy * inv_mass;
+  body.velocity_inv_inertia.z = body.velocity_inv_inertia.z +
+    (cross2(r, generalized.xy) + generalized.z) * body.velocity_inv_inertia.w;
+  body.pose_inv_mass.xy = body.pose_inv_mass.xy + normal *
+    max(penetration - params.solver.y, 0.0) * params.solver.x * params.padding.x;
+  body.triangle_range.w = -1.0;
+  bodies[index] = body;
+}
+
+@compute @workgroup_size(64)
+fn integrate(@builtin(global_invocation_id) id: vec3<u32>) {
+  let index = id.x;
+  let body_count = u32(params.gravity_counts.z);
+  if (index >= body_count) { return; }
+  var body = bodies[index];
+  if (body.pose_inv_mass.w <= 0.0) { return; }
+  if (body.triangle_range.w > 0.5) { return; }
+  body.triangle_range.w = 0.0;
+  let dt = params.world_dt.z;
+  body.velocity_inv_inertia.xy = body.velocity_inv_inertia.xy + params.gravity_counts.xy * dt;
+  let damping = max(0.0, 1.0 - params.solver.z * dt);
+  body.velocity_inv_inertia.xy = body.velocity_inv_inertia.xy * damping;
+  body.velocity_inv_inertia.z = body.velocity_inv_inertia.z * damping;
+  bodies[index] = body;
+}
+
+@compute @workgroup_size(1)
+fn resolve_contacts(@builtin(global_invocation_id) id: vec3<u32>) {
+  if (id.x != 0u) { return; }
+  let body_count = u32(params.gravity_counts.z);
+  let event = earliest_swept_event(params.world_dt.z, body_count);
+  let event_time = select(params.world_dt.z, event.time, event.hit != 0u);
+  for (var advance_index = 0u; advance_index < body_count; advance_index = advance_index + 1u) {
+    var advanced = bodies[advance_index];
+    if (advanced.pose_inv_mass.w > 0.0) {
+      advanced.pose_inv_mass.xy = advanced.pose_inv_mass.xy + advanced.velocity_inv_inertia.xy * event_time;
+      advanced.pose_inv_mass.z = advanced.pose_inv_mass.z + advanced.velocity_inv_inertia.z * event_time;
+    }
+    bodies[advance_index] = advanced;
+  }
+  let solver_iterations = max(1u, u32(params.padding.y));
+  for (var solver_iteration = 0u; solver_iteration < solver_iterations; solver_iteration = solver_iteration + 1u) {
+  for (var ia = 0u; ia < body_count; ia = ia + 1u) {
+    for (var ib = ia + 1u; ib < body_count; ib = ib + 1u) {
+      let body_a = bodies[ia];
+      let body_b = bodies[ib];
+      if (body_a.pose_inv_mass.w + body_b.pose_inv_mass.w <= 0.0) { continue; }
+      let center_delta = body_b.pose_inv_mass.xy - body_a.pose_inv_mass.xy;
+      let radius_sum = body_a.contact_geometry.z + body_b.contact_geometry.z;
+      if (dot(center_delta, center_delta) > radius_sum * radius_sum) { continue; }
+      var best: Contact;
+      best.hit = 0u;
+      best.penetration = 1.0e30;
+      let start_a = u32(body_a.triangle_range.x);
+      let count_a = u32(body_a.triangle_range.y);
+      let start_b = u32(body_b.triangle_range.x);
+      let count_b = u32(body_b.triangle_range.y);
+      for (var ta = 0u; ta < count_a; ta = ta + 1u) {
+          let triangle_a = triangles[start_a + ta];
+          let world_a = world_triangle(triangle_a, body_a);
+        for (var tb = 0u; tb < count_b; tb = tb + 1u) {
+          let triangle_b = triangles[start_b + tb];
+          let world_b = world_triangle(triangle_b, body_b);
+          let candidate = triangle_contact(triangle_a, triangle_b, world_a, world_b);
+          if (candidate.hit != 0u && candidate.penetration < best.penetration) {
+            best = candidate;
+          }
+        }
+      }
+      if (best.hit != 0u) {
+        apply_pair_impulse(ia, ib, best);
+      }
+    }
+  }
+
+  let half_width = params.world_dt.x * 0.5;
+  let half_height = params.world_dt.y * 0.5;
+  for (var body_index = 0u; body_index < body_count; body_index = body_index + 1u) {
+    let body = bodies[body_index];
+    if (body.pose_inv_mass.w <= 0.0) { continue; }
+    var min_x = 1.0e30;
+    var max_x = -1.0e30;
+    var min_y = 1.0e30;
+    var max_y = -1.0e30;
+    var min_x_point = vec2<f32>(0.0);
+    var max_x_point = vec2<f32>(0.0);
+    var min_y_point = vec2<f32>(0.0);
+    var max_y_point = vec2<f32>(0.0);
+    let start = u32(body.triangle_range.x);
+    let count = u32(body.triangle_range.y);
+    for (var tri_index = 0u; tri_index < count; tri_index = tri_index + 1u) {
+      let tri = triangles[start + tri_index];
+      for (var vertex_index = 0u; vertex_index < 3u; vertex_index = vertex_index + 1u) {
+        let point = body.pose_inv_mass.xy + rotate2(triangle_vertex(tri, vertex_index), body.pose_inv_mass.z);
+        if (point.x < min_x) { min_x = point.x; min_x_point = point; }
+        if (point.x > max_x) { max_x = point.x; max_x_point = point; }
+        if (point.y < min_y) { min_y = point.y; min_y_point = point; }
+        if (point.y > max_y) { max_y = point.y; max_y_point = point; }
+      }
+    }
+    apply_wall(body_index, min_x_point, vec2<f32>(1.0, 0.0), -half_width - min_x);
+    apply_wall(body_index, max_x_point, vec2<f32>(-1.0, 0.0), max_x - half_width);
+    apply_wall(body_index, min_y_point, vec2<f32>(0.0, 1.0), -half_height - min_y);
+    apply_wall(body_index, max_y_point, vec2<f32>(0.0, -1.0), max_y - half_height);
+  }
+  }
+
+  let remaining = max(params.world_dt.z - event_time, 0.0);
+  if (remaining > 0.0) {
+    for (var remainder_index = 0u; remainder_index < body_count; remainder_index = remainder_index + 1u) {
+      var remainder_body = bodies[remainder_index];
+      if (remainder_body.pose_inv_mass.w > 0.0) {
+        remainder_body.pose_inv_mass.xy = remainder_body.pose_inv_mass.xy + remainder_body.velocity_inv_inertia.xy * remaining;
+        remainder_body.pose_inv_mass.z = remainder_body.pose_inv_mass.z + remainder_body.velocity_inv_inertia.z * remaining;
+        bodies[remainder_index] = remainder_body;
+      }
+    }
+  }
+
+  for (var sleep_index = 0u; sleep_index < body_count; sleep_index = sleep_index + 1u) {
+    var sleep_body = bodies[sleep_index];
+    if (sleep_body.pose_inv_mass.w <= 0.0) { continue; }
+    if (sleep_body.triangle_range.w > 0.5) {
+      sleep_body.velocity_inv_inertia.xy = vec2<f32>(0.0);
+      sleep_body.velocity_inv_inertia.z = 0.0;
+      bodies[sleep_index] = sleep_body;
+      continue;
+    }
+    let has_contact = sleep_body.triangle_range.w < -0.5;
+    let below_threshold =
+      length(sleep_body.velocity_inv_inertia.xy) <= params.world_dt.w &&
+      abs(sleep_body.velocity_inv_inertia.z) <= params.padding.z;
+    if (has_contact && below_threshold) {
+      sleep_body.triangle_range.z = sleep_body.triangle_range.z + params.world_dt.z;
+      if (sleep_body.triangle_range.z >= params.padding.w) {
+        sleep_body.velocity_inv_inertia.xy = vec2<f32>(0.0);
+        sleep_body.velocity_inv_inertia.z = 0.0;
+        sleep_body.triangle_range.w = 1.0;
+      } else {
+        sleep_body.triangle_range.w = 0.0;
+      }
+    } else {
+      sleep_body.triangle_range.z = 0.0;
+      sleep_body.triangle_range.w = 0.0;
+    }
+    bodies[sleep_index] = sleep_body;
+  }
+}
+
+@compute @workgroup_size(64)
+fn write_render_vertices(@builtin(global_invocation_id) id: vec3<u32>) {
+  let index = id.x;
+  let render_count = u32(params.gravity_counts.w);
+  if (index >= render_count) { return; }
+  let source = render_source[index];
+  let body = bodies[u32(source.local_z_body.w)];
+  let point = body.pose_inv_mass.xy + rotate2(source.local_z_body.xy, body.pose_inv_mass.z);
+  let base = index * 10u;
+  render_vertices[base + 0u] = point.x;
+  render_vertices[base + 1u] = point.y;
+  render_vertices[base + 2u] = source.local_z_body.z;
+  render_vertices[base + 3u] = 0.0;
+  render_vertices[base + 4u] = 0.0;
+  render_vertices[base + 5u] = 1.0;
+  render_vertices[base + 6u] = source.color.x;
+  render_vertices[base + 7u] = source.color.y;
+  render_vertices[base + 8u] = source.color.z;
+  render_vertices[base + 9u] = source.color.w;
+}

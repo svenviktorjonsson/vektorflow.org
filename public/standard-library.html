@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="description" content="Vektor Flow: a few powerful principles for calculations, data and visual programs. Try supported examples in your browser."><title>VKF Standard Library · Vektor Flow</title><link rel="canonical" href="https://vektorflow.org/standard-library.html"><link rel="stylesheet" href="./site.css"><link rel="stylesheet" href="./vf-ui/katex/katex.min.css"><link rel="stylesheet" href="./vf-ui/vf-frame.css"><script>window.__vfInlineRetainedScene=true;</script><script src="./vf-ui/katex/katex.min.js"></script><script src="./vf-ui/vf-startup-gate.js"></script><script src="./vf-ui/vf-runtime-packet-contract.js"></script><script src="./vf-ui/vf-retained-event-adapter.js"></script><script src="./vf-ui/vf-runtime-source.js"></script><script src="./vf-ui/vf-html-components.js"></script><script src="./vf-ui/vf-runtime-scene.js"></script><script src="./vf-ui/vf-runtime-flow.js"></script><script src="./vf-ui/vf-compiled-runtime-bridge.js"></script><script src="./vf-ui/vf-compiled-webgpu-adapter.js"></script><script src="./vf-ui/vf-render-clock.js"></script><script src="./vf-ui/vf-frame.js"></script><script src="./vf-ui/vf-widgets.js"></script><script src="./vf-ui/vf-static-html-loader.js"></script><script src="./vf-ui/vf-shared-runtime.js"></script><script src="./vf-ui/vf-gpu-runtime.js"></script><script src="./vf-ui/vf-axis2d-ticks.js"></script><script src="./vf-ui/vf-axis3d-kernel.js"></script><script src="./vf-ui/vf-axis3d-kernel-adapter.js"></script><script src="./vf-ui/vf-axis3d-projection-kernel.js"></script><script src="./vf-ui/vf-axis3d-projection-kernel-adapter.js"></script><script src="./vf-ui/geom/vf-geom-math.js"></script><script src="./vf-ui/geom/vf-geom-core.js"></script><script src="./vf-ui/geom/vf-geom-material-arena.js"></script><script src="./vf-ui/geom/vf-geom-ledger-layout.js"></script><script src="./vf-ui/geom/vf-geom-ledger-transport.js"></script><script src="./vf-ui/geom/vf-geom-ledger.js"></script><script src="./vf-ui/geom/vf-geom-parametric-surface.js"></script><script src="./vf-ui/geom/vf-geom-frame-adapter.js"></script><script src="./vf-ui/geom/vf-geom-wgpu.js"></script><script src="./vf-ui/vf-display.js"></script></head><body><a class="skip-link" href="#readme-documentation">Skip to content</a><header class="site-nav"><a class="wordmark" href="./index.html">Vektor Flow</a><nav aria-label="Main navigation"><a href="./guide.html">Guide</a><a href="./reference.html">Syntax</a><a aria-current="page" href="./standard-library.html">Std lib</a><a href="./performance.html">Performance</a><a href="./install.html">Download</a></nav><label class="release-selector" for="vkf-release-version">Release <select id="vkf-release-version" data-latest="0.4.5" aria-label="VKF release version"><option value="0.4.5" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.5/vkf-shared-compiler.wasm?sha256=0146e4996ebb505f9fc4808f4825282ad5783ee9021e738a19ad568aaf3e366c" selected>0.4.5</option><option value="0.4.4" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.4/vkf-shared-compiler.wasm?sha256=6d783e8cd1ee9f2459d4d1980d0de6e92da92c781ef83f5d94018e773273ab06">0.4.4</option><option value="0.4.3" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.3/vkf-shared-compiler.wasm?sha256=0317b212c0ca899f27cce30c4dca08c49145903030f2e95fcabc2a422d36252d">0.4.3</option><option value="0.4.0" data-browser-wasm="">0.4.0</option></select></label></header><main class="documentation"><details class="contents"><summary>On this page</summary><nav aria-label="On this page"><a href="#importing-and-using-a-library">Importing and using a library</a><a href="#1-math">1. math</a><a href="#2-stat">2. stat</a><a href="#3-random">3. random</a><a href="#4-time">4. time</a><a href="#5-io">5. io</a><a href="#6-collections">6. collections</a><a href="#7-errors">7. errors</a><a href="#8-system">8. system</a><a href="#9-process">9. process</a><a href="#10-regex">10. regex</a><a href="#11-linalg">11. linalg</a><a href="#12-physics-and-dimensioned-units">12. physics And Dimensioned Units</a><a href="#13-symbolic">13. symbolic</a><a href="#continue-reading">Continue reading</a></nav></details><article id="readme-documentation" class="readme"><h1 id="vkf-standard-library">VKF Standard Library</h1>
+<p>The standard library is separate from VKF syntax. This page describes each published library, how to bring it into scope, what it is useful for, and a runnable example. The <a href="./reference.html">syntax reference</a> explains the language constructs used by those examples.</p>
+<h2 id="importing-and-using-a-library">Importing and using a library</h2>
+<p>A dotted name on the right of a declaration creates a module handle, as in <code>math: .math</code>; calls then remain qualified as <code>math.sqrt(...)</code>. A leading colon spills public names into the current scope, as in <code>:.linalg</code>; functions such as <code>dot(...)</code> can then be called directly. Nested modules use the same forms, including <code>:.physics.units</code>.</p>
+<p>Qualified imports make dependencies obvious and are the default in the examples below. Spilling is useful for mathematical libraries where repeated qualification would obscure a formula. Each editor starts with the relevant import and can be compiled in the browser when that library has a browser-safe implementation. Native-only capabilities are labelled explicitly.</p>
+<h2 id="1-math">1. <code>math</code></h2>
+<p>Constants: <code>pi</code>, <code>e</code>, <code>tau</code>.</p>
+<p>Functions: <code>abs</code>, <code>sqrt</code>, <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>sec</code>, <code>cot</code>, <code>csc</code>, <code>asin</code>, <code>acos</code>, <code>atan</code>, <code>atan2</code>, <code>acot</code>, <code>asec</code>, <code>acsc</code>, <code>sinh</code>, <code>cosh</code>, <code>tanh</code>, <code>asinh</code>, <code>acosh</code>, <code>atanh</code>, <code>exp</code>, <code>ln</code>, <code>lg</code>, <code>lg2</code>, <code>log</code>, <code>gamma</code>, <code>erf</code>.</p>
+<section class="readme-example" data-vkf-example-id="example-1"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-1" aria-label="Editable VKF source: 1. math" spellcheck="false">math: .math
+:: math.sqrt(81)
+:: math.sin(math.pi / 2)
+:: math.log(8, 2)</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">9
+1
+3</pre></section></div></div></section>
+<p>Unary math functions use the safe <a href="./reference.html#4-automatic-vector-function-application">vector-lifting rule</a>.</p>
+<h2 id="2-stat">2. <code>stat</code></h2>
+<p>Functions include <code>sum</code>, <code>mean</code>, <code>count</code>, <code>min</code>, <code>max</code>, <code>range</code>, <code>variance</code>, <code>std</code>, <code>percentile</code>, <code>median</code>, <code>iqr</code>, <code>mode</code>, <code>zscore</code>, <code>normalize</code>, <code>covariance</code>, <code>correlation</code>, <code>clamp</code>, and <code>sign</code>. <code>sum</code> reduces every nested vector dimension by default. Its named <code>axis</code> argument accepts one constant integer or a nonempty tuple of constant integers; negative values count from the last dimension.</p>
+<section class="readme-example" data-vkf-example-id="example-2"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-2" aria-label="Editable VKF source: 2. stat" spellcheck="false">stat: .stat
+values: [2, 4, 4, 4, 5, 5, 7, 9]
+matrix: [[1, 2, 3], [4, 5, 6]]
+:: stat.mean(values)
+:: stat.variance(values)
+:: stat.std(values)
+:: stat.range(values)
+:: stat.sum(matrix)
+:: stat.sum(matrix, axis: 0)
+:: stat.sum(matrix, axis: 1)</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">5
+4
+2
+7
+21
+[5, 7, 9]
+[6, 15]</pre></section></div></div></section>
+<p>For a matrix, <code>axis:0</code> reduces rows and returns column sums; <code>axis:1</code> reduces columns and returns row sums. A tuple such as <code>axis:(0, 2)</code> reduces both named dimensions. Axis reduction currently requires a fixed rectangular numeric vector. Duplicate and out-of-range axes are compile errors. <code>variance</code> and <code>std</code> accept <code>ddof</code>; zero is the population form and one is the sample form.</p>
+<h2 id="3-random">3. <code>random</code></h2>
+<p><code>next</code>, <code>uniform</code>, and <code>normal</code> are explicit-seed functions returning <code>(value, seed)</code>. <code>clock_seed</code> creates a time-based seed. Explicit state makes deterministic sequences easy to reproduce.</p>
+<section class="readme-example" data-vkf-example-id="example-3"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-3" aria-label="Editable VKF source: 3. random" spellcheck="false">random: .random
+first: random.uniform(123, low:0, high:10)
+second: random.uniform(first.seed, low:0, high:10)
+:: first.value
+:: second.value</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">0.009626434189093501
+1.791479416094478</pre></section></div></div></section>
+<h2 id="4-time">4. <code>time</code></h2>
+<p><code>wall_time</code>, <code>monotonic</code>, <code>sleep</code>, <code>time_stamp</code>, <code>format_time</code>, and <code>current_time</code> are native. Formatting accepts UTC selection and percent directives.</p>
+<p>Browser execution supplies <code>wall_time</code> and <code>monotonic</code> through one versioned ClockArena sample per Play, tick, or event. It has no ambient host-call access. Filesystem I/O, operating-system inspection, and native process launch remain browser-forbidden and receive explicit compiler diagnostics.</p>
+<section class="readme-example" data-vkf-example-id="example-4"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-4" aria-label="Editable VKF source: 4. time" spellcheck="false">time: .time
+before: time.monotonic()
+after: time.monotonic()
+(time.wall_time() &gt; 1700000000)?!
+(after &gt;= before)?!
+:: time.format_time(0, &quot;%Y-%m-%d %H:%M:%S&quot;, utc:true)</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">1970-01-01 00:00:00</pre></section></div></div></section>
+<h2 id="5-io">5. <code>io</code></h2>
+<p><code>print</code>, <code>eprint</code>, <code>read_line</code>, <code>read_text</code>, <code>read_bytes</code>, <code>write_text</code>, <code>write_bytes</code>, and <code>append_text</code> perform native stream and file I/O.</p>
+<section class="readme-example" data-vkf-example-id="example-5"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-5" aria-label="Editable VKF source: 5. io" spellcheck="false">io: .io
+io.write_text(&quot;vkf-example.txt&quot;, &quot;hello&quot;)
+io.append_text(&quot;vkf-example.txt&quot;, &quot; world&quot;)
+:: io.read_text(&quot;vkf-example.txt&quot;)</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">hello world</pre></section></div></div></section>
+<p>Native file operations use the current user's permissions and paths are not sandboxed. Browser <code>read_text</code>, <code>write_text</code>, and <code>append_text</code> instead use a session-scoped RAM DocumentArena. Browser paths must be normalized relative paths using <code>/</code>; the arena allows 64 documents, 8,192 UTF-8 bytes per document, and 49,152 live bytes total. It is cleared on refresh or reset and never grants filesystem, persistent-storage, network, DOM, or download capability.</p>
+<h2 id="6-collections">6. <code>collections</code></h2>
+<p><code>list</code> creates a dynamic list, <code>map</code> creates an extensible named record, and <code>queue</code> creates a FIFO queue with <code>put</code>, <code>get</code>, and <code>empty</code>.</p>
+<section class="readme-example" data-vkf-example-id="example-6"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-6" aria-label="Editable VKF source: 6. collections" spellcheck="false">collections: .collections
+values: collections.list(1, 2, 3)
+point: collections.map(name:&quot;origin&quot;, x:1, y:2)
+queue: collections.queue()
+queue.put(10)
+
+:: values
+:: point.name
+:: queue.get()
+:: queue.empty()</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">[1, 2, 3]
+origin
+10
+true</pre></section></div></div></section>
+<p>An empty queue returns <code>null</code> from <code>get</code>.</p>
+<h2 id="7-errors">7. <code>errors</code></h2>
+<p>The module exposes typed errors for the <code>!?</code> mechanism, including <code>Error</code>, <code>AssertionError</code>, <code>IndexError</code>, and <code>ValueError</code>.</p>
+<section class="readme-example" data-vkf-example-id="example-7"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-7" aria-label="Editable VKF source: 7. errors" spellcheck="false">errors: .errors
+caught: false
+int(1.5)!?
+    errors.ValueError =&gt; .caught: true
+:: caught</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">true</pre></section></div></div></section>
+<h2 id="8-system">8. <code>system</code></h2>
+<p><code>os</code>, <code>arch</code>, <code>cpu_count</code>, <code>cwd</code>, and <code>env</code> expose narrow host information. <code>env</code> returns <code>(found, value)</code> instead of confusing a missing variable with an empty value.</p>
+<section class="readme-example" data-vkf-example-id="example-8"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-8" aria-label="Editable VKF source: 8. system" spellcheck="false">system: .system
+path: system.env(&quot;PATH&quot;)
+:: system.os()
+:: system.arch()
+:: system.cpu_count()
+:: system.cwd()
+:: path.found</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">windows
+x86_64
+4
+C:\Users\RUNNER~1\AppData\Local\Temp\vkf-readme-proof-QuOXY1\runtime\stdlib\08-system
+true</pre></section></div></div></section>
+<p>There is no portable raw-syscall function in the stable library. The browser target keeps the <code>system</code> module available for normal resolution, but rejects every reachable host-information call at compile time with <code>browser target forbids standard-library call ...</code>; it never substitutes a runtime stub or host import.</p>
+<h2 id="9-process">9. <code>process</code></h2>
+<p><code>run(program, args)</code> launches a program directly and returns <code>(code, out, err)</code>. <code>shell(command)</code> deliberately invokes the platform shell. The browser target keeps the <code>process</code> module available for normal resolution, but rejects every reachable process call at compile time with <code>browser target forbids standard-library call ...</code>; it never emits a process stub or host import.</p>
+<section class="readme-example" data-vkf-example-id="example-9"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-9" aria-label="Editable VKF source: 9. process" spellcheck="false">process: .process
+result: process.run(&quot;git&quot;, [&quot;--version&quot;])
+:: result.code
+:: result.out
+:: result.err</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">0
+git version 2.55.0.windows.4
+
+</pre></section></div></div></section>
+<p>Use <code>run</code> for ordinary commands. It keeps arguments separate and avoids shell interpolation. Use <code>shell</code> only when shell syntax is genuinely required, and never insert untrusted text into its command.</p>
+<h2 id="10-regex">10. <code>regex</code></h2>
+<p><code>regex.match(source, pattern)</code> returns a record of named captures. <code>regex.groups(source, pattern)</code> returns positional captures as a tuple. Patterns are compile-time constants in the portable byte-pattern grammar.</p>
+<section class="readme-example" data-vkf-example-id="example-10"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-10" aria-label="Editable VKF source: 10. regex" spellcheck="false">regex: .regex
+named: regex.match(&quot;vektor&quot;, '^(?P&lt;word&gt;[a-z]+)$')
+positional: regex.groups(&quot;vkf-101&quot;, '([a-z]+)-([0-9]+)')
+:: named.word
+:: positional.0
+:: positional.1</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">vektor
+vkf
+101</pre></section></div></div></section>
+<h2 id="11-linalg">11. <code>linalg</code></h2>
+<p><code>:.linalg</code> uses ordinary rectangular nested vectors rather than a separate matrix class. Numeric operations include <code>dot</code>, <code>cross</code>, <code>outer</code>, <code>matmul</code>, <code>transpose</code>, <code>trace</code>, <code>determinant</code>, <code>rank</code>, <code>inverse</code>, <code>solve</code>, <code>least_squares</code>, <code>solution_space</code>, <code>rref</code>, <code>null_space</code>, <code>lu</code>, <code>qr</code>, <code>cholesky</code>, <code>svd</code>, and <code>eigen</code>.</p>
+<p>The same vector-lifting rule makes <code>dot(matrix, vector)</code> apply the declared vector-vector dot product to every compatible matrix row. Decompositions and solvers return verification metadata where convergence, residuals, or singular systems require an explicit result rather than an assumption.</p>
+<section class="readme-example" data-vkf-example-id="example-11"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-11" aria-label="Editable VKF source: 11. linalg" spellcheck="false">:.linalg
+
+product: matmul([[1, 2], [3, 4]], [[5, 6], [7, 8]])
+solution: solve([[2, 1], [1, 1]], [5, 3])
+
+:: dot([1, 2, 3], [4, 5, 6])
+:: cross([1, 0, 0], [0, 1, 0])
+:: product
+:: determinant([[1, 2], [3, 4]])
+:: solution</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite">32
+[0, 0, 1]
+[[19, 22], [43, 50]]
+-2
+[2, 1]</pre></section></div></div></section>
+<h2 id="12-physics-and-dimensioned-units">12. <code>physics</code> And Dimensioned Units</h2>
+<p>Import the engine and units separately. <code>:.physics.units</code> selects the native SI catalog; <code>:.physics.units.si</code> is the explicit equivalent. Unit symbols are not spilled by <code>:.physics</code>.</p>
+<section class="readme-example" data-vkf-example-id="example-12"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-12" aria-label="Editable VKF source: 12. physics And Dimensioned Units" spellcheck="false">:.physics
+:.physics.units
+
+force: 2kg * 3m / 1s^2
+normal: cross3([1, 0, 0], [0, 1, 0])
+
+:: force / 1N
+:: normal</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite"></pre></section></div></div></section>
+<p><strong>Exact output:</strong></p>
+<pre><code>6
+[0, 0, 1]</code></pre>
+<p>Both <code>2km</code> and <code>2 km</code> are quantity literals. A unit supplies its scale and one seven-exponent physical dimension. Multiplication and division add and subtract dimensions; addition, subtraction, ordering, and equality require matching dimensions. The native SI catalog provides all seven bases, coherent derived units, and prefixes from quecto through quetta. SI is the only catalog currently declared; future catalogs may change names and scales but never the dimension model.</p>
+<p>The engine surface includes 2D/3D vectors, 3×3 matrices, tetrahedral mass properties, rigid momentum stepping, collision matrices, restitution, tangential/rolling/spin friction, coupled solid contacts, materials, and the deterministic dice example. Rigid-body functions live only in <code>physics</code>; there is no release <code>rigid_body</code> compatibility module.</p>
+<h2 id="13-symbolic">13. <code>symbolic</code></h2>
+<p><code>:.symbolic</code> provides domains <code>N</code>, <code>Z</code>, <code>Q</code>, <code>R</code>, and <code>C</code>; exact expression construction; elementary functions; expansion and collection; simplification; substitution; evaluation; differentiation; integration; and truncated series multiplication.</p>
+<p>The public hierarchy is <code>Expression</code>, with <code>Symbol IS Expression</code>, <code>Constant IS Symbol</code>, and <code>Relation IS Proposition IS Expression</code>. Symbolic <code>=</code> and the ordered comparison operators create relations. <code>=&gt;</code> has lower precedence than those operators and joins propositions without parentheses. It preserves a symbolic <code>Proposition</code>; with two <code>bit</code> operands it evaluates ordinary logical implication. The same token remains the arm separator after <code>??</code>, where its role is fixed by the match context.</p>
+<section class="readme-example" data-vkf-example-id="example-13"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-13" aria-label="Editable VKF source: 13. symbolic" spellcheck="false">:.symbolic
+
+x: R
+claim: (x + 1)^2 = x^2 + 2*x + 1
+
+:: katex(claim)
+:: equivalent((x + 1)^2, x^2 + 2*x + 1)</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite"></pre></section></div></div></section>
+<p><strong>Exact output:</strong></p>
+<pre><code>\left(x + 1\right)^{2} = x^{2} + 2 x + 1
+true</code></pre>
+<p>A power on a domain denotes a vector space, so <code>R^3</code> is a real three-vector domain and <code>R^3-&gt;R</code> is a scalar function on that space.</p>
+<section class="readme-example" data-vkf-example-id="example-14"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-14" aria-label="Editable VKF source: 13. symbolic" spellcheck="false">:.symbolic
+
+x: R
+y: R
+expanded: expand((x + 1)^3)
+derivative: diff(expanded, x)
+
+:: term_count(expanded)
+:: evaluate(expanded, [2])
+:: evaluate(derivative, [2])
+:: evaluate(1/xy, [2, 4])
+:: evaluate(1/x y, [2, 4])</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite"></pre></section></div></div></section>
+<p><strong>Exact output:</strong></p>
+<pre><code>4
+27
+27
+0.125
+2</code></pre>
+<p>In symbolic code, an unbound adjacent name such as <code>xy</code> is decomposed only when it has one unambiguous factorization into already-bound symbolic names. A real <code>xy</code> binding wins. Consequently <code>1/xy</code> above is <code>1/(x*y)</code>, while the space in <code>1/x y</code> resumes the outer product and gives <code>(1/x)*y</code>. Ambiguous factorizations are compile errors; <code>*</code> or parentheses always make intent explicit.</p>
+<p>Literal adjacency uses the same multiplication rule for values and symbols: <code>a:3; 3a+4^2</code> evaluates to <code>25</code>, while <code>x:R; 3x+4^2</code> constructs an evaluable <code>Expression</code>. Symbol spelling is case-preserving. Ordinary multi-character names render with <code>\operatorname{...}</code>; a one-character subscript stays exact (<code>x_r</code> renders as <code>x_{r}</code>), while a multi-character subscript uses <code>\mathrm{...}</code> (<code>x_tot</code> renders as <code>x_{\mathrm{tot}}</code>).</p>
+<p>Ordinary typed functions have one source definition for numeric and symbolic use. A call whose arguments are fully numeric is compiled to its numeric form. A call containing symbols traces the same function body into an <code>Expression</code>:</p>
+<section class="readme-example" data-vkf-example-id="example-15"><div class="readme-example-bar"><span>Run in browser · <span data-vkf-run-version>0.4.5</span></span><button type="button" class="readme-example-play">Run</button></div><div class="readme-example-layout"><div class="readme-example-workspace"><div class="readme-example-editor"><pre class="readme-example-highlight" aria-hidden="true"><code></code></pre><textarea class="readme-example-source" data-example-id="example-15" aria-label="Editable VKF source: 13. symbolic" spellcheck="false">:.symbolic
+
+radius_squared(x:num, y:num) -&gt; num: x^2 + y^2
+
+x: R
+y: R
+numeric: radius_squared(3, 4)
+symbolic_value: radius_squared(x, y)
+numeric_function: compile(symbolic_value, [x, y])
+
+:: numeric
+:: numeric_function(3, 4)</textarea></div><section class="readme-example-terminal"><span>Console</span><pre class="readme-example-output" aria-live="polite"></pre></section></div></div></section>
+<p><strong>Exact output:</strong></p>
+<pre><code>25
+25</code></pre>
+<p><code>compile(expression, variables)</code> produces an ordinary native function. If the listed variables resolve the expression completely, calls return numbers. Any unresolved symbolic constant or symbolic function remains in the returned expression; literals can still replace the arguments that are known. Thus an unknown <code>f:R-&gt;R</code> called as <code>f(2)</code> is a symbolic application, not an invented numeric value.</p>
+<p>The reproducible <a href="./reference/benchmarks/symbolic-comparison/README.html">symbolic comparison</a> uses the exact <code>expand1</code>, <code>expand2</code>, <code>add1</code>, and <code>series</code> kernels published by SymEngine and compares the same operations with SymEngine/C++, SymPy/Python, and Symbolics.jl/Julia. The <a href="./reference/benchmarks/symbolic-comparison/results/windows-x64-030.html">0.3.0 evidence</a> passes all 12 ratios below <code>2×</code>.</p>
+<h2 id="continue-reading">Continue reading</h2>
+<p>Return to the <a href="./guide.html">Guide</a>, look up <a href="./reference.html">Syntax</a>, or review <a href="./performance.html">Performance</a>.</p></article></main><footer class="site-footer">Experimental software · <a href="https://github.com/svenviktorjonsson/vektor-flow">Source</a> · <a href="./origins.html">Origins</a></footer><script type="module" src="./release-selector.mjs"></script><script type="module" src="./documentation.mjs"></script></body></html>

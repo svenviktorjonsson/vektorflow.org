@@ -1,0 +1,71 @@
+{
+  "schema": "vektor-flow/public-release-assets-v1",
+  "version": "0.4.4",
+  "tag": "v0.4.4",
+  "assets": [
+    {
+      "kind": "download",
+      "name": "vektor-flow-windows-x64-setup.exe",
+      "url": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-windows-x64-setup.exe?sha256=7b07f654a5c066e11ab8ed706852bd01e171f5769669078b6df8c05271b527f0",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-windows-x64-setup.exe.sha256",
+      "sha256": "7b07f654a5c066e11ab8ed706852bd01e171f5769669078b6df8c05271b527f0",
+      "bytes": 4537685
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-windows-x64.zip",
+      "url": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-windows-x64.zip?sha256=d786febd3fba73f70e89043bede38214fe1e7439dbaa3a9e330720ff5ffa7216",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-windows-x64.zip.sha256",
+      "sha256": "d786febd3fba73f70e89043bede38214fe1e7439dbaa3a9e330720ff5ffa7216",
+      "bytes": 8535798
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-linux-x64.deb",
+      "url": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-linux-x64.deb?sha256=9684b5e7b426cbded6113b682a368a116d38a4789112894f3e3f983ab3d4052c",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-linux-x64.deb.sha256",
+      "sha256": "9684b5e7b426cbded6113b682a368a116d38a4789112894f3e3f983ab3d4052c",
+      "bytes": 1981378
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-linux-x64.tar.gz",
+      "url": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-linux-x64.tar.gz?sha256=ed9c91ef4fe666a252e513fcefbfeb8ee8b19045972cbe390c5d9ffb50e2bb3e",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-linux-x64.tar.gz.sha256",
+      "sha256": "ed9c91ef4fe666a252e513fcefbfeb8ee8b19045972cbe390c5d9ffb50e2bb3e",
+      "bytes": 2438918
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-macos-arm64.pkg",
+      "url": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-macos-arm64.pkg?sha256=b99cd9a1e008fcc12f89a9ffb96e4f5cd71a21f324960b3164e98ed4573991ce",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-macos-arm64.pkg.sha256",
+      "sha256": "b99cd9a1e008fcc12f89a9ffb96e4f5cd71a21f324960b3164e98ed4573991ce",
+      "bytes": 1499429
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-macos-arm64.tar.gz",
+      "url": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-macos-arm64.tar.gz?sha256=fb9c9f6439d7bea0aa6a28fc55d2a1f63786777b68b029e143814d5e219bcb77",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-macos-arm64.tar.gz.sha256",
+      "sha256": "fb9c9f6439d7bea0aa6a28fc55d2a1f63786777b68b029e143814d5e219bcb77",
+      "bytes": 1499583
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-browser-wasm.zip",
+      "url": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-browser-wasm.zip?sha256=4c1117aeca45b8a796a3b36ccee83b8f0bb10b85dfd2d74f381413493ad46c9a",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.4/vektor-flow-browser-wasm.zip.sha256",
+      "sha256": "4c1117aeca45b8a796a3b36ccee83b8f0bb10b85dfd2d74f381413493ad46c9a",
+      "bytes": 1106174
+    },
+    {
+      "kind": "runtime",
+      "name": "vkf-shared-compiler.wasm",
+      "url": "https://vektorflow.org/runtimes/v0.4.4/vkf-shared-compiler.wasm?sha256=6d783e8cd1ee9f2459d4d1980d0de6e92da92c781ef83f5d94018e773273ab06",
+      "checksumUrl": "https://vektorflow.org/runtimes/v0.4.4/vkf-shared-compiler.wasm.sha256",
+      "sha256": "6d783e8cd1ee9f2459d4d1980d0de6e92da92c781ef83f5d94018e773273ab06",
+      "bytes": 6680476
+    }
+  ]
+}

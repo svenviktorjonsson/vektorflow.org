@@ -1,0 +1,1010 @@
+{
+  "functions": {
+    "__vkf_module_lexer__StringCursor": {
+      "index": 1,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___append_tagged_token": {
+      "index": 21,
+      "parameters": 7,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___lexer_cursor_at": {
+      "index": 14,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___lexer_digit_value": {
+      "index": 16,
+      "parameters": 1,
+      "resultType": 2
+    },
+    "__vkf_module_lexer___lexer_scan_number": {
+      "index": 17,
+      "parameters": 7,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___lexer_skip_identifier": {
+      "index": 15,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___lexer_skip_number": {
+      "index": 19,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___scan_tagged_function_string": {
+      "index": 25,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___scan_tagged_function_tokens": {
+      "index": 26,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___scan_tagged_statement_tokens": {
+      "index": 22,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___string_cursor_advance": {
+      "index": 3,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer___string_cursor_peek": {
+      "index": 2,
+      "parameters": 1,
+      "resultType": 4
+    },
+    "__vkf_module_lexer___string_cursor_slice": {
+      "index": 4,
+      "parameters": 3,
+      "resultType": 4
+    },
+    "__vkf_module_lexer___tagged_function_punctuation_kind": {
+      "index": 24,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_alpha": {
+      "index": 8,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_digit": {
+      "index": 5,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_ident_continue": {
+      "index": 9,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_identifier_start": {
+      "index": 12,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_lower": {
+      "index": 6,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_newline": {
+      "index": 11,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_number_start": {
+      "index": 13,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_upper": {
+      "index": 7,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__is_whitespace": {
+      "index": 10,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__number_token": {
+      "index": 18,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__tagged_numeric_function_token_tape": {
+      "index": 27,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__tagged_statement_token_tape": {
+      "index": 23,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__tagged_token_tape": {
+      "index": 20,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_lexer__token": {
+      "index": 0,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "__vkf_module_mir___mir_dynamic_arithmetic_operator_opcode": {
+      "index": 33,
+      "parameters": 1,
+      "resultType": 2
+    },
+    "__vkf_module_mir___mir_dynamic_arithmetic_operator_precedence": {
+      "index": 34,
+      "parameters": 1,
+      "resultType": 2
+    },
+    "__vkf_module_mir__mir_tagged_dynamic_grouped_arithmetic": {
+      "index": 35,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "__vkf_module_mir__mir_tagged_dynamic_two_derived_bindings": {
+      "index": 32,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "__vkf_module_parser__parse_tagged_printed_dynamic_grouped_arithmetic": {
+      "index": 28,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "__vkf_module_parser__parse_tagged_two_derived_bindings": {
+      "index": 29,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "__vkf_module_typed__typed_tagged_dynamic_grouped_arithmetic": {
+      "index": 30,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "__vkf_module_typed__typed_tagged_two_derived_bindings": {
+      "index": 31,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "__vkf_module_validation__machine_ir_arithmetic_opcode_stack_effect": {
+      "index": 38,
+      "parameters": 1,
+      "resultType": 2
+    },
+    "__vkf_module_validation__machine_ir_arithmetic_opcode_tape_stack_maximum": {
+      "index": 39,
+      "parameters": 1,
+      "resultType": 2
+    },
+    "__vkf_module_validation__machine_ir_numeric_opcode_depth": {
+      "index": 36,
+      "parameters": 2,
+      "resultType": 2
+    },
+    "__vkf_module_validation__machine_ir_numeric_opcode_tape_stack_maximum": {
+      "index": 37,
+      "parameters": 1,
+      "resultType": 2
+    },
+    "_browser_ascii_identifier_start": {
+      "index": 73,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_axis_elementwise": {
+      "index": 57,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_axis_lookup": {
+      "index": 64,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_axis_outer": {
+      "index": 59,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_axis_outer_tensor": {
+      "index": 61,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_axis_product2": {
+      "index": 62,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_axis_product3": {
+      "index": 63,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_axis_scale_plane": {
+      "index": 60,
+      "parameters": 6,
+      "resultType": 1
+    },
+    "_browser_axis_scaled_row": {
+      "index": 58,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_axis_term": {
+      "index": 56,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_basic_line_stop": {
+      "index": 146,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_basic_loop_factor": {
+      "index": 148,
+      "parameters": 2,
+      "resultType": 2
+    },
+    "_browser_basic_loop_sum": {
+      "index": 149,
+      "parameters": 4,
+      "resultType": 2
+    },
+    "_browser_basic_number_after": {
+      "index": 147,
+      "parameters": 2,
+      "resultType": 2
+    },
+    "_browser_basic_switch": {
+      "index": 150,
+      "parameters": 4,
+      "resultType": 2
+    },
+    "_browser_basic_syntax_source_matches": {
+      "index": 151,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_bind_expression_source_matches": {
+      "index": 163,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_bind_update_source_matches": {
+      "index": 161,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_decimal_at": {
+      "index": 155,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_dense_composition": {
+      "index": 173,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_dense_term": {
+      "index": 171,
+      "parameters": 5,
+      "resultType": 6
+    },
+    "_browser_dense_transform": {
+      "index": 172,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_display_axes_by_kind": {
+      "index": 83,
+      "parameters": 4,
+      "resultType": 5
+    },
+    "_browser_display_axes_equal": {
+      "index": 82,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_display_axis_contains": {
+      "index": 79,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_display_bracket_stop": {
+      "index": 72,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_display_call_stop": {
+      "index": 70,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_display_camera_source": {
+      "index": 101,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_display_complex_p_packet": {
+      "index": 99,
+      "parameters": 6,
+      "resultType": 1
+    },
+    "_browser_display_coordinate_axes": {
+      "index": 80,
+      "parameters": 4,
+      "resultType": 5
+    },
+    "_browser_display_coordinate_key": {
+      "index": 81,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_display_coordinate_rank": {
+      "index": 97,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_display_decimal_at": {
+      "index": 75,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_display_grid_shape_matches": {
+      "index": 96,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_display_identifier_stop": {
+      "index": 74,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_display_light_source": {
+      "index": 103,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_display_mesh_source": {
+      "index": 100,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_display_optical_packet": {
+      "index": 94,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_display_options_call": {
+      "index": 65,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_display_raw_source_matches": {
+      "index": 69,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_display_string_stop": {
+      "index": 84,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_display_surface_packet": {
+      "index": 91,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_display_texture_packet": {
+      "index": 87,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_display_v6_packet": {
+      "index": 98,
+      "parameters": 9,
+      "resultType": 1
+    },
+    "_browser_display_value_start": {
+      "index": 71,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_expect_statement": {
+      "index": 191,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_field_indices_valid": {
+      "index": 137,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_find_source": {
+      "index": 67,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_function_name": {
+      "index": 157,
+      "parameters": 2,
+      "resultType": 4
+    },
+    "_browser_function_parameter": {
+      "index": 158,
+      "parameters": 2,
+      "resultType": 4
+    },
+    "_browser_inline_space_only": {
+      "index": 145,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_inline_space_start": {
+      "index": 144,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_layout_only": {
+      "index": 190,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_lifted_complex": {
+      "index": 52,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_lifted_complex_coordinates": {
+      "index": 55,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_lifted_complex_vector": {
+      "index": 53,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_lifted_nested_complex_vector": {
+      "index": 54,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_lifted_nested_vector": {
+      "index": 50,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_lifted_number": {
+      "index": 48,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_lifted_numeric_vector": {
+      "index": 49,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_lifted_value": {
+      "index": 51,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_lifted_vector_function_matches": {
+      "index": 141,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_line_start_before": {
+      "index": 154,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_line_start_before_walk": {
+      "index": 153,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_named_axis_source_matches": {
+      "index": 142,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_cube_packet": {
+      "index": 132,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_cube_scene": {
+      "index": 133,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_native_cube_source_matches": {
+      "index": 116,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_dice_texture_packet": {
+      "index": 129,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_field_scene": {
+      "index": 138,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_native_field_source_matches": {
+      "index": 134,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_light_references_valid": {
+      "index": 126,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_native_plane_packet": {
+      "index": 131,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_rigid_body_packet": {
+      "index": 114,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_rigid_scene": {
+      "index": 115,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_native_rigid_source_matches": {
+      "index": 110,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_rigid_world_packet": {
+      "index": 112,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_surface_packet": {
+      "index": 130,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_native_timing_packet": {
+      "index": 123,
+      "parameters": 4,
+      "resultType": 6
+    },
+    "_browser_nbody_compact": {
+      "index": 178,
+      "parameters": 4,
+      "resultType": 4
+    },
+    "_browser_nbody_flatten": {
+      "index": 186,
+      "parameters": 3,
+      "resultType": 5
+    },
+    "_browser_nbody_mass_terms": {
+      "index": 184,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_nbody_masses": {
+      "index": 185,
+      "parameters": 5,
+      "resultType": 5
+    },
+    "_browser_nbody_nested_value": {
+      "index": 181,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_nbody_scale_row": {
+      "index": 182,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_nbody_scaled_rows": {
+      "index": 183,
+      "parameters": 7,
+      "resultType": 1
+    },
+    "_browser_nbody_shape": {
+      "index": 180,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_nbody_shape_field": {
+      "index": 179,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_numeric_literal_array": {
+      "index": 193,
+      "parameters": 1,
+      "resultType": 5
+    },
+    "_browser_numeric_range": {
+      "index": 156,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_output_assert_source_matches": {
+      "index": 165,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_pairwise_system_plan": {
+      "index": 188,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_pairwise_system_source_matches": {
+      "index": 187,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_parity_clause": {
+      "index": 194,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_permutation_reduction_source_matches": {
+      "index": 195,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_power_final_multiplier": {
+      "index": 175,
+      "parameters": 2,
+      "resultType": 2
+    },
+    "_browser_power_method_source_matches": {
+      "index": 176,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_power_state": {
+      "index": 174,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_procedural_affine_range": {
+      "index": 76,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_procedural_complex_coordinates": {
+      "index": 78,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_procedural_complex_samples": {
+      "index": 77,
+      "parameters": 9,
+      "resultType": 1
+    },
+    "_browser_record_list_count": {
+      "index": 127,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_record_list_has_id": {
+      "index": 125,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_browser_record_list_item": {
+      "index": 128,
+      "parameters": 4,
+      "resultType": 4
+    },
+    "_browser_record_string_field": {
+      "index": 124,
+      "parameters": 2,
+      "resultType": 4
+    },
+    "_browser_rigid_contour_valid": {
+      "index": 113,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_scan_display_mesh_source": {
+      "index": 95,
+      "parameters": 16,
+      "resultType": 1
+    },
+    "_browser_scan_display_mirror_fields": {
+      "index": 88,
+      "parameters": 9,
+      "resultType": 1
+    },
+    "_browser_scan_display_optical_fields": {
+      "index": 92,
+      "parameters": 8,
+      "resultType": 1
+    },
+    "_browser_scan_display_source": {
+      "index": 104,
+      "parameters": 10,
+      "resultType": 1
+    },
+    "_browser_scan_display_surface_camera_fields": {
+      "index": 89,
+      "parameters": 11,
+      "resultType": 1
+    },
+    "_browser_scan_display_surface_fields": {
+      "index": 90,
+      "parameters": 16,
+      "resultType": 1
+    },
+    "_browser_scan_display_texture_fields": {
+      "index": 85,
+      "parameters": 12,
+      "resultType": 1
+    },
+    "_browser_scan_native_cube": {
+      "index": 119,
+      "parameters": 13,
+      "resultType": 1
+    },
+    "_browser_scan_native_cube_scene": {
+      "index": 117,
+      "parameters": 13,
+      "resultType": 1
+    },
+    "_browser_scan_native_dice_texture": {
+      "index": 120,
+      "parameters": 8,
+      "resultType": 1
+    },
+    "_browser_scan_native_field_mesh": {
+      "index": 136,
+      "parameters": 11,
+      "resultType": 1
+    },
+    "_browser_scan_native_field_scene": {
+      "index": 135,
+      "parameters": 8,
+      "resultType": 1
+    },
+    "_browser_scan_native_plane": {
+      "index": 118,
+      "parameters": 11,
+      "resultType": 1
+    },
+    "_browser_scan_native_rigid_scene": {
+      "index": 111,
+      "parameters": 11,
+      "resultType": 1
+    },
+    "_browser_scan_native_shadow": {
+      "index": 122,
+      "parameters": 8,
+      "resultType": 1
+    },
+    "_browser_scan_native_surface": {
+      "index": 121,
+      "parameters": 15,
+      "resultType": 1
+    },
+    "_browser_scan_world_options": {
+      "index": 106,
+      "parameters": 12,
+      "resultType": 1
+    },
+    "_browser_semicolon_pipeline_source_matches": {
+      "index": 168,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_semicolon_pipeline_values": {
+      "index": 169,
+      "parameters": 4,
+      "resultType": 5
+    },
+    "_browser_signed_lifted_value": {
+      "index": 102,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_source_starts_with": {
+      "index": 66,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_source_whitespace_only": {
+      "index": 166,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_token_is": {
+      "index": 160,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_token_kind": {
+      "index": 140,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_token_tape_ends_with_newline": {
+      "index": 43,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_token_tape_has_output_marker": {
+      "index": 42,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_token_tape_is_numeric_literal_function": {
+      "index": 44,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_token_text": {
+      "index": 139,
+      "parameters": 2,
+      "resultType": 4
+    },
+    "_browser_typed_optical_packet": {
+      "index": 93,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_typed_texture_packet": {
+      "index": 86,
+      "parameters": 4,
+      "resultType": 1
+    },
+    "_browser_vector_return_size": {
+      "index": 159,
+      "parameters": 2,
+      "resultType": 2
+    },
+    "_browser_world_argument_start": {
+      "index": 68,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_browser_world_particle_packet": {
+      "index": 108,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_world_source_matches": {
+      "index": 107,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_browser_zero_vector_statement": {
+      "index": 192,
+      "parameters": 3,
+      "resultType": 1
+    },
+    "_compile_tagged_numeric_literal_function_tape": {
+      "index": 45,
+      "parameters": 3,
+      "resultType": 6
+    },
+    "_run_tagged_basic_syntax_source": {
+      "index": 152,
+      "parameters": 1,
+      "resultType": 6
+    },
+    "_run_tagged_bind_expression_source": {
+      "index": 164,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_bind_update_source": {
+      "index": 162,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_browser_numeric_tape": {
+      "index": 46,
+      "parameters": 3,
+      "resultType": 2
+    },
+    "_run_tagged_display_source": {
+      "index": 105,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "_run_tagged_lifted_vector_function": {
+      "index": 197,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_named_axis_source": {
+      "index": 143,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_output_assert_source": {
+      "index": 167,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_pairwise_system_source": {
+      "index": 189,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_permutation_reduction_source": {
+      "index": 196,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_power_method_source": {
+      "index": 177,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_semicolon_pipeline_source": {
+      "index": 170,
+      "parameters": 1,
+      "resultType": 1
+    },
+    "_run_tagged_world_source": {
+      "index": 109,
+      "parameters": 2,
+      "resultType": 1
+    },
+    "compile_tagged_dependency_tape": {
+      "index": 41,
+      "parameters": 1,
+      "resultType": 6
+    },
+    "compile_tagged_printed_dynamic_grouped_arithmetic": {
+      "index": 40,
+      "parameters": 1,
+      "resultType": 6
+    },
+    "run_tagged_browser_source": {
+      "index": 198,
+      "parameters": 2,
+      "resultType": 2
+    },
+    "run_tagged_dependency_source": {
+      "index": 47,
+      "parameters": 1,
+      "resultType": 2
+    }
+  },
+  "memory": {
+    "argumentsCapacity": 16,
+    "argumentsPointer": 454528,
+    "bytecodeLength": 454523,
+    "bytecodePointer": 0,
+    "resultsCapacity": 1,
+    "resultsPointer": 454784
+  },
+  "schema": "vektor-flow.symbolic-kernel",
+  "version": 1,
+  "wasm": "vkf-browser-compiler.wasm"
+}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="description" content="Vektor Flow: a few powerful principles for calculations, data and visual programs. Try supported examples in your browser."><title>Vektor Flow Beta Testing Guide · Vektor Flow</title><link rel="canonical" href="https://vektorflow.org/testing.html"><link rel="stylesheet" href="./site.css"></head><body><a class="skip-link" href="#readme-documentation">Skip to content</a><header class="site-nav"><a class="wordmark" href="./index.html">Vektor Flow</a><nav aria-label="Main navigation"><a href="./guide.html">Guide</a><a href="./reference.html">Syntax</a><a href="./standard-library.html">Std lib</a><a href="./performance.html">Performance</a><a href="./install.html">Download</a></nav><label class="release-selector" for="vkf-release-version">Release <select id="vkf-release-version" data-latest="0.4.5" aria-label="VKF release version"><option value="0.4.5" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.5/vkf-shared-compiler.wasm?sha256=0146e4996ebb505f9fc4808f4825282ad5783ee9021e738a19ad568aaf3e366c" selected>0.4.5</option><option value="0.4.4" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.4/vkf-shared-compiler.wasm?sha256=6d783e8cd1ee9f2459d4d1980d0de6e92da92c781ef83f5d94018e773273ab06">0.4.4</option><option value="0.4.3" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.3/vkf-shared-compiler.wasm?sha256=0317b212c0ca899f27cce30c4dca08c49145903030f2e95fcabc2a422d36252d">0.4.3</option><option value="0.4.0" data-browser-wasm="">0.4.0</option></select></label></header><main class="documentation"><details class="contents"><summary>On this page</summary><nav aria-label="On this page"><a href="#start-here">Start Here</a><a href="#terminal-smoke-tests">Terminal Smoke Tests</a><a href="#vs-code-extension-smoke-test">VS Code Extension Smoke Test</a><a href="#what-feedback-helps-most">What Feedback Helps Most</a><a href="#bug-report-checklist">Bug Report Checklist</a></nav></details><article id="readme-documentation" class="readme"><h1 id="vektor-flow-beta-testing-guide">Vektor Flow Beta Testing Guide</h1>
+<p>This is the fastest path for community testers who want to help us find compiler, standard-library, installation, packaging, and VS Code integration problems.</p>
+<h2 id="start-here">Start Here</h2>
+<ol><li>Install or extract the packaged Vektor Flow release for your platform.</li><li>Confirm the packaged <code>vkf</code> command works in a terminal.</li><li>Run one sample file.</li><li>Install the bundled VS Code extension if you want editor testing too.</li><li>Report any friction with the checklist at the bottom of this file.</li></ol>
+<p>If you are looking for platform-specific install steps, start with:</p>
+<ul><li><a href="./install.html">INSTALL.md</a></li></ul>
+<p>If you are the maintainer preparing a tester bundle, verify the native suite before sharing:</p>
+<pre><code>vkf -t tests/vkf</code></pre>
+<h2 id="terminal-smoke-tests">Terminal Smoke Tests</h2>
+<h3 id="windows">Windows</h3>
+<p>From the extracted bundle folder:</p>
+<pre><code>.\bin\vkf.exe -e ':: &quot;hello, world&quot;'
+.\bin\vkf.exe .\samples\01_hello.vkf
+.\bin\vkf.exe .\samples\64_axis_tags_and_broadcast.vkf</code></pre>
+<h3 id="macos-linux">macOS / Linux</h3>
+<p>From the extracted bundle folder:</p>
+<pre><code>./bin/vkf -e ':: &quot;hello, world&quot;'
+./bin/vkf ./samples/01_hello.vkf
+./bin/vkf ./samples/64_axis_tags_and_broadcast.vkf</code></pre>
+<h2 id="vs-code-extension-smoke-test">VS Code Extension Smoke Test</h2>
+<p>If your bundle includes an <code>extensions/</code> folder:</p>
+<ol><li>Install the bundled <code>.vsix</code> from that folder.</li><li>Open VS Code.</li><li>Set <code>vektorflow.compilerPath</code> to the packaged <code>vkf</code> binary:</li></ol>
+<h3 id="windows-1">Windows</h3>
+<pre><code>{
+  &quot;vektorflow.compilerPath&quot;: &quot;C:\\path\\to\\vkf.exe&quot;
+}</code></pre>
+<h3 id="macos-linux-1">macOS / Linux</h3>
+<pre><code>{
+  &quot;vektorflow.compilerPath&quot;: &quot;/path/to/vkf&quot;
+}</code></pre>
+<ol><li>Open <code>samples/01_hello.vkf</code>.</li><li>Run <code>Run Vektor Flow File</code>.</li><li>Confirm the terminal prints:</li></ol>
+<pre><code>hello, world</code></pre>
+<p>Good extra editor checks:</p>
+<ul><li>syntax highlighting looks correct</li><li>diagnostics appear for real mistakes</li><li><code>Check Vektor Flow File</code> reports compiler errors without running the program</li><li><code>Build Vektor Flow File</code> behaves sensibly for supported native subsets</li></ul>
+<h2 id="what-feedback-helps-most">What Feedback Helps Most</h2>
+<p>We especially want to hear about:</p>
+<ul><li>install friction</li><li>missing bundled files</li><li><code>vkf</code> command failures</li><li>cross-platform differences in native standard-library behavior</li><li>VS Code extension setup friction</li><li>examples that work from source but fail from a packaged bundle</li></ul>
+<h2 id="bug-report-checklist">Bug Report Checklist</h2>
+<p>When reporting a bug, include:</p>
+<ol><li>platform and version:</li></ol>
+<ul><li>Windows / macOS / Linux</li><li>bundle channel if known</li></ul>
+<ol><li>whether you used:</li></ol>
+<ul><li>packaged release</li><li>source build</li></ul>
+<ol><li>exact command you ran</li><li>exact <code>.vkf</code> file or minimal snippet</li><li>terminal output or screenshot</li><li>whether VS Code extension was involved</li><li>whether the issue is:</li></ol>
+<ul><li>install</li><li>compiler/runtime</li><li>package/launcher</li><li>extension/editor</li></ul>
+<p>If the problem involves a packaged native program, also include:</p>
+<ul><li><code>vektorflow-package.json</code></li><li><code>vektorflow-release.json</code> if present</li></ul>
+<p>That gives us enough context to reproduce the issue much faster.</p></article></main><footer class="site-footer">Experimental software · <a href="https://github.com/svenviktorjonsson/vektor-flow">Source</a> · <a href="./origins.html">Origins</a></footer><script type="module" src="./release-selector.mjs"></script></body></html>

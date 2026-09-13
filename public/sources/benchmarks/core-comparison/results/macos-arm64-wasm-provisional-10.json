@@ -1,0 +1,1058 @@
+{
+  "schema": "vektor-flow/wasm-browser-benchmark",
+  "version": 1,
+  "provisional": true,
+  "workload": "spectral-norm-small",
+  "warmups": 3,
+  "measuredRuns": 10,
+  "host": {
+    "platform": "darwin",
+    "release": "24.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M1 (Virtual)",
+    "runnerImage": "macos15",
+    "runnerImageVersion": "20260829.0321.1"
+  },
+  "artifactManifest": {
+    "schema": "vektor-flow/wasm-browser-benchmark-artifacts",
+    "version": 1,
+    "workload": "spectral-norm-small",
+    "expected": 1.2742199912349306,
+    "tolerance": 1e-12,
+    "compiler": {
+      "vkfWasmSha256": "fef26947a5f7d68ba02d10a232f4e8e66a2d2512455b2637029708b1b95ae24c",
+      "clang": "Debian clang version 14.0.6",
+      "rustc": "rustc 1.89.0 (29483883e 2025-08-04)",
+      "zig": "0.14.1"
+    },
+    "artifacts": {
+      "vkf": {
+        "file": "vkf.wasm",
+        "sha256": "86f301ac5969e1a51dfb4287ea8fdcb7f59bdb8acb33003092c33a382fcdf2f4",
+        "imports": 0,
+        "source": "published/spectral-norm-small/vkf.vkf",
+        "sourceSha256": "338af4f20c418b6030ca3a75c8cc27843a09bf171a488dad6faf40d7b7ef502c",
+        "expected": 1.2742199912349306
+      },
+      "c": {
+        "file": "c.wasm",
+        "sha256": "1b8da205679d0ea2ffcbd42ee13ca58a559f3e80adc6e91e454f8329e31c7068",
+        "imports": 0,
+        "source": "published/spectral-norm-small/c.c",
+        "sourceSha256": "d44c39d2cd08deed898dc022b18093bc0f25631b3117a693a93d7ec672ec376a",
+        "expected": 1.2742199912349306
+      },
+      "rust": {
+        "file": "rust.wasm",
+        "sha256": "d387a94769d4f5f2b2f7b58bb59c17e92a47507c0445bd97e4c6c9ef3e954812",
+        "imports": 0,
+        "source": "published/spectral-norm-small/rust.rs",
+        "sourceSha256": "a567fbc398ebbe63875580fc0c1af8552c7887002f36d5167c6375d4244846ad",
+        "expected": 1.2742199912349306
+      },
+      "zig": {
+        "file": "zig.wasm",
+        "sha256": "89f97558416573701c0685561e9f47e3fa9590fa85cfdbcd461aeedfcf126031",
+        "imports": 0,
+        "source": "published/spectral-norm-small/zig.zig",
+        "sourceSha256": "e1fb7e8abc346e7e8dd71b284323d9fb1609a77bb3f82834b808f90dd7584df0",
+        "expected": 1.2742199912349306
+      }
+    }
+  },
+  "browsers": [
+    {
+      "name": "chrome",
+      "ok": true,
+      "capabilities": {
+        "acceptInsecureCerts": false,
+        "browserName": "chrome",
+        "browserVersion": "152.0.7977.64",
+        "chrome": {
+          "chromedriverVersion": "152.0.7977.64 (506c834ecceaa943c5f41e6cfe7f68acb5c45346-refs/branch-heads/7977@{#1891})",
+          "userDataDir": "/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/org.chromium.Chromium.scoped_dir.uJAFjg"
+        },
+        "fedcm:accounts": true,
+        "goog:chromeOptions": {
+          "debuggerAddress": "localhost:49174"
+        },
+        "goog:processID": 1291,
+        "networkConnectionEnabled": false,
+        "pageLoadStrategy": "normal",
+        "platformName": "mac",
+        "proxy": {},
+        "setWindowRect": true,
+        "strictFileInteractability": false,
+        "timeouts": {
+          "implicit": 0,
+          "pageLoad": 300000,
+          "script": 30000
+        },
+        "unhandledPromptBehavior": "dismiss and notify",
+        "webauthn:extension:credBlob": true,
+        "webauthn:extension:largeBlob": true,
+        "webauthn:extension:minPinLength": true,
+        "webauthn:extension:prf": true,
+        "webauthn:virtualAuthenticators": true
+      },
+      "metadata": {
+        "hardwareConcurrency": 3,
+        "manifest": {
+          "artifacts": {
+            "c": {
+              "expected": 1.2742199912349306,
+              "file": "c.wasm",
+              "imports": 0,
+              "sha256": "1b8da205679d0ea2ffcbd42ee13ca58a559f3e80adc6e91e454f8329e31c7068",
+              "source": "published/spectral-norm-small/c.c",
+              "sourceSha256": "d44c39d2cd08deed898dc022b18093bc0f25631b3117a693a93d7ec672ec376a"
+            },
+            "rust": {
+              "expected": 1.2742199912349306,
+              "file": "rust.wasm",
+              "imports": 0,
+              "sha256": "d387a94769d4f5f2b2f7b58bb59c17e92a47507c0445bd97e4c6c9ef3e954812",
+              "source": "published/spectral-norm-small/rust.rs",
+              "sourceSha256": "a567fbc398ebbe63875580fc0c1af8552c7887002f36d5167c6375d4244846ad"
+            },
+            "vkf": {
+              "expected": 1.2742199912349306,
+              "file": "vkf.wasm",
+              "imports": 0,
+              "sha256": "86f301ac5969e1a51dfb4287ea8fdcb7f59bdb8acb33003092c33a382fcdf2f4",
+              "source": "published/spectral-norm-small/vkf.vkf",
+              "sourceSha256": "338af4f20c418b6030ca3a75c8cc27843a09bf171a488dad6faf40d7b7ef502c"
+            },
+            "zig": {
+              "expected": 1.2742199912349306,
+              "file": "zig.wasm",
+              "imports": 0,
+              "sha256": "89f97558416573701c0685561e9f47e3fa9590fa85cfdbcd461aeedfcf126031",
+              "source": "published/spectral-norm-small/zig.zig",
+              "sourceSha256": "e1fb7e8abc346e7e8dd71b284323d9fb1609a77bb3f82834b808f90dd7584df0"
+            }
+          },
+          "compiler": {
+            "clang": "Debian clang version 14.0.6",
+            "rustc": "rustc 1.89.0 (29483883e 2025-08-04)",
+            "vkfWasmSha256": "fef26947a5f7d68ba02d10a232f4e8e66a2d2512455b2637029708b1b95ae24c",
+            "zig": "0.14.1"
+          },
+          "expected": 1.2742199912349306,
+          "schema": "vektor-flow/wasm-browser-benchmark-artifacts",
+          "tolerance": 1e-12,
+          "version": 1,
+          "workload": "spectral-norm-small"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36"
+      },
+      "cells": {
+        "vkf": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.6500000000029104,
+              "sampleSdMs": 0.47199340861728756,
+              "ci95LowerMs": 0.3574554544867443,
+              "ci95UpperMs": 0.9425445455190764,
+              "samples": [
+                0.40000000000873115,
+                0.5,
+                1.8000000000029104,
+                0.8000000000029104,
+                0.39999999999417923,
+                0.3000000000029104,
+                0.40000000000873115,
+                0.39999999999417923,
+                0.40000000000873115,
+                1.1000000000058208
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 68.79000000000087,
+              "sampleSdMs": 56.25308781648125,
+              "ci95LowerMs": 33.92397494816134,
+              "ci95UpperMs": 103.6560250518404,
+              "samples": [
+                46.30000000000291,
+                228.1999999999971,
+                63.80000000000291,
+                52,
+                52.60000000000582,
+                46.80000000000291,
+                52.60000000000582,
+                45.19999999999709,
+                50,
+                50.39999999999418
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 69.87999999999883,
+              "sampleSdMs": 48.37797478651324,
+              "ci95LowerMs": 39.89502057332916,
+              "ci95UpperMs": 99.8649794266685,
+              "samples": [
+                54.69999999999709,
+                204.5,
+                63.40000000000873,
+                46.80000000000291,
+                56.30000000000291,
+                52.39999999999418,
+                47.5,
+                79.19999999999709,
+                49.39999999999418,
+                44.59999999999127
+              ]
+            }
+          }
+        },
+        "c": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.269999999999709,
+              "sampleSdMs": 0.5735852159911398,
+              "ci95LowerMs": -0.08551180008769166,
+              "ci95UpperMs": 0.6255118000871096,
+              "samples": [
+                0,
+                0.09999999999126885,
+                1.9000000000087311,
+                0.09999999999126885,
+                0.09999999999126885,
+                0.10000000000582077,
+                0.09999999999126885,
+                0.10000000000582077,
+                0.10000000000582077,
+                0.10000000000582077
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 0.6,
+              "sampleSdMs": 0.35901098714203006,
+              "ci95LowerMs": 0.37748268481872915,
+              "ci95UpperMs": 0.8225173151812708,
+              "samples": [
+                1.1999999999970896,
+                1.3000000000029104,
+                0.6999999999970896,
+                0.39999999999417923,
+                0.40000000000873115,
+                0.40000000000873115,
+                0.5,
+                0.3000000000029104,
+                0.39999999999417923,
+                0.39999999999417923
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.32000000000116413,
+              "sampleSdMs": 0.0788810637698241,
+              "ci95LowerMs": 0.27110901015031624,
+              "ci95UpperMs": 0.368890989852012,
+              "samples": [
+                0.29999999998835847,
+                0.39999999999417923,
+                0.39999999999417923,
+                0.20000000001164153,
+                0.3000000000029104,
+                0.20000000001164153,
+                0.39999999999417923,
+                0.3000000000029104,
+                0.3000000000029104,
+                0.40000000000873115
+              ]
+            }
+          }
+        },
+        "rust": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.5700000000026193,
+              "sampleSdMs": 0.11595018086941021,
+              "ci95LowerMs": 0.4981333333380788,
+              "ci95UpperMs": 0.6418666666671597,
+              "samples": [
+                0.6999999999970896,
+                0.6000000000058208,
+                0.6999999999970896,
+                0.5,
+                0.5,
+                0.6000000000058208,
+                0.40000000000873115,
+                0.6000000000058208,
+                0.40000000000873115,
+                0.6999999999970896
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 0.41000000000058207,
+              "sampleSdMs": 0.11972189997346235,
+              "ci95LowerMs": 0.33579559761565936,
+              "ci95UpperMs": 0.4842044023855048,
+              "samples": [
+                0.40000000000873115,
+                0.5,
+                0.6999999999970896,
+                0.40000000000873115,
+                0.3000000000029104,
+                0.40000000000873115,
+                0.39999999999417923,
+                0.29999999998835847,
+                0.39999999999417923,
+                0.3000000000029104
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.3199999999982538,
+              "sampleSdMs": 0.04216370213726569,
+              "ci95LowerMs": 0.2938666666638747,
+              "ci95UpperMs": 0.3461333333326329,
+              "samples": [
+                0.3000000000029104,
+                0.3000000000029104,
+                0.40000000000873115,
+                0.3000000000029104,
+                0.39999999999417923,
+                0.29999999998835847,
+                0.3000000000029104,
+                0.29999999998835847,
+                0.3000000000029104,
+                0.29999999998835847
+              ]
+            }
+          }
+        },
+        "zig": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.20000000000145518,
+              "sampleSdMs": 0.04714045207841718,
+              "ci95LowerMs": 0.1707820450958831,
+              "ci95UpperMs": 0.22921795490702726,
+              "samples": [
+                0.19999999999708962,
+                0.19999999999708962,
+                0.20000000001164153,
+                0.19999999999708962,
+                0.19999999999708962,
+                0.10000000000582077,
+                0.3000000000029104,
+                0.19999999999708962,
+                0.20000000001164153,
+                0.19999999999708962
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 0.4400000000023283,
+              "sampleSdMs": 0.08432740426724533,
+              "ci95LowerMs": 0.387733333338086,
+              "ci95UpperMs": 0.4922666666665706,
+              "samples": [
+                0.40000000000873115,
+                0.40000000000873115,
+                0.5999999999912689,
+                0.3000000000029104,
+                0.40000000000873115,
+                0.5,
+                0.5,
+                0.40000000000873115,
+                0.5,
+                0.39999999999417923
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.3599999999962165,
+              "sampleSdMs": 0.10749676997484724,
+              "ci95LowerMs": 0.29337281168679974,
+              "ci95UpperMs": 0.4266271883056333,
+              "samples": [
+                0.39999999999417923,
+                0.5999999999912689,
+                0.39999999999417923,
+                0.39999999999417923,
+                0.3000000000029104,
+                0.39999999999417923,
+                0.19999999999708962,
+                0.29999999998835847,
+                0.3000000000029104,
+                0.3000000000029104
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "firefox",
+      "ok": true,
+      "capabilities": {
+        "acceptInsecureCerts": false,
+        "browserName": "firefox",
+        "browserVersion": "154.0.1",
+        "moz:accessibilityChecks": false,
+        "moz:buildID": "20260824154132",
+        "moz:geckodriverVersion": "0.37.1",
+        "moz:headless": true,
+        "moz:platformVersion": "24.6.0",
+        "moz:processID": 1554,
+        "moz:profile": "/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/rust_mozprofileWjgxgz",
+        "moz:shutdownTimeout": 60000,
+        "moz:webdriverClick": true,
+        "moz:windowless": false,
+        "pageLoadStrategy": "normal",
+        "platformName": "mac",
+        "proxy": {},
+        "setWindowRect": true,
+        "strictFileInteractability": false,
+        "timeouts": {
+          "implicit": 0,
+          "pageLoad": 300000,
+          "script": 30000
+        },
+        "unhandledPromptBehavior": "dismiss and notify",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:154.0) Gecko/20100101 Firefox/154.0"
+      },
+      "metadata": {
+        "hardwareConcurrency": 3,
+        "manifest": {
+          "artifacts": {
+            "c": {
+              "expected": 1.2742199912349306,
+              "file": "c.wasm",
+              "imports": 0,
+              "sha256": "1b8da205679d0ea2ffcbd42ee13ca58a559f3e80adc6e91e454f8329e31c7068",
+              "source": "published/spectral-norm-small/c.c",
+              "sourceSha256": "d44c39d2cd08deed898dc022b18093bc0f25631b3117a693a93d7ec672ec376a"
+            },
+            "rust": {
+              "expected": 1.2742199912349306,
+              "file": "rust.wasm",
+              "imports": 0,
+              "sha256": "d387a94769d4f5f2b2f7b58bb59c17e92a47507c0445bd97e4c6c9ef3e954812",
+              "source": "published/spectral-norm-small/rust.rs",
+              "sourceSha256": "a567fbc398ebbe63875580fc0c1af8552c7887002f36d5167c6375d4244846ad"
+            },
+            "vkf": {
+              "expected": 1.2742199912349306,
+              "file": "vkf.wasm",
+              "imports": 0,
+              "sha256": "86f301ac5969e1a51dfb4287ea8fdcb7f59bdb8acb33003092c33a382fcdf2f4",
+              "source": "published/spectral-norm-small/vkf.vkf",
+              "sourceSha256": "338af4f20c418b6030ca3a75c8cc27843a09bf171a488dad6faf40d7b7ef502c"
+            },
+            "zig": {
+              "expected": 1.2742199912349306,
+              "file": "zig.wasm",
+              "imports": 0,
+              "sha256": "89f97558416573701c0685561e9f47e3fa9590fa85cfdbcd461aeedfcf126031",
+              "source": "published/spectral-norm-small/zig.zig",
+              "sourceSha256": "e1fb7e8abc346e7e8dd71b284323d9fb1609a77bb3f82834b808f90dd7584df0"
+            }
+          },
+          "compiler": {
+            "clang": "Debian clang version 14.0.6",
+            "rustc": "rustc 1.89.0 (29483883e 2025-08-04)",
+            "vkfWasmSha256": "fef26947a5f7d68ba02d10a232f4e8e66a2d2512455b2637029708b1b95ae24c",
+            "zig": "0.14.1"
+          },
+          "expected": 1.2742199912349306,
+          "schema": "vektor-flow/wasm-browser-benchmark-artifacts",
+          "tolerance": 1e-12,
+          "version": 1,
+          "workload": "spectral-norm-small"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:154.0) Gecko/20100101 Firefox/154.0"
+      },
+      "cells": {
+        "vkf": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 1.1,
+              "sampleSdMs": 0.5676462121975466,
+              "ci95LowerMs": 0.7481692326005459,
+              "ci95UpperMs": 1.4518307673994544,
+              "samples": [
+                1,
+                1,
+                0,
+                1,
+                1,
+                1,
+                1,
+                1,
+                2,
+                2
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 47.8,
+              "sampleSdMs": 3.3928028399998595,
+              "ci95LowerMs": 45.69711901324767,
+              "ci95UpperMs": 49.90288098675232,
+              "samples": [
+                49,
+                45,
+                54,
+                51,
+                47,
+                46,
+                47,
+                43,
+                45,
+                51
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 48.4,
+              "sampleSdMs": 8.113089560840693,
+              "ci95LowerMs": 43.3714549928544,
+              "ci95UpperMs": 53.428545007145594,
+              "samples": [
+                49,
+                44,
+                46,
+                47,
+                47,
+                44,
+                44,
+                45,
+                47,
+                71
+              ]
+            }
+          }
+        },
+        "c": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.2,
+              "sampleSdMs": 0.42163702135578396,
+              "ci95LowerMs": -0.06133333333333335,
+              "ci95UpperMs": 0.4613333333333334,
+              "samples": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                1,
+                0,
+                0,
+                0
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 0.2,
+              "sampleSdMs": 0.42163702135578396,
+              "ci95LowerMs": -0.06133333333333335,
+              "ci95UpperMs": 0.4613333333333334,
+              "samples": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.3,
+              "sampleSdMs": 0.4830458915396479,
+              "ci95LowerMs": 0.0006050545962185128,
+              "ci95UpperMs": 0.5993949454037815,
+              "samples": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                1,
+                1,
+                0
+              ]
+            }
+          }
+        },
+        "rust": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 1.1,
+              "sampleSdMs": 0.9944289260117533,
+              "ci95LowerMs": 0.4836465660389686,
+              "ci95UpperMs": 1.7163534339610316,
+              "samples": [
+                0,
+                1,
+                2,
+                1,
+                1,
+                0,
+                1,
+                0,
+                2,
+                3
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 0.4,
+              "sampleSdMs": 0.5163977794943223,
+              "ci95LowerMs": 0.07993334027633137,
+              "ci95UpperMs": 0.7200666597236687,
+              "samples": [
+                1,
+                1,
+                0,
+                0,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.5,
+              "sampleSdMs": 0.7071067811865476,
+              "ci95LowerMs": 0.06173067641004126,
+              "ci95UpperMs": 0.9382693235899587,
+              "samples": [
+                0,
+                0,
+                1,
+                0,
+                2,
+                0,
+                1,
+                0,
+                1,
+                0
+              ]
+            }
+          }
+        },
+        "zig": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.2,
+              "sampleSdMs": 0.42163702135578396,
+              "ci95LowerMs": -0.06133333333333335,
+              "ci95UpperMs": 0.4613333333333334,
+              "samples": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 0.8,
+              "sampleSdMs": 1.0327955589886446,
+              "ci95LowerMs": 0.15986668055266273,
+              "ci95UpperMs": 1.4401333194473374,
+              "samples": [
+                0,
+                1,
+                1,
+                0,
+                2,
+                0,
+                0,
+                0,
+                3,
+                1
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.2,
+              "sampleSdMs": 0.42163702135578396,
+              "ci95LowerMs": -0.06133333333333335,
+              "ci95UpperMs": 0.4613333333333334,
+              "samples": [
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "safari",
+      "ok": true,
+      "capabilities": {
+        "safari:platformVersion": "15.7.9",
+        "safari:automaticInspection": false,
+        "webkit:WebRTC": {
+          "DisableICECandidateFiltering": false,
+          "DisableInsecureMediaCapture": false
+        },
+        "webkit:alwaysAllowAutoplay": false,
+        "browserVersion": "26.6.1",
+        "strictFileInteractability": false,
+        "browserName": "Safari",
+        "safari:useSimulator": false,
+        "safari:automaticProfiling": false,
+        "setWindowRect": true,
+        "acceptInsecureCerts": false,
+        "safari:platformBuildVersion": "24G830",
+        "safari:experimentalWebSocketUrl": false,
+        "platformName": "macOS",
+        "safari:diagnose": false
+      },
+      "metadata": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Safari/605.1.15",
+        "manifest": {
+          "schema": "vektor-flow/wasm-browser-benchmark-artifacts",
+          "expected": 1.2742199912349306,
+          "compiler": {
+            "vkfWasmSha256": "fef26947a5f7d68ba02d10a232f4e8e66a2d2512455b2637029708b1b95ae24c",
+            "clang": "Debian clang version 14.0.6",
+            "rustc": "rustc 1.89.0 (29483883e 2025-08-04)",
+            "zig": "0.14.1"
+          },
+          "tolerance": 1e-12,
+          "version": 1,
+          "workload": "spectral-norm-small",
+          "artifacts": {
+            "vkf": {
+              "sourceSha256": "338af4f20c418b6030ca3a75c8cc27843a09bf171a488dad6faf40d7b7ef502c",
+              "sha256": "86f301ac5969e1a51dfb4287ea8fdcb7f59bdb8acb33003092c33a382fcdf2f4",
+              "source": "published/spectral-norm-small/vkf.vkf",
+              "file": "vkf.wasm",
+              "expected": 1.2742199912349306,
+              "imports": 0
+            },
+            "zig": {
+              "sourceSha256": "e1fb7e8abc346e7e8dd71b284323d9fb1609a77bb3f82834b808f90dd7584df0",
+              "sha256": "89f97558416573701c0685561e9f47e3fa9590fa85cfdbcd461aeedfcf126031",
+              "source": "published/spectral-norm-small/zig.zig",
+              "file": "zig.wasm",
+              "expected": 1.2742199912349306,
+              "imports": 0
+            },
+            "rust": {
+              "sourceSha256": "a567fbc398ebbe63875580fc0c1af8552c7887002f36d5167c6375d4244846ad",
+              "sha256": "d387a94769d4f5f2b2f7b58bb59c17e92a47507c0445bd97e4c6c9ef3e954812",
+              "source": "published/spectral-norm-small/rust.rs",
+              "file": "rust.wasm",
+              "expected": 1.2742199912349306,
+              "imports": 0
+            },
+            "c": {
+              "sourceSha256": "d44c39d2cd08deed898dc022b18093bc0f25631b3117a693a93d7ec672ec376a",
+              "sha256": "1b8da205679d0ea2ffcbd42ee13ca58a559f3e80adc6e91e454f8329e31c7068",
+              "source": "published/spectral-norm-small/c.c",
+              "file": "c.wasm",
+              "expected": 1.2742199912349306,
+              "imports": 0
+            }
+          }
+        },
+        "hardwareConcurrency": 4
+      },
+      "cells": {
+        "vkf": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 1.4,
+              "sampleSdMs": 0.5163977794942244,
+              "ci95LowerMs": 1.079933340276392,
+              "ci95UpperMs": 1.7200666597236078,
+              "samples": [
+                1,
+                2,
+                2,
+                1,
+                1.9999999999995453,
+                1,
+                1,
+                1.0000000000004547,
+                2,
+                1
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 52.5,
+              "sampleSdMs": 4.503085362035477,
+              "ci95LowerMs": 49.70895877652958,
+              "ci95UpperMs": 55.29104122347042,
+              "samples": [
+                51,
+                51,
+                52,
+                62,
+                54.999999999999545,
+                49,
+                44.999999999999545,
+                56,
+                52,
+                52.00000000000091
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 48.400000000000226,
+              "sampleSdMs": 4.4020197384582405,
+              "ci95LowerMs": 45.67159989900507,
+              "ci95UpperMs": 51.128400100995385,
+              "samples": [
+                46.000000000000455,
+                56,
+                48,
+                56,
+                46,
+                45,
+                49,
+                49,
+                46.00000000000091,
+                43.00000000000091
+              ]
+            }
+          }
+        },
+        "c": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.5999999999999546,
+              "sampleSdMs": 0.699205898780072,
+              "ci95LowerMs": 0.1666276940602004,
+              "ci95UpperMs": 1.0333723059397086,
+              "samples": [
+                1,
+                2,
+                0,
+                0,
+                0,
+                1,
+                0.9999999999995453,
+                0,
+                1,
+                0
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 3.399999999999909,
+              "sampleSdMs": 1.9550504398156365,
+              "ci95LowerMs": 2.1882471832549637,
+              "ci95UpperMs": 4.611752816744854,
+              "samples": [
+                2,
+                3,
+                6,
+                3,
+                7.000000000000455,
+                4,
+                0.9999999999995453,
+                4,
+                0.9999999999990905,
+                3
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.4,
+              "sampleSdMs": 0.5163977794943223,
+              "ci95LowerMs": 0.07993334027633137,
+              "ci95UpperMs": 0.7200666597236687,
+              "samples": [
+                0,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+                1,
+                0,
+                1
+              ]
+            }
+          }
+        },
+        "rust": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.5,
+              "sampleSdMs": 0.5270462766947299,
+              "ci95LowerMs": 0.17333333333333334,
+              "ci95UpperMs": 0.8266666666666667,
+              "samples": [
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                1,
+                1,
+                0
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 5.499999999999955,
+              "sampleSdMs": 3.1358146203712023,
+              "ci95LowerMs": 3.5564019619958236,
+              "ci95UpperMs": 7.443598038004086,
+              "samples": [
+                2,
+                5,
+                6,
+                9,
+                7,
+                8,
+                0.9999999999995453,
+                9,
+                1,
+                7
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.30000000000009097,
+              "sampleSdMs": 0.4830458915397943,
+              "ci95LowerMs": 0.0006050545962187348,
+              "ci95UpperMs": 0.5993949454039632,
+              "samples": [
+                1.0000000000004547,
+                0,
+                0.9999999999995453,
+                0,
+                0,
+                0,
+                0,
+                1.0000000000009095,
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "zig": {
+          "ok": true,
+          "metrics": {
+            "compile": {
+              "count": 10,
+              "meanMs": 0.7999999999999545,
+              "sampleSdMs": 0.42163702135576,
+              "ci95LowerMs": 0.538666666666636,
+              "ci95UpperMs": 1.061333333333273,
+              "samples": [
+                1,
+                1,
+                0.9999999999995453,
+                1,
+                1,
+                1,
+                1,
+                0,
+                0,
+                1
+              ]
+            },
+            "cold": {
+              "count": 10,
+              "meanMs": 6.600000000000046,
+              "sampleSdMs": 3.5023801430835717,
+              "ci95LowerMs": 4.429202297157506,
+              "ci95UpperMs": 8.770797702842586,
+              "samples": [
+                6,
+                8,
+                10,
+                11,
+                10,
+                7,
+                1.0000000000004547,
+                5,
+                1,
+                7
+              ]
+            },
+            "warm": {
+              "count": 10,
+              "meanMs": 0.4000000000002274,
+              "sampleSdMs": 0.5163977794946157,
+              "ci95LowerMs": 0.07993334027637689,
+              "ci95UpperMs": 0.7200666597240779,
+              "samples": [
+                1.0000000000004547,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1.0000000000009095,
+                1.0000000000009095
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

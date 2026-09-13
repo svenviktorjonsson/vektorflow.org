@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Vektor Flow · Run example</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../vf-ui/katex/katex.min.css">
+  <link rel="stylesheet" href="../vf-ui/vf-frame.css">
+</head>
+<body>
+  <main class="runner">
+    <section class="workbench" aria-label="Vektor Flow playground">
+      <div class="pane source-pane">
+        <div class="pane-bar">
+          <label class="example-label" for="example">Editor</label>
+          <select id="example" aria-label="Example">
+            <option value="console">Console · dependency chain</option>
+            <option value="console-arithmetic">Console · grouped arithmetic</option>
+          </select>
+          <div class="actions">
+            <button id="play" type="button" hidden>Play</button>
+            <button id="compile" type="button" disabled>Run</button>
+          </div>
+        </div>
+        <div class="editor-shell">
+          <pre class="highlight" aria-hidden="true"><code id="highlight" class="language-vektorflow"></code></pre>
+          <textarea id="source" aria-label="Editable Vektor Flow source" autocomplete="off" autocapitalize="off" spellcheck="false">base: 40
+first: base + 1
+second: first + 1
+second + 1</textarea>
+        </div>
+      </div>
+
+      <div class="pane output-pane">
+        <div class="pane-bar">
+          <span id="output-heading">Console</span>
+          <output id="status">Loading compiler…</output>
+        </div>
+        <div class="result-shell">
+          <pre id="output" aria-live="polite">The compiler is loading locally.</pre>
+          <div id="visualization" aria-label="VKF visualization" hidden></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>window.__vfInlineRetainedScene=true;</script>
+  <script src="../vf-ui/katex/katex.min.js"></script>
+  <script src="../vf-ui/vf-startup-gate.js"></script>
+  <script src="../vf-ui/vf-runtime-packet-contract.js"></script>
+  <script src="../vf-ui/vf-retained-event-adapter.js"></script>
+  <script src="../vf-ui/vf-runtime-source.js"></script>
+  <script src="../vf-ui/vf-html-components.js"></script>
+  <script src="../vf-ui/vf-runtime-scene.js"></script>
+  <script src="../vf-ui/vf-runtime-flow.js"></script>
+  <script src="../vf-ui/vf-compiled-runtime-bridge.js"></script>
+  <script src="../vf-ui/vf-compiled-webgpu-adapter.js"></script>
+  <script src="../vf-ui/vf-render-clock.js"></script>
+  <script src="../vf-ui/vf-frame.js"></script>
+  <script src="../vf-ui/vf-widgets.js"></script>
+  <script src="../vf-ui/vf-static-html-loader.js"></script>
+  <script src="../vf-ui/vf-shared-runtime.js"></script>
+  <script src="../vf-ui/vf-gpu-runtime.js"></script>
+  <script src="../vf-ui/vf-axis2d-ticks.js"></script>
+  <script src="../vf-ui/vf-axis3d-kernel.js"></script>
+  <script src="../vf-ui/vf-axis3d-kernel-adapter.js"></script>
+  <script src="../vf-ui/vf-axis3d-projection-kernel.js"></script>
+  <script src="../vf-ui/vf-axis3d-projection-kernel-adapter.js"></script>
+  <script src="../vf-ui/geom/vf-geom-math.js"></script>
+  <script src="../vf-ui/geom/vf-geom-core.js"></script>
+  <script src="../vf-ui/geom/vf-geom-material-arena.js"></script>
+  <script src="../vf-ui/geom/vf-geom-ledger-layout.js"></script>
+  <script src="../vf-ui/geom/vf-geom-ledger-transport.js"></script>
+  <script src="../vf-ui/geom/vf-geom-ledger.js"></script>
+  <script src="../vf-ui/geom/vf-geom-parametric-surface.js"></script>
+  <script src="../vf-ui/geom/vf-geom-frame-adapter.js"></script>
+  <script src="../vf-ui/geom/vf-geom-wgpu.js"></script>
+  <script src="../vf-ui/vf-display.js"></script>
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

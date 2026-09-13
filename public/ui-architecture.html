@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="description" content="Vektor Flow: a few powerful principles for calculations, data and visual programs. Try supported examples in your browser."><title>ADR 0001: UI Runtime Uses Shared Memory And GPU-Owned Buffers · Vektor Flow</title><link rel="canonical" href="https://vektorflow.org/ui-architecture.html"><link rel="stylesheet" href="./site.css"></head><body><a class="skip-link" href="#readme-documentation">Skip to content</a><header class="site-nav"><a class="wordmark" href="./index.html">Vektor Flow</a><nav aria-label="Main navigation"><a href="./guide.html">Guide</a><a href="./reference.html">Syntax</a><a href="./standard-library.html">Std lib</a><a href="./performance.html">Performance</a><a href="./install.html">Download</a></nav><label class="release-selector" for="vkf-release-version">Release <select id="vkf-release-version" data-latest="0.4.5" aria-label="VKF release version"><option value="0.4.5" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.5/vkf-shared-compiler.wasm?sha256=0146e4996ebb505f9fc4808f4825282ad5783ee9021e738a19ad568aaf3e366c" selected>0.4.5</option><option value="0.4.4" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.4/vkf-shared-compiler.wasm?sha256=6d783e8cd1ee9f2459d4d1980d0de6e92da92c781ef83f5d94018e773273ab06">0.4.4</option><option value="0.4.3" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.3/vkf-shared-compiler.wasm?sha256=0317b212c0ca899f27cce30c4dca08c49145903030f2e95fcabc2a422d36252d">0.4.3</option><option value="0.4.0" data-browser-wasm="">0.4.0</option></select></label></header><main class="documentation"><details class="contents"><summary>On this page</summary><nav aria-label="On this page"><a href="#status">Status</a><a href="#context">Context</a><a href="#decision">Decision</a><a href="#module-shape">Module Shape</a><a href="#runtime-model">Runtime Model</a><a href="#event-model">Event Model</a><a href="#transform-model">Transform Model</a><a href="#consequences">Consequences</a></nav></details><article id="readme-documentation" class="readme"><h1 id="adr-0001-ui-runtime-uses-shared-memory-and-gpu-owned-buffers">ADR 0001: UI Runtime Uses Shared Memory And GPU-Owned Buffers</h1>
+<p>Date: 2026-05-02</p>
+<h2 id="status">Status</h2>
+<p>Accepted.</p>
+<h2 id="context">Context</h2>
+<p>The first interactive UI demos used this loop:</p>
+<ol><li>browser or overlay emits pointer events</li><li>Python polls events over HTTP</li><li>VKF code mutates Python objects</li><li>Python writes <code>vf-display.json</code></li><li>browser or overlay reloads JSON and redraws</li></ol>
+<p>That path is useful for language semantics, screenshots, and simple smoke tests. It is not acceptable for high-performance UI. Dragging a single rectangle showed visible tail latency because every pointer sample crosses process boundaries and forces a JSON/file synchronization cycle.</p>
+<p>Vektor Flow needs UI interaction to feel like a rendering system, not like a remote-control script.</p>
+<h2 id="decision">Decision</h2>
+<p>The real UI runtime is a deep module: callers see a small arena-and-buffer interface, while scheduling, dirty-range tracking, transform propagation, and GPU upload policy stay inside the implementation. The hot seam is:</p>
+<p><code>VKF compiled core -&gt; shared arenas -&gt; renderer adapter -&gt; GPU buffers</code></p>
+<p>That seam replaces the shallow Python/JSON frame loop. Python and JSON may remain adapters for compilation, inspection, compatibility, and tests, but not for interactive frame execution.</p>
+<p>The UI runtime will be:</p>
+<ul><li>browser-first for iteration and testing</li><li>VKF-binary-first or WASM-first for execution in the UI process</li><li>shared-memory-backed for UI state, events, transforms, and geometry</li><li>GPU-buffer-backed for render data</li><li>JSON-free on the hot path</li><li>Python-free on the hot path</li></ul>
+<p>VKF source may still compile through Python during bring-up. The tomorrow-demo path, however, must prove that a VKF binary or compiled core can drive shared arenas directly, and that the renderer reads those arenas into GPU-owned buffers without polling Python or reloading JSON.</p>
+<h2 id="module-shape">Module Shape</h2>
+<p>The first implementable module split is:</p>
+<ul><li><code>CompiledCore</code>: owns VKF execution and writes arena records</li><li><code>RuntimeArenas</code>: owns stable memory layout, generations, and dirty ranges</li><li><code>RendererAdapter</code>: reads dirty arena ranges and updates GPU buffers</li><li><code>InspectionAdapter</code>: exports snapshots for tests and docs outside the hot path</li></ul>
+<p>The main interface is the arena layout plus dirty-range protocol. That gives leverage because demos, tests, browser rendering, and later native overlays can share the same memory contract. It gives locality because event ingestion, transform updates, geometry mutation, and upload policy each change behind one module instead of spreading across scripts, JSON files, and render glue.</p>
+<h2 id="runtime-model">Runtime Model</h2>
+<p>The UI runtime owns arenas:</p>
+<ul><li><code>EventArena</code>: input samples and hover context</li><li><code>TransformArena</code>: TRS/quaternion authoring state plus cached <code>mat4</code></li><li><code>GeometryArena</code>: vertices, indices, dimensions, and topology</li><li><code>WidgetArena</code>: retained widget state and dispatch metadata</li><li><code>CommandArena</code>: append-only setup commands, not per-frame movement</li></ul>
+<p>The render loop owns GPU resources:</p>
+<ul><li>WebGPU storage/uniform buffers when available</li><li>WebGL typed-array uploads as fallback</li><li>native overlay GPU buffers later</li></ul>
+<p>WASM/VKF writes directly into arenas. The renderer reads dirty ranges and uploads only changed slices.</p>
+<p>The renderer is an adapter at the arena seam. WebGPU, WebGL, and later native overlay rendering are separate adapters over the same arena interface; they should not own widget state or VKF execution semantics.</p>
+<h2 id="event-model">Event Model</h2>
+<p>Events carry:</p>
+<ul><li>absolute cursor position in pixel coordinates</li><li>absolute cursor position in active frame/data coordinates when available</li><li>hover context (<code>frame</code>, <code>object</code>, <code>face</code>, <code>edge</code>, <code>vertex</code>)</li><li>button and modifier state</li></ul>
+<p><code>trans</code> may exist as a convenience delta, but it is not the core API. Serious interaction should anchor on <code>down</code> and compute transforms from absolute cursor position:</p>
+<pre class="vkf-static" data-vkf-source><code>down_pos: ui.cursor.pos
+start: rect.transform
+
+drag(e):
+  rect.translate(to: start.pos + (ui.cursor.pos - down_pos))</code></pre>
+<h2 id="transform-model">Transform Model</h2>
+<p>2D and 3D objects expose semantic operations:</p>
+<ul><li><code>translate(trans:[num])</code></li><li><code>rotate(axis:[num], angle:num)</code></li><li><code>scale(factor:[num])</code></li></ul>
+<p>Internally:</p>
+<ul><li>authoring state is TRS</li><li>3D rotation is quaternion</li><li>cached render state is <code>mat4</code></li><li>parent/child propagation updates cached world matrices</li></ul>
+<h2 id="consequences">Consequences</h2>
+<ul><li>The current Python/JSON UI path becomes a compatibility and test path, not the target runtime.</li><li>The next demos must run against the shared-memory browser runtime before adding more language surface.</li><li>A feature is not &quot;real&quot; until it is testable in the shared-memory/GPU path.</li><li>The deletion test for new UI runtime modules is strict: deleting a module should not move its complexity into every caller. If it does, the module was too shallow and the seam needs to move.</li></ul></article></main><footer class="site-footer">Experimental software · <a href="https://github.com/svenviktorjonsson/vektor-flow">Source</a> · <a href="./origins.html">Origins</a></footer><script type="module" src="./release-selector.mjs"></script><script type="module" src="./documentation.mjs"></script></body></html>

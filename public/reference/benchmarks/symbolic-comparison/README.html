@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="description" content="Vektor Flow: a few powerful principles for calculations, data and visual programs. Try supported examples in your browser."><title>Symbolic benchmark comparison · Vektor Flow</title><link rel="canonical" href="https://vektorflow.org/reference/benchmarks/symbolic-comparison/README.html"><link rel="stylesheet" href="../../../site.css"></head><body><a class="skip-link" href="#readme-documentation">Skip to content</a><header class="site-nav"><a class="wordmark" href="../../../index.html">Vektor Flow</a><nav aria-label="Main navigation"><a href="../../../guide.html">Guide</a><a href="../../../reference.html">Syntax</a><a href="../../../standard-library.html">Std lib</a><a href="../../../performance.html">Performance</a><a href="../../../install.html">Download</a></nav><label class="release-selector" for="vkf-release-version">Release <select id="vkf-release-version" data-latest="0.4.5" aria-label="VKF release version"><option value="0.4.5" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.5/vkf-shared-compiler.wasm?sha256=0146e4996ebb505f9fc4808f4825282ad5783ee9021e738a19ad568aaf3e366c" selected>0.4.5</option><option value="0.4.4" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.4/vkf-shared-compiler.wasm?sha256=6d783e8cd1ee9f2459d4d1980d0de6e92da92c781ef83f5d94018e773273ab06">0.4.4</option><option value="0.4.3" data-browser-wasm="https://vektorflow.org/runtimes/v0.4.3/vkf-shared-compiler.wasm?sha256=0317b212c0ca899f27cce30c4dca08c49145903030f2e95fcabc2a422d36252d">0.4.3</option><option value="0.4.0" data-browser-wasm="">0.4.0</option></select></label></header><main class="documentation"><details class="contents"><summary>On this page</summary><nav aria-label="On this page"><a href="#latest-verified-result">Latest verified result</a><a href="#measurement-contract">Measurement contract</a><a href="#pinned-environments">Pinned environments</a><a href="#run">Run</a><a href="#release-verification">Release verification</a></nav></details><article id="readme-documentation" class="readme"><h1 id="symbolic-benchmark-comparison">Symbolic benchmark comparison</h1>
+<p>This laboratory compares VKF's native symbolic engine with three symbolic libraries hosted by general-purpose languages:</p>
+<ul><li>SymEngine at commit <code>0c183629a35dd9d8123fafcc47b0e0283bbae80d</code> in C++</li><li>SymPy <code>1.14.0</code> in Python</li><li>Symbolics.jl <code>7.31.0</code> in Julia <code>1.12.6</code></li></ul>
+<p>The four operations are the exact shapes published in SymEngine's benchmark suite, not kernels invented for VKF:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table><thead><tr><th scope="col">Kernel</th><th scope="col">Published operation</th><th scope="col">Validated result</th></tr></thead><tbody><tr><td><code>expand1</code></td><td>expand <code>(x + y + z + w)^60</code></td><td>39,711 terms</td></tr><tr><td><code>expand2</code></td><td>expand <code>e * (e + w)</code>, where <code>e = (x + y + z + w)^15</code></td><td>6,272 terms</td></tr><tr><td><code>add1</code></td><td>accumulate 3,000 alternating powers of <code>x</code></td><td>2,998 nonconstant terms</td></tr><tr><td><code>series</code></td><td>multiply <code>[0, 1, ..., 999]</code> by itself, truncated to order 1,000</td><td>coefficient 999 = 166,167,000</td></tr></tbody></table></div>
+<h2 id="latest-verified-result">Latest verified result</h2>
+<p>The 0.3.0 Linux x64 evidence is the <a href="../../../reference/benchmarks/symbolic-comparison/results/linux-x64-030.html"><code>readable report</code></a> plus its <a href="../../../sources/benchmarks/symbolic-comparison/results/linux-x64-030.json"><code>raw JSON</code></a>. It contains all ten measured samples per kernel and competitor from the same release workflow run.</p>
+<p>Upstream sources: <a href="https://github.com/symengine/symengine/blob/0c183629a35dd9d8123fafcc47b0e0283bbae80d/benchmarks/expand1.cpp">expand1.cpp</a>, <a href="https://github.com/symengine/symengine/blob/0c183629a35dd9d8123fafcc47b0e0283bbae80d/benchmarks/expand2.cpp">expand2.cpp</a>, <a href="https://github.com/symengine/symengine/blob/0c183629a35dd9d8123fafcc47b0e0283bbae80d/benchmarks/add1.cpp">add1.cpp</a>, and <a href="https://github.com/symengine/symengine/blob/0c183629a35dd9d8123fafcc47b0e0283bbae80d/benchmarks/series.cpp">series.cpp</a>.</p>
+<h2 id="measurement-contract">Measurement contract</h2>
+<p>Each implementation constructs its inputs before starting its internal monotonic timer. The timer covers only the symbolic operation. Every completed sample must produce the validated result above. Each round rotates the process order on the same host so one language does not systematically receive the first or last CPU state.</p>
+<p>The report stores every sample, source and executable hashes, exact tool versions, host CPU and OS, timeout counts, means, sample standard deviations, and <code>VKF / competitor</code> ratios. A ratio below <code>1</code> means VKF was faster. The release gate passes <code>--relative-limit=1.5</code> and requires every ratio to be strictly below that limit.</p>
+<p>A timeout is censored evidence, not a measurement. If an operation exceeds the configured timeout, the report uses that timeout only as a conservative lower bound for competitor time and prints the ratio as <code>&lt;x</code>. It never invents a competitor mean or standard deviation.</p>
+<h2 id="pinned-environments">Pinned environments</h2>
+<p>Create a Python environment and install the exact requirement:</p>
+<pre><code>python -m venv .venv-symbolic
+.venv-symbolic/bin/python -m pip install -r benchmarks/symbolic-comparison/requirements.txt</code></pre>
+<p>On Windows, the Python executable is <code>.venv-symbolic/Scripts/python.exe</code>.</p>
+<p>Install Julia <code>1.12.6</code>, then instantiate the committed Project and Manifest:</p>
+<pre><code>julia --project=benchmarks/symbolic-comparison/julia \
+  -e 'using Pkg; Pkg.instantiate()'</code></pre>
+<p>Build SymEngine from the pinned commit with Boost <code>1.86.0</code>. The checked-in <code>cmake/BoostConfig.cmake</code> makes the header-only Boost multiprecision dependency explicit even with recent CMake versions:</p>
+<pre><code>git clone https://github.com/symengine/symengine.git .work/symengine
+git -C .work/symengine checkout 0c183629a35dd9d8123fafcc47b0e0283bbae80d
+cmake -S .work/symengine -B .work/symengine-build \
+  -DINTEGER_CLASS=boostmp -DBUILD_TESTS=OFF -DBUILD_BENCHMARKS=OFF \
+  -DBoost_DIR=&quot;$PWD/benchmarks/symbolic-comparison/cmake&quot; \
+  -DBOOST_ROOT=/path/to/boost_1_86_0
+cmake --build .work/symengine-build --config Release --parallel
+cmake -S benchmarks/symbolic-comparison/competitors \
+  -B .work/symengine-runner \
+  -DSymEngine_DIR=&quot;$PWD/.work/symengine-build&quot; \
+  -DBoost_DIR=&quot;$PWD/benchmarks/symbolic-comparison/cmake&quot; \
+  -DBOOST_ROOT=/path/to/boost_1_86_0
+cmake --build .work/symengine-runner --config Release --parallel</code></pre>
+<h2 id="run">Run</h2>
+<p>Pass the exact executables for the local environment:</p>
+<pre><code>node benchmarks/symbolic-comparison/run.mjs \
+  --compiler=build/native-compiler-clang/bin/vkf-strict \
+  --python=.venv-symbolic/bin/python \
+  --julia=/path/to/julia \
+  --symengine=.work/symengine-runner/symengine_runner \
+  --runs=3 \
+  --timeout-ms=30000 \
+  --relative-limit=1.5 \
+  --output=benchmarks/symbolic-comparison/results/local.json</code></pre>
+<p>Append <code>.exe</code> where required on Windows. <code>--julia-depot=/path</code> can isolate the Julia package cache. <code>--kernels=series,add1</code> and <code>--languages=vkf,symengine</code> provide quick development subsets. VKF uses the compiler's <code>auto</code> policy by default; override it explicitly with <code>--optimizer-policy=mask-ff</code> when studying a fixed policy.</p>
+<p>The command exits nonzero if any completed or conservatively bounded <code>VKF / competitor</code> ratio reaches <code>--relative-limit</code>, any output differs, or any tool fails. The default and release limit is <code>1.5</code>; release verification also passes it explicitly, and the value is recorded in the JSON and Markdown evidence.</p>
+<h2 id="release-verification">Release verification</h2>
+<p>The native release workflow runs ten samples of the full four-kernel comparison on Linux only after the Windows x64, Linux x64, and macOS arm64 compiler verification jobs succeed. It installs the pinned SymPy and Symbolics.jl environments and builds the pinned SymEngine revision with Boost 1.86.0, then uploads both evidence files even when the relative gate fails. Publishing depends on this job.</p></article></main><footer class="site-footer">Experimental software · <a href="https://github.com/svenviktorjonsson/vektor-flow">Source</a> · <a href="../../../origins.html">Origins</a></footer><script type="module" src="../../../release-selector.mjs"></script></body></html>
