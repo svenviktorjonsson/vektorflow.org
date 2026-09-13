@@ -35,11 +35,11 @@ $env:VKF_NATIVE_BIN = (Resolve-Path build/pages-compiler/bin)
 npm run build:browser-compiler
 node --test tests/bootstrap/browser-compiler-wasm.test.mjs
 node tools/build-pages-readme.mjs --output=web/generated</code></pre>
-<p>The build must pass before publishing. The <a href="https://github.com/svenviktorjonsson/vektor-flow/blob/main/.github/workflows/pages.yml">Pages workflow</a> is the complete build recipe; <a href="./browser-architecture.html">the browser architecture</a> explains the VKF-to-WASM runtime path.</p>
+<p>The build must pass before publishing. The generated public site is the complete versioned distribution; <a href="./browser-architecture.html">the browser architecture</a> explains the VKF-to-WASM runtime path.</p>
 <h2 id="host-it-without-an-application-backend">Host it without an application backend</h2>
 <p>Serve the generated <code>web/</code> directory on a static HTTPS host, preserving its subdirectories. Serve <code>.wasm</code> as <code>application/wasm</code> and <code>.mjs</code> as JavaScript. No VKF compilation service is needed: the browser loads the shipped runtime and executes supported source locally.</p>
 <p>For local testing, use an HTTP static-file server rather than opening <code>index.html</code> as a <code>file://</code> URL. The Web Worker and module paths must remain same-origin and accessible. The existing GitHub Pages workflow publishes this same directory to vektorflow.org.</p>
 <p>Native HTML/CSS applications and the browser examples have different capability boundaries. Native code runs with your user permissions; browser execution intentionally excludes filesystem, process and network access from user programs.</p>
 <h2 id="embed-vkf-in-your-own-webpage">Embed VKF in your own webpage</h2>
 <p><a href="./browser.html">Build the browser bundle and connect it to HTML/CSS</a> without a compilation backend.</p>
-<p><a href="./guide.html">Return to the guide</a>.</p></article></main><footer class="site-footer">Experimental software · <a href="https://github.com/svenviktorjonsson/vektor-flow">Source</a> · <a href="./origins.html">Origins</a></footer><script type="module" src="./release-selector.mjs"></script><script type="module" src="./documentation.mjs"></script></body></html>
+<p><a href="./guide.html">Return to the guide</a>.</p></article></main><footer class="site-footer">Experimental software · <a href="./origins.html">Origins</a></footer><script type="module" src="./release-selector.mjs"></script><script type="module" src="./documentation.mjs"></script></body></html>
