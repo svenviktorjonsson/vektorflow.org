@@ -98,6 +98,9 @@ select:focus-visible, textarea:focus-visible {
 .readme th, .readme td { border: 1px solid var(--rule); padding: 6px 13px; text-align: left; }
 .readme th { white-space: nowrap; }
 .readme tr:nth-child(2n) { background: #f6f8fa; }
+.benchmark-table table { width: max-content; min-width: max(100%, 62rem); }
+.benchmark-table th, .benchmark-table td { min-width: 8rem; vertical-align: top; }
+.benchmark-table th:first-child, .benchmark-table td:first-child { min-width: 18rem; }
 
 .readme-example { margin: 16px 0; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
 .readme-example-bar {
