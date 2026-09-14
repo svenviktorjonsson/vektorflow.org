@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Vektor Flow 0.6.0 development preview — water capture in progress</title>
+    <title>Vektor Flow 0.6.0 development preview — water test video</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
@@ -28,18 +28,30 @@
         font-size: 12px;
         vertical-align: 2px;
       }
+      video {
+        display: block;
+        width: 100%;
+        max-height: calc(100dvh - 132px);
+        border-radius: 14px;
+        background: #000;
+      }
       p { margin: 10px 2px 0; color: #9eabc0; }
       a { color: #8cc8ff; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Water capture <span class="status">replacement in progress</span></h1>
+      <h1>Water test video <span class="status">0.6.0 · work in progress</span></h1>
+      <video controls playsinline preload="metadata" poster="./latest.png">
+        <source src="./latest.mp4" type="video/mp4">
+        Your browser does not support MP4 video.
+      </video>
       <p>
-        The previous proof was withdrawn because its splash breakup and warm
-        low-resolution caustic did not pass visual review. A new capture based
-        on the shared rigid-body and APIC liquid state is in progress. No water
-        video is published here until that full GPU capture passes review.
+        Latest mobile-compatible VKF capture from the shared 3D rigid-body and
+        APIC water state. It demonstrates the current cavity, crown, central jet,
+        spray, foam and refractive interfaces; it is an active proof, not a
+        released feature or final visual result.
+        <a href="./latest.mp4" download>Download MP4</a>.
       </p>
     </main>
   </body>
