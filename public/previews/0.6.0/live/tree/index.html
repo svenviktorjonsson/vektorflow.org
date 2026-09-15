@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101a16">
+  <title>Vektor Flow · live tree and grass</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #101a16; color: #edf4ea; }
+    #controls { position: fixed; z-index: 20; inset: 0 0 auto 0; min-height: 58px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #405148; background: rgb(16 26 22 / .94); backdrop-filter: blur(12px); }
+    h1 { margin: 0 14px 0 0; font-size: clamp(17px, 3.8vw, 23px); }
+    label { display: flex; align-items: center; gap: 8px; color: #c8d4ca; font-size: 13px; }
+    input { accent-color: #b8d692; }
+    button { min-height: 38px; border: 1px solid #64766a; border-radius: 9px; padding: 0 13px; background: #203029; color: inherit; font: inherit; font-weight: 670; }
+    button[aria-pressed="true"] { background: #dcebd6; color: #152019; border-color: #dcebd6; }
+    #status { margin-left: auto; color: #aebdaf; font-size: 12px; }
+    #layer { position: fixed; inset: 58px 0 0; }
+    #vf-screen-canvas { position: fixed; inset: 58px 0 0; pointer-events: none; }
+    #error { position: fixed; z-index: 30; inset: 70px 12px auto; padding: 12px; color: #ffb4ab; background: #301c1c; white-space: pre-wrap; }
+    @media (max-width: 680px) { #controls { min-height: 102px; } #layer, #vf-screen-canvas { inset-block-start: 102px; } #status { width: 100%; margin: 0; } }
+  </style>
+</head>
+<body data-vf-runtime-autoboot="false">
+  <div id="controls">
+    <h1>Tree and grass</h1>
+    <label>Wind <input id="wind" type="range" min="0" max="1" value="0.32" step="0.01"></label>
+    <button id="grass" type="button" aria-pressed="true">Grass</button>
+    <span id="status" role="status">Growing the retained tree…</span>
+  </div>
+  <div id="layer"></div>
+  <canvas id="vf-screen-canvas"></canvas>
+  <pre id="error" hidden></pre>
+  <script>
+    window.__vfRuntimeShellConfig = {
+      sceneStyleDeps: [{ href: 'vf-frame.css' }],
+      sceneScriptDeps: [
+        'vf-frame.js',
+        'geom/vf-geom-math.js',
+        'geom/vf-geom-core.js',
+        'geom/vf-geom-material-arena.js',
+        'geom/vf-geom-ledger.js',
+        'geom/vf-geom-ledger-layout.js',
+        'geom/vf-geom-ledger-transport.js',
+        'geom/vf-geom-parametric-surface.js',
+        'geom/vf-geom-frame-adapter.js',
+        'geom/vf-geom-wgpu.js',
+        'vf-display.js',
+      ],
+    };
+  </script>
+  <script src="./ui/vf-runtime-shell.js?v=tree-grass-live-1"></script>
+  <script type="module" src="./scene.mjs"></script>
+</body>
+</html>

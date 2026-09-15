@@ -1,0 +1,206 @@
+import {
+  createWeatheredGraniteSpecimenReference,
+} from './vf-weathered-granite-specimen.mjs';
+
+export const STONE_SPECIES_PROFILES = Object.freeze([
+  Object.freeze({ id: 'gray-granite', aspect: [1.00, 0.94, 1.15], aspectVariation: Object.freeze({ planar: [0.92, 1.08], vertical: [0.96, 1.26] }), tilt: 0.28, macroForm: Object.freeze({ facetCount: 7, facetStrength: 0.035, profileExponent: 0.76, latitudeWarp: 0.030, latitudeTwist: 8.0 }), roughness: [0.70, 0.94], albedo: [0.28, 0.82] }),
+  Object.freeze({ id: 'red-granite', aspect: [1.08, 0.90, 1.08], aspectVariation: Object.freeze({ planar: [0.91, 1.09], vertical: [0.98, 1.31] }), tilt: 0.35, macroForm: Object.freeze({ facetCount: 8, facetStrength: 0.05, profileExponent: 0.72, latitudeWarp: 0.034, latitudeTwist: 9.5 }), roughness: [0.68, 0.93], albedo: [0.22, 0.74] }),
+  Object.freeze({ id: 'pale-quartzite', aspect: [0.92, 1.04, 1.35], aspectVariation: Object.freeze({ planar: [0.93, 1.07], vertical: [0.94, 1.22] }), tilt: 0.25, macroForm: Object.freeze({ facetCount: 6, facetStrength: 0.08, profileExponent: 0.86, latitudeWarp: 0.038, latitudeTwist: 11.0 }), roughness: [0.66, 0.90], albedo: [0.52, 0.84] }),
+  Object.freeze({ id: 'dark-basalt', aspect: [0.90, 0.92, 1.65], aspectVariation: Object.freeze({ planar: [0.91, 1.09], vertical: [0.92, 1.24] }), tilt: 0.42, macroForm: Object.freeze({ facetCount: 9, facetStrength: 0.11, profileExponent: 0.92, latitudeWarp: 0.042, latitudeTwist: 13.0 }), roughness: [0.80, 0.94], albedo: [0.10, 0.34] }),
+  Object.freeze({ id: 'banded-gneiss', aspect: [1.16, 0.86, 0.90], aspectVariation: Object.freeze({ planar: [0.90, 1.10], vertical: [1.00, 1.38] }), tilt: 0.32, macroForm: Object.freeze({ facetCount: 5, facetStrength: 0.02, profileExponent: 0.62, latitudeWarp: 0.024, latitudeTwist: 7.0 }), roughness: [0.70, 0.90], albedo: [0.25, 0.68] }),
+]);
+
+const PILE_SPECIES_COMPOSITION = Object.freeze([
+  3, 0, 4, 1, 3, 2, 4, 0, 3, 1, 4, 2,
+  2, 3, 4, 0, 1, 2,
+  0, 1,
+]);
+
+function mix32(value) {
+  let word = value >>> 0;
+  word ^= word >>> 16;
+  word = Math.imul(word, 0x7feb352d) >>> 0;
+  word ^= word >>> 15;
+  word = Math.imul(word, 0x846ca68b) >>> 0;
+  word ^= word >>> 16;
+  return word >>> 0;
+}
+
+function unit(seed, lane) {
+  return mix32(seed ^ Math.imul(lane + 1, 0x9e3779b1)) / 0x100000000;
+}
+
+function modelMatrix(center, yaw, pitch, roll, scale) {
+  const cy = Math.cos(yaw); const sy = Math.sin(yaw);
+  const cp = Math.cos(pitch); const sp = Math.sin(pitch);
+  const cr = Math.cos(roll); const sr = Math.sin(roll);
+  return [
+    cy * cp * scale[0], sy * cp * scale[0], -sp * scale[0], 0,
+    (cy * sp * sr - sy * cr) * scale[1],
+    (sy * sp * sr + cy * cr) * scale[1], cp * sr * scale[1], 0,
+    (cy * sp * cr + sy * sr) * scale[2],
+    (sy * sp * cr - cy * sr) * scale[2], cp * cr * scale[2], 0,
+    center[0], center[1], center[2], 1,
+  ];
+}
+
+function transformedBounds(packet, matrix) {
+  const minimum = [Infinity, Infinity, Infinity];
+  const maximum = [-Infinity, -Infinity, -Infinity];
+  for (let offset = 0; offset < packet.vertices.length; offset += 10) {
+    const x = packet.vertices[offset]; const y = packet.vertices[offset + 1];
+    const z = packet.vertices[offset + 2];
+    const point = [
+      matrix[0] * x + matrix[4] * y + matrix[8] * z,
+      matrix[1] * x + matrix[5] * y + matrix[9] * z,
+      matrix[2] * x + matrix[6] * y + matrix[10] * z,
+    ];
+    for (let axis = 0; axis < 3; axis += 1) {
+      minimum[axis] = Math.min(minimum[axis], point[axis]);
+      maximum[axis] = Math.max(maximum[axis], point[axis]);
+    }
+  }
+  return { minimum, maximum };
+}
+
+export function createStoneSpeciesPileReference() {
+  const meshes = [];
+  const individuals = [];
+  const speciesOccurrences = STONE_SPECIES_PROFILES.map(() => 0);
+  for (let index = 0; index < 20; index += 1) {
+    const speciesIndex = PILE_SPECIES_COMPOSITION[index];
+    const individualIndex = speciesOccurrences[speciesIndex];
+    speciesOccurrences[speciesIndex] += 1;
+    const profile = STONE_SPECIES_PROFILES[speciesIndex];
+    const seed0 = mix32(0x51f15e5d ^ Math.imul(speciesIndex + 1, 0x9e3779b1)
+      ^ Math.imul(individualIndex + 1, 0x85ebca77));
+    const seed1 = mix32(seed0 ^ 0xc2b2ae3d);
+    const identity = Object.freeze({
+      generator: 'vkf.conditioned', version: 1,
+      seed: Object.freeze([seed0, seed1]), domain: 'material',
+      hierarchy: Object.freeze(['world:highland', `stone:${profile.id}`, `individual:${individualIndex}`]),
+      lod: 0, channel: 'geology',
+    });
+    const specimen = createWeatheredGraniteSpecimenReference(identity, {
+      granularMicrorelief: true,
+      microshadow: true,
+      roundedUnderside: true,
+      macroForm: profile.macroForm,
+    });
+    const layer = index < 12 ? 0 : (index < 18 ? 1 : 2);
+    const layerIndex = layer === 0 ? index : (layer === 1 ? index - 12 : index - 18);
+    const layerCount = layer === 0 ? 10 : (layer === 1 ? 6 : 2);
+    const baseScale = 0.205 + layer * 0.010 + unit(seed0, 1) * 0.022;
+    const scale = profile.aspect.map((value, axis) => {
+      const bounds = axis === 2
+        ? profile.aspectVariation.vertical : profile.aspectVariation.planar;
+      return value * baseScale * (bounds[0] + unit(seed0, 3 + axis) * (bounds[1] - bounds[0]));
+    });
+    const angle = layerIndex / layerCount * Math.PI * 2
+      + (layer === 1 ? 0.31 : 0) + (unit(seed1, 7) - 0.5) * 0.09;
+    const innerBase = layer === 0 && layerIndex >= 10;
+    const radiusX = layer === 0 ? 1.55 : (layer === 1 ? 0.76 : 0.19);
+    const radiusY = layer === 0 ? 0.98 : (layer === 1 ? 0.48 : 0.09);
+    const horizontalCenter = [
+      (innerBase ? (layerIndex === 10 ? -0.43 : 0.43) : Math.cos(angle) * radiusX)
+        + (unit(seed1, 8) - 0.5) * 0.06,
+      (innerBase ? 0 : Math.sin(angle) * radiusY)
+        + (unit(seed1, 10) - 0.5) * 0.05,
+    ];
+    const supportRadius = Math.max(
+      specimen.metrics.maximumRadius * scale[0],
+      specimen.metrics.maximumRadius * scale[1],
+    );
+    const yaw = unit(seed1, 9) * Math.PI * 2;
+    const pitch = (unit(seed0, 11) * 2 - 1) * profile.tilt;
+    const roll = (unit(seed1, 12) * 2 - 1) * profile.tilt;
+    const orientation = modelMatrix([0, 0, 0], yaw, pitch, roll, scale);
+    const bounds = transformedBounds(specimen.packet, orientation);
+    const formExtents = bounds.maximum.map((value, axis) => value - bounds.minimum[axis]);
+    const formAspectRatio = formExtents[2] / Math.max(formExtents[0], formExtents[1]);
+    const localMidZ = (bounds.minimum[2] + bounds.maximum[2]) * 0.5;
+    const halfHeight = (bounds.maximum[2] - bounds.minimum[2]) * 0.25;
+    const collisionRadius = supportRadius * 0.5;
+    const groundTranslation = -bounds.minimum[2];
+    let translationZ = groundTranslation;
+    const candidates = [];
+    for (const support of individuals) {
+      const distance = Math.hypot(
+        horizontalCenter[0] - support.center[0], horizontalCenter[1] - support.center[1],
+      );
+      const horizontalSum = collisionRadius + support.collisionRadius;
+      if (distance >= horizontalSum) continue;
+      const horizontalPart = distance / horizontalSum;
+      const verticalSum = halfHeight + support.halfHeight;
+      const requiredCenterZ = support.proxyCenterZ
+        + verticalSum * Math.sqrt(Math.max(0, 1 - horizontalPart * horizontalPart));
+      const requiredTranslation = requiredCenterZ - localMidZ;
+      candidates.push({ supportIndex: support.index, requiredTranslation });
+      translationZ = Math.max(translationZ, requiredTranslation);
+    }
+    const center = [horizontalCenter[0], horizontalCenter[1], translationZ];
+    const proxyCenterZ = translationZ + localMidZ;
+    const contacts = candidates
+      .filter(({ requiredTranslation }) => Math.abs(requiredTranslation - translationZ) < 2e-6)
+      .map(({ supportIndex }) => {
+        const support = individuals[supportIndex];
+        const horizontalPart = Math.hypot(
+          center[0] - support.center[0], center[1] - support.center[1],
+        ) / (collisionRadius + support.collisionRadius);
+        const verticalPart = (proxyCenterZ - support.proxyCenterZ) / (halfHeight + support.halfHeight);
+        return Object.freeze({ supportIndex, normalizedSeparation: Math.hypot(horizontalPart, verticalPart) });
+      });
+    const packet = Object.freeze({
+      ...specimen.packet,
+      id: `stone:pile:${profile.id}:${individualIndex}`,
+      object_id: index + 1,
+      _modelMatrix: modelMatrix(center, yaw, pitch, roll, scale),
+      rock_material_gpu: Object.freeze({
+        ...specimen.packet.rock_material_gpu,
+        speciesIndex,
+      }),
+    });
+    meshes.push(packet);
+    individuals.push(Object.freeze({
+      index, speciesIndex, speciesId: profile.id, individualIndex, layer, identity,
+      seed: Object.freeze([seed0, seed1]), center: Object.freeze(center.slice()),
+      scale: Object.freeze(scale), yaw, pitch, roll, supportRadius,
+      formExtents: Object.freeze(formExtents), formAspectRatio,
+      vertexCount: packet.vertices.length / 10,
+      triangleCount: packet.indices.length / 3,
+      baseHeightSpan: specimen.metrics.baseHeightSpan,
+      undersideHeightSpan: specimen.metrics.undersideHeightSpan,
+      macroFacetDisplacementSpan: specimen.metrics.macroFacetDisplacementSpan,
+      latitudeContourHeightSpan: specimen.metrics.latitudeContourHeightSpan,
+      latitudeProfileDisplacementMaximum: specimen.metrics.latitudeProfileDisplacementMaximum,
+      collisionRadius, halfHeight, proxyCenterZ,
+      minimumWorldZ: bounds.minimum[2] + translationZ,
+      contacts: Object.freeze(contacts),
+      vectorBytes: specimen.vectorBytes,
+    }));
+  }
+  let maximumNormalizedPenetration = 0;
+  for (let right = 1; right < individuals.length; right += 1) {
+    for (let left = 0; left < right; left += 1) {
+      const a = individuals[left]; const b = individuals[right];
+      const horizontalPart = Math.hypot(a.center[0] - b.center[0], a.center[1] - b.center[1])
+        / (a.collisionRadius + b.collisionRadius);
+      const verticalPart = Math.abs(a.proxyCenterZ - b.proxyCenterZ) / (a.halfHeight + b.halfHeight);
+      maximumNormalizedPenetration = Math.max(
+        maximumNormalizedPenetration, Math.max(0, 1 - Math.hypot(horizontalPart, verticalPart)),
+      );
+    }
+  }
+  return Object.freeze({
+    kind: 'stone-species-pile:v1',
+    profiles: STONE_SPECIES_PROFILES,
+    individuals: Object.freeze(individuals),
+    meshes: Object.freeze(meshes),
+    settlement: Object.freeze({
+      maximumNormalizedPenetration,
+      floatingCount: individuals.filter((item) => (
+        item.minimumWorldZ > 1e-7 && item.contacts.length === 0
+      )).length,
+    }),
+  });
+}
