@@ -37,6 +37,8 @@
       }
       p { margin: 10px 2px 0; color: #9eabc0; }
       a { color: #8cc8ff; }
+      .live { display: inline-block; margin-top: 12px; padding: 10px 12px;
+        border: 1px solid #8cc8ff; border-radius: 9px; text-decoration: none; }
     </style>
   </head>
   <body>
@@ -45,6 +47,7 @@
       <video controls playsinline preload="metadata" poster="./latest.png">
         <source src="./latest.mp4" type="video/mp4">
       </video>
+      <a class="live" href="../../live-gpu/water/">Run the live WebGPU simulation</a>
       <p>
         Ten-second, deliberately slowed test-generated visualization from active Vektor Flow 0.6.0 water and
         shared-physics development. Evidence 178 is an internal verification

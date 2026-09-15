@@ -29,6 +29,14 @@ jobs:
           test -f public/previews/0.6.0/test-generated-videos/water-surface/index.html
           test -f public/previews/0.6.0/test-generated-videos/water-surface/latest.mp4
           test -f public/previews/0.6.0/test-generated-videos/water-surface/latest.png
+          test -f public/previews/0.6.0/live-gpu/water/index.html
+          test -f public/previews/0.6.0/live-gpu/water/scene.mjs
+          test -f public/previews/0.6.0/live-gpu/water/runtime/vf-liquid-particle-world-gpu.mjs
+          test -f public/previews/0.6.0/live-gpu/water/runtime/vf-liquid-particle-embedding-gpu.mjs
+          test -f public/previews/0.6.0/live-gpu/water/runtime/fixed-step-realtime-clock.mjs
+          test -f public/previews/0.6.0/live-gpu/water/runtime/vf-physics-liquid-local-particle-reference.mjs
+          test -f public/previews/0.6.0/live-gpu/water/runtime/vf-physics-transport-core-reference.mjs
+          test -f public/previews/0.6.0/live-gpu/water/runtime/vf-water-2d-stone-channel-reference.mjs
       - uses: actions/upload-pages-artifact@v4
         with:
           path: public
