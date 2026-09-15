@@ -241,7 +241,7 @@
     if (!global.fetch || !global.createImageBitmap) {
       failFast("chess_board texture font requires fetch and createImageBitmap");
     }
-    var atlasUrl = runtimeAssetUrl("../assets/fonts/NotoSans-Regular-chess-sdf.png");
+    var atlasUrl = runtimeAssetUrl("../../../../../../vf-ui/assets/fonts/NotoSans-Regular-chess-sdf.png");
     var response = await global.fetch(atlasUrl, { cache: "force-cache" });
     if (!response.ok) {
       failFast("chess_board font atlas failed to load: " + atlasUrl + " (" + String(response.status) + ")");
