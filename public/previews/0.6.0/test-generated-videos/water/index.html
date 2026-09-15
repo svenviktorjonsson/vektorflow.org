@@ -31,48 +31,26 @@
       video {
         display: block;
         width: 100%;
-        max-height: calc(100dvh - 132px);
+        max-height: calc(100dvh - 88px);
         border-radius: 14px;
         background: #000;
       }
       p { margin: 10px 2px 0; color: #9eabc0; }
       a { color: #8cc8ff; }
-      .open-video {
-        display: block;
-        margin: 12px 0;
-        padding: 13px 16px;
-        border: 1px solid #4676a3;
-        border-radius: 12px;
-        background: #10243a;
-        color: #fff;
-        font-weight: 700;
-        text-align: center;
-        text-decoration: none;
-      }
     </style>
   </head>
   <body>
     <main>
-      <h1>Water entry and splash <span class="status">0.6.0 · work in progress</span></h1>
-      <video controls playsinline webkit-playsinline preload="auto" poster="./latest.png?v=water-interference-spray-410f-20260914">
-        <source src="./latest.mp4?v=water-interference-spray-410f-20260914" type="video/mp4">
-        Your browser does not support MP4 video.
+      <h1>Water test video <span class="status">0.6.0 · not released</span></h1>
+      <video controls playsinline preload="metadata" poster="./latest.png">
+        <source src="./latest.mp4" type="video/mp4">
       </video>
-      <a class="open-video" href="./latest.mp4?v=water-interference-spray-410f-20260914" target="_blank" rel="noopener">Open video directly</a>
       <p>
-        Latest mobile-compatible VKF capture from the shared 3D rigid-body and
-        APIC water state. It demonstrates the current cavity, crown, central jet,
-        fine spray, foam, depth-aware Snell refraction and Fresnel surface reflection.
-        The entry cavity follows the generated stone's projected impact profile and
-        closes into the centred jet in about 0.080 seconds. The 3,200-drop crown and
-        240-drop jet use a conserved size distribution. This 410-frame proof renders
-        transmission and a clipped reflected-camera scene as separate physical paths.
-        Four finite-depth gravity-capillary wave scales propagate, reflect from the
-        chamber and interfere while their normals distort the reflected coloured walls
-        and emissive sun. It continues through liquid relaxation and ends at measured rest.
-        It is an active proof, not a released feature or final visual result.
-        If embedded playback fails, use “Open video directly” above. You can also
-        <a href="./latest.mp4?v=water-interference-spray-410f-20260914" download>download the MP4</a>.
+        Ten-second, deliberately slowed test-generated visualization from active Vektor Flow 0.6.0 water and
+        shared-physics development. Evidence 178 is an internal verification
+        run, not a released feature or final visual result. Only the latest
+        proof of concept is retained here.
+        <a href="./latest.mp4">Open MP4 directly</a>.
       </p>
     </main>
   </body>

@@ -1689,7 +1689,6 @@
 
     function shouldUseAnalyticLineStroke(spec) {
       return !!spec &&
-        spec.mode3d === false &&
         String(spec.topology || "") === "line-list" &&
         fieldMeshRenderMode(spec) === "line" &&
         fieldMeshMarkerSpace(spec) === "pixel";
@@ -3079,7 +3078,7 @@
     for (var i = 0; i < texts.length; i += 1) {
       var item = texts[i] || {};
       if (item.edge_anchor !== true || item.world !== true) { continue; }
-      var p = geomTextToPx(item, w, h, geom.camera || null);
+      var p = geomTextToPx(item, w, h, geom.camera || null, geom);
       if (!p) { continue; }
       var el = pool[used];
       if (!el || el.parentNode !== layer) {
@@ -8038,18 +8037,23 @@
   }
 
   function isSimple2DMarkerLineMesh(mesh) {
+    var topology = String(mesh && mesh.topology || "");
+    var renderMode = String(mesh && mesh.render_mode || "");
     var retainedCurve = String(mesh && mesh.curve_path || "") === "open-continuous";
-    var retainedArenaArrays = retainedCurve &&
+    var retainedArenaArrays =
       ArrayBuffer.isView(mesh && mesh.vertices) &&
       ArrayBuffer.isView(mesh && mesh.indices);
+    var arrays = (Array.isArray(mesh && mesh.vertices) && Array.isArray(mesh && mesh.indices)) ||
+      retainedArenaArrays;
+    var retainedPoints = topology === "point-list" && renderMode === "marker_impostor";
+    var retainedLine = topology === "line-list" && retainedCurve &&
+      (renderMode === "marker_impostor" || renderMode === "line");
     return !!(
       mesh &&
       mesh.mode3d === false &&
-      (String(mesh.render_mode || "") === "marker_impostor" ||
-        (retainedCurve && String(mesh.render_mode || "") === "line")) &&
       String(mesh.marker_space || "") === "pixel" &&
-      String(mesh.topology || "") === "line-list" &&
-      ((Array.isArray(mesh.vertices) && Array.isArray(mesh.indices)) || retainedArenaArrays)
+      arrays &&
+      (retainedPoints || retainedLine)
     );
   }
 
@@ -9555,6 +9559,54 @@
         ctx.rect(clipBox.left, clipBox.top, clipBox.width, clipBox.height);
         ctx.clip();
       }
+      if (String(mesh.topology || "") === "point-list") {
+        var pointView = !boundController && mesh.axis_ticks
+          ? axisViewport(mesh, mesh.axis_ticks, w, h)
+          : null;
+        if (!boundController) {
+          drawAxisGrid(mesh, color);
+          ctx.beginPath();
+          ctx.strokeStyle = runtimeColorCss(visualColors.axis);
+          drawAxisFullFrameLines(mesh);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = runtimeColorCss(visualColors.tick);
+          drawAxisTicks(mesh);
+          ctx.stroke();
+        }
+        var pointScales = Array.isArray(mesh.vertex_scale) ? mesh.vertex_scale : null;
+        var globalPointScale = pointScales
+          ? null
+          : Number(mesh.vertex_scale == null ? 1 : mesh.vertex_scale);
+        for (var point = 0; point < mesh.indices.length; point += 1) {
+          var pointIndex = Number(mesh.indices[point]);
+          if (!Number.isSafeInteger(pointIndex) || pointIndex < 0) { continue; }
+          var pointOffset = pointIndex * 10;
+          if (pointOffset + 1 >= mesh.vertices.length) { continue; }
+          var pointPosition = boundController
+            ? (drawController && drawController.axis_polar === true
+              ? axis2DPolarPlotPointPx(mesh, drawController, pointIndex)
+              : axis2DPlotPointPx(mesh, boundController, drawCfg, w, h, pointIndex))
+            : (pointView
+              ? [pointView.dataToX(mesh.vertices[pointOffset]),
+                 pointView.dataToY(mesh.vertices[pointOffset + 1])]
+              : toPx(mesh.vertices[pointOffset], mesh.vertices[pointOffset + 1], mesh.aspect));
+          if (!pointPosition) { continue; }
+          var scale = pointScales
+            ? Number(pointScales[point] == null ? 1 : pointScales[point])
+            : globalPointScale;
+          if (!(scale > 0)) { scale = 1; }
+          var radius = Math.max(0.5, Number(mesh.vertex_size || 5) * scale);
+          pointPosition[0] = Math.max(radius, Math.min(w - radius, pointPosition[0]));
+          pointPosition[1] = Math.max(radius, Math.min(h - radius, pointPosition[1]));
+          ctx.beginPath();
+          ctx.fillStyle = runtimeColorCss(meshVertexColor(mesh, pointIndex, color));
+          ctx.arc(pointPosition[0], pointPosition[1], radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        continue;
+      }
       if (!boundController && String(mesh.curve_path || "") === "open-continuous") {
         var curveView = mesh.axis_ticks ? axisViewport(mesh, mesh.axis_ticks, w, h) : null;
         if (!curveView) {
@@ -10839,7 +10891,38 @@
     return info ? info.point : null;
   }
 
-  function geomTextToPx(item, w, h, camera) {
+  function geomText2DController(item, geomSpec) {
+    var meshes = geomSpec && Array.isArray(geomSpec.meshes) ? geomSpec.meshes : [];
+    var layerId = item && item.layer_id;
+    var fallback = null;
+    for (var i = 0; i < meshes.length; i += 1) {
+      var mesh = meshes[i];
+      if (!mesh || !mesh.axis_ticks || mesh.mode3d === true) { continue; }
+      if (!fallback) { fallback = mesh; }
+      if (layerId != null && String(mesh.layer_id) === String(layerId)) { return mesh; }
+    }
+    return layerId == null ? fallback : null;
+  }
+
+  function geomText2DWorldToPx(item, w, h, geomSpec) {
+    var controller = geomText2DController(item, geomSpec);
+    var cfg = controller && controller.axis_ticks;
+    if (!controller || !cfg) { return null; }
+    var x = Number(item && item.x);
+    var y = Number(item && item.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) { return null; }
+    if (controller.axis_box === true) {
+      var box = axisBoxRect(controller, w, h);
+      return [
+        box.left + axisValueToUnit(x, Number(cfg.x_min), Number(cfg.x_max), cfg.x_mode) * box.width,
+        box.bottom - axisValueToUnit(y, Number(cfg.y_min), Number(cfg.y_max), cfg.y_mode) * box.height
+      ];
+    }
+    var view = axisViewport(controller, cfg, w, h);
+    return view ? view.dataToPoint(x, y) : null;
+  }
+
+  function geomTextToPx(item, w, h, camera, geomSpec) {
     if (item && item.pixel === true) {
       return [Number(item.x) || 0, Number(item.y) || 0];
     }
@@ -10848,6 +10931,8 @@
         var anchored = edgeAnchorPixelFromWorld(camera, w, h, item);
         if (anchored) { return anchored; }
       }
+      var projected2D = geomText2DWorldToPx(item, w, h, geomSpec);
+      if (projected2D) { return projected2D; }
       var projected = projectWorldToPixel(camera, w, h, [Number(item.x) || 0, Number(item.y) || 0, Number(item.z) || 0]);
       if (projected) { return projected; }
       return null;
@@ -10860,6 +10945,22 @@
       return [(w * 0.5) + x * s, (h * 0.5) - y * s];
     }
     return [((x + 1.0) * 0.5) * w, (1.0 - ((y + 1.0) * 0.5)) * h];
+  }
+
+  function geomTextAnchorPercent(item, ha, va) {
+    var anchor = item && Array.isArray(item.anchor) ? item.anchor : null;
+    if (anchor && anchor.length === 2 && Number.isFinite(Number(anchor[0])) && Number.isFinite(Number(anchor[1]))) {
+      var anchorX = Math.max(0, Math.min(1, Number(anchor[0])));
+      var anchorY = Math.max(0, Math.min(1, Number(anchor[1])));
+      return [
+        anchorX === 0 ? 0 : -100 * anchorX,
+        anchorY === 0 ? 0 : -100 * anchorY
+      ];
+    }
+    return [
+      ha === "left" ? 0 : ha === "right" ? -100 : -50,
+      va === "top" ? 0 : va === "bottom" ? -100 : -50
+    ];
   }
 
   function axisMathText(text) {
@@ -11242,7 +11343,7 @@
         var edgeInfo = item && item.world === true && item.edge_anchor === true
           ? edgeAnchorPixelInfoFromWorld(geomSpec && geomSpec.camera || null, w, h, item)
           : null;
-        var p = edgeInfo ? edgeInfo.point : geomTextToPx(item, w, h, geomSpec && geomSpec.camera || null);
+        var p = edgeInfo ? edgeInfo.point : geomTextToPx(item, w, h, geomSpec && geomSpec.camera || null, geomSpec);
         if (!p) { continue; }
         if (!keepAllAxis3DLabels && !textPointIsNearViewport(p, w, h, 112)) { continue; }
         var textValue = item.text != null ? String(item.text) : "";
@@ -11250,7 +11351,7 @@
         var ha = String(item.ha || "center").toLowerCase();
         var va = String(item.va || "center").toLowerCase();
         if (!keepAllAxis3DLabels) {
-          var dedupeKey = textValue + "\x1f" + String(Math.round(p[0] / 2)) + "\x1f" + String(Math.round(p[1] / 2)) + "\x1f" + ha + "\x1f" + va + "\x1f" + String(Math.round(rotation));
+          var dedupeKey = textValue + "\x1f" + String(Math.round(p[0] / 2)) + "\x1f" + String(Math.round(p[1] / 2)) + "\x1f" + ha + "\x1f" + va + "\x1f" + String(item.anchor || "") + "\x1f" + String(Math.round(rotation));
           if (seen2DTextItems[dedupeKey]) { continue; }
           seen2DTextItems[dedupeKey] = true;
         }
@@ -11292,10 +11393,9 @@
             va = "bottom";
           }
         }
+        var anchorPercent = geomTextAnchorPercent(item, ha, va);
         el.style.transform = "translate(" + String(p[0]) + "px," + String(p[1]) + "px) translate(" +
-          (ha === "left" ? "0" : ha === "right" ? "-100%" : "-50%") +
-          "," +
-          (va === "top" ? "0" : va === "bottom" ? "-100%" : "-50%") +
+          String(anchorPercent[0]) + "%," + String(anchorPercent[1]) + "%" +
           ")" + (rotation ? " rotate(" + String(rotation) + "deg)" : "");
         if (el.dataset.vfGeomTextValue !== textValue) {
           renderMathText(el, textValue);
@@ -11320,7 +11420,7 @@
     rec.simple2DMeshes = specs;
     rec.simple2DGeomSpec = geomSpec;
     rec.simple2DFrameEl = frameEl;
-    rec.simple2DCanvas = geomHostCanvas(geomFrameHost(frameEl, fid), 0);
+    rec.simple2DCanvas = ensureGeomCanvas(frameEl, 0, fid);
     if (!drawSimple2DMarkerLineMeshes(fid, frameEl, rec.simple2DMeshes)) {
       return false;
     }
@@ -13485,6 +13585,8 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       isSimple2DMarkerLineMesh: isSimple2DMarkerLineMesh,
       axisMathText: axisMathText,
       collectAxisTickLabelSpecs: collectAxisTickLabelSpecs,
+      geomTextToPx: geomTextToPx,
+      geomTextAnchorPercent: geomTextAnchorPercent,
       renderMathText: renderMathText,
       buildSingleMesh: buildSingleMesh,
       buildCombinedTriangleMesh: buildCombinedTriangleMesh,
