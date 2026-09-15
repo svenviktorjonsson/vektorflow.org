@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Vektor Flow 0.6.0 development preview — water surface optics</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100dvh; display: grid; place-items: center;
+        background: #05070b; color: #eef4ff; font: 15px/1.4 system-ui, sans-serif; }
+      main { width: min(100%, 560px); padding: 16px; }
+      h1 { margin: 0 2px 12px; font-size: 20px; }
+      .status { display: inline-block; margin-left: 8px; padding: 3px 7px;
+        border: 1px solid #a86f2a; border-radius: 999px; color: #ffc56f;
+        font-size: 12px; vertical-align: 2px; }
+      video { display: block; width: 100%; max-height: calc(100dvh - 132px);
+        border-radius: 14px; background: #000; }
+      p { margin: 10px 2px 0; color: #9eabc0; }
+      a { color: #8cc8ff; }
+      .open-video { display: block; margin: 12px 0; padding: 13px 16px;
+        border: 1px solid #4676a3; border-radius: 12px; background: #10243a;
+        color: #fff; font-weight: 700; text-align: center; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Water surface and plane-wave optics <span class="status">0.6.0 · work in progress</span></h1>
+      <video controls playsinline webkit-playsinline preload="auto" poster="./latest.png?v=plane-wave-exact-snell-108f-20260915">
+        <source src="./latest.mp4?v=plane-wave-exact-snell-108f-20260915" type="video/mp4">
+        Your browser does not support MP4 video.
+      </video>
+      <a class="open-video" href="./latest.mp4?v=plane-wave-exact-snell-108f-20260915" target="_blank" rel="noopener">Open video directly</a>
+      <p>
+        Isolated VKF optics test with no stone, splash, foam or droplets. One
+        finite-depth plane-wave packet crosses the chamber, reflects at the far
+        wall and returns. Refraction uses the actual resolved surface normal,
+        measured water IOR and Snell's law—without normal attenuation or an
+        artistic refraction-strength control. A separately rendered mirror camera
+        is composed with exact unpolarized Fresnel reflectance. The coloured walls and emissive sun make reflection movement
+        visible; the neutral dark checker floor remains visible through refraction.
+        This is a development proof, not a released feature.
+      </p>
+    </main>
+  </body>
+</html>
