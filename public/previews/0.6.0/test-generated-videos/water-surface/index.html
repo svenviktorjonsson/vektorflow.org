@@ -26,21 +26,22 @@
   <body>
     <main>
       <h1>Water surface and plane-wave optics <span class="status">0.6.0 · work in progress</span></h1>
-      <video controls playsinline webkit-playsinline preload="auto" poster="./latest.png?v=plane-wave-env-reflection-108f-20260915">
-        <source src="./latest.mp4?v=plane-wave-env-reflection-108f-20260915" type="video/mp4">
+      <video controls playsinline webkit-playsinline preload="auto" poster="./latest.png?v=plane-wave-wall-reflection-108f-20260915">
+        <source src="./latest.mp4?v=plane-wave-wall-reflection-108f-20260915" type="video/mp4">
         Your browser does not support MP4 video.
       </video>
-      <a class="open-video" href="./latest.mp4?v=plane-wave-env-reflection-108f-20260915" target="_blank" rel="noopener">Open video directly</a>
+      <a class="open-video" href="./latest.mp4?v=plane-wave-wall-reflection-108f-20260915" target="_blank" rel="noopener">Open video directly</a>
       <p>
         Isolated VKF optics test with no stone, splash, foam or droplets. One
         finite-depth plane-wave packet crosses the chamber, reflects at the far
         wall and returns. Refraction uses the actual resolved surface normal,
         measured water IOR and Snell's law—without normal attenuation or an
         artistic refraction-strength control. A separately rendered mirror camera
-        is composed with exact unpolarized Fresnel reflectance. Empty mirror-camera
-        pixels now preserve directional environment radiance instead of replacing
-        it with opaque black. The coloured walls and emissive sun make reflection
-        movement visible; the neutral dark checker floor remains visible through refraction.
+        is composed with exact unpolarized Fresnel reflectance. This chamber has
+        no sky model: the reflected colour comes only from the retained red/black,
+        blue/black and green/black walls plus the emissive sun. Missed rays see the
+        black scene background. The neutral dark checker floor remains visible
+        through refraction.
         This is a development proof, not a released feature.
       </p>
     </main>
