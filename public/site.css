@@ -85,6 +85,69 @@ select:focus-visible, textarea:focus-visible {
   background: #05070b;
 }
 .readme-video figcaption { margin-top: .45rem; color: var(--muted); font-size: .88rem; }
+.vkf-live-showcase {
+  width: 100%;
+  margin: 1.25rem 0 2rem;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: #080b10;
+}
+.vkf-live-stage { position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 280px; }
+.vkf-live-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  background: #080b10;
+  touch-action: none;
+  overscroll-behavior: contain;
+  cursor: grab;
+}
+.vkf-live-stage canvas:active { cursor: grabbing; }
+.vkf-live-status {
+  position: absolute;
+  inset: auto 12px 10px;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  margin: 0 !important;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #dfe7ee;
+  background: rgb(5 9 13 / .78);
+  font: 600 12px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+  pointer-events: none;
+}
+.vkf-live-controls {
+  display: grid;
+  width: 100%;
+  gap: 12px;
+  border-top: 1px solid #2a3038;
+  padding: 14px;
+  color: #e6edf3;
+  background: #11161d;
+}
+.vkf-live-controls button {
+  min-height: 44px;
+  border: 1px solid #56606d;
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: inherit;
+  background: #1a212a;
+  cursor: pointer;
+  font: 650 14px/1.2 inherit;
+  touch-action: manipulation;
+}
+.vkf-live-controls button[aria-pressed="true"] { border-color: #b7a6fa; background: #322c50; }
+.vkf-live-transport, .vkf-live-view, .vkf-live-seed { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.vkf-live-levers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; width: 100%; }
+.vkf-live-levers > label { display: grid; gap: 5px; font-size: 13px; color: #c7d0da; }
+.vkf-live-levers > label > span { display: grid; grid-template-columns: 1fr 3.3rem; align-items: center; gap: 8px; }
+.vkf-live-levers input { width: 100%; accent-color: #a58cf4; touch-action: pan-x; }
+.vkf-live-levers output, .vkf-live-seed output { color: #aeb8c3; font: 12px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; text-align: right; }
+.vkf-live-seed { grid-column: 1 / -1; align-items: center; }
+.vkf-live-instruction { margin: 0 !important; color: #aeb8c3; font-size: 13px; line-height: 1.5; }
+.vkf-live-showcase[data-vkf-error] .vkf-live-status { color: #ffb4ab; }
 .readme blockquote {
   margin-left: 0;
   border-left: 4px solid var(--rule);
@@ -248,4 +311,8 @@ select:focus-visible, textarea:focus-visible {
   .landing .readme { padding: 36px 0 40px; font-size: 17px; }
   .landing .readme > p:first-of-type { font-size: 21px; }
   .readme h1 { font-size: 30px; }
+  .vkf-live-stage { aspect-ratio: 4 / 3; min-height: 240px; }
+  .vkf-live-stage canvas { min-height: 240px; }
+  .vkf-live-levers { grid-template-columns: 1fr; }
+  .vkf-live-seed { grid-column: auto; }
 }
