@@ -1,4 +1,4 @@
-import { createLiquidParticleWorldGpuRuntime } from './runtime/vf-liquid-particle-world-gpu.mjs';
+import { createLiquidParticleWorldGpuRuntime } from './runtime/vf-liquid-particle-world-gpu.mjs?v=wheel-pressure-8';
 import { createLiquidParticleEmbeddingGpu } from './runtime/vf-liquid-particle-embedding-gpu.mjs';
 import { createFixedStepRealtimeClock } from './runtime/fixed-step-realtime-clock.mjs';
 import { createGranularParticleWorldGpuRuntime } from '../sand/runtime/vf-granular-particle-world-gpu.mjs';
@@ -122,6 +122,13 @@ const releaseWheel = (event) => {
 };
 canvas.addEventListener('pointerup', releaseWheel);
 canvas.addEventListener('pointercancel', releaseWheel);
+
+// iOS can hand a gesture from an iframe to the parent scroller before pointer
+// capture settles. A non-passive touch guard keeps the whole simulation surface
+// owned by the drum interaction from the first sample onward.
+for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+  canvas.addEventListener(type, (event) => event.preventDefault(), { passive: false });
+}
 
 const renderFrame = (timestamp) => {
   try {

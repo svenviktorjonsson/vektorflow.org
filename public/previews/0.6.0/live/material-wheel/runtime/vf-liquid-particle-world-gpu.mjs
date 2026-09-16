@@ -107,6 +107,11 @@ struct KernelSample {
   supported: u32,
 };
 
+struct WheelBoundarySample {
+  density_factor: f32,
+  gradient: vec2<f32>,
+};
+
 struct ContactResult {
   position: vec2<f32>,
   velocity: vec2<f32>,
@@ -233,6 +238,65 @@ fn sample_kernel(displacement: vec2<f32>) -> KernelSample {
     gradient = displacement / distance * derivative;
   }
   return KernelSample(weight, gradient, 1u);
+}
+
+fn wheel_boundary_support(position: vec2<f32>) -> WheelBoundarySample {
+  var density_factor = 0.0;
+  var gradient = vec2<f32>(0.0);
+  let center = params.terrain.zw;
+  let angle = params.terrain.x;
+  let h = params.fluid.z;
+  // Matches the calibrated volume of the canonical 2D Akinci boundary. The
+  // samples are evaluated only near the analytic wheel, so the drum becomes a
+  // pressure boundary without changing the liquid particle rules.
+  let boundary_volume = 0.000142;
+  let sample_spacing = 0.009;
+
+  let radial = position - center;
+  let radial_length = length(radial);
+  if (radial_length > WHEEL_RADIUS - h - WHEEL_BAR_HALF_WIDTH) {
+    let theta = atan2(radial.y, radial.x);
+    for (var along = -3; along <= 3; along = along + 1) {
+      let sample_theta = theta + f32(along) * sample_spacing / WHEEL_RADIUS;
+      let outward = vec2<f32>(cos(sample_theta), sin(sample_theta));
+      for (var layer = 0; layer <= 2; layer = layer + 1) {
+        let solid = center + outward
+          * (WHEEL_RADIUS + f32(layer) * sample_spacing);
+        let kernel = sample_kernel(position - solid);
+        density_factor = density_factor + boundary_volume * kernel.weight;
+        gradient = gradient + boundary_volume * kernel.gradient;
+      }
+    }
+  }
+
+  for (var segment = 0u; segment < 7u; segment = segment + 1u) {
+    let local = baffle(segment);
+    let a = center + rotate_local(local.xy, angle);
+    let b = center + rotate_local(local.zw, angle);
+    let edge = b - a;
+    let edge_length = max(length(edge), 1.0e-8);
+    let tangent = edge / edge_length;
+    let raw_along = dot(position - a, tangent);
+    let closest_along = clamp(raw_along, 0.0, edge_length);
+    let closest = a + tangent * closest_along;
+    if (length(position - closest) < h + WHEEL_BAR_HALF_WIDTH) {
+      let normal = vec2<f32>(-tangent.y, tangent.x);
+      let snapped_along = round(closest_along / sample_spacing) * sample_spacing;
+      for (var offset = -3; offset <= 3; offset = offset + 1) {
+        let sample_along = snapped_along + f32(offset) * sample_spacing;
+        if (sample_along < 0.0 || sample_along > edge_length) { continue; }
+        let center_sample = a + tangent * sample_along;
+        for (var layer = -1; layer <= 1; layer = layer + 1) {
+          let solid = center_sample + normal
+            * (f32(layer) * WHEEL_BAR_HALF_WIDTH);
+          let kernel = sample_kernel(position - solid);
+          density_factor = density_factor + boundary_volume * kernel.weight;
+          gradient = gradient + boundary_volume * kernel.gradient;
+        }
+      }
+    }
+  }
+  return WheelBoundarySample(density_factor, gradient);
 }
 
 fn telemetry_base() -> u32 {
@@ -716,9 +780,10 @@ fn resolve_wheel_motion(position_input: vec2<f32>, velocity_input: vec2<f32>,
         if (inward_speed < 0.0) {
           relative_velocity = relative_velocity - normal * inward_speed;
         }
-        let tangent_velocity = relative_velocity
-          - normal * dot(relative_velocity, normal);
-        velocity = surface_velocity + relative_velocity - tangent_velocity * 0.18;
+        // The baffles are smooth rigid constraints: only their normal motion
+        // transfers momentum. Tangential coupling would behave like an
+        // adhesive belt and carry liquid around the drum wall.
+        velocity = surface_velocity + relative_velocity;
       }
     }
     let radial = position - center;
@@ -737,9 +802,9 @@ fn resolve_wheel_motion(position_input: vec2<f32>, velocity_input: vec2<f32>,
       if (inward_speed < 0.0) {
         relative_velocity = relative_velocity - normal * inward_speed;
       }
-      let tangent_velocity = relative_velocity
-        - normal * dot(relative_velocity, normal);
-      velocity = surface_velocity + relative_velocity - tangent_velocity * 0.18;
+      // A circular rim has no normal motion when it spins. Keep the contact
+      // frictionless so rotation cannot inject a rim-following velocity.
+      velocity = surface_velocity + relative_velocity;
     }
   }
   // A bounded contact response prevents a bad pointer sample or a deeply
@@ -815,6 +880,9 @@ fn measure_constraint(index: u32) -> ConstraintSample {
       center_gradient = center_gradient + solid.z * kernel.gradient;
     }
   }
+  let wheel_boundary = wheel_boundary_support(position);
+  density = density + params.material.x * wheel_boundary.density_factor;
+  center_gradient = center_gradient + wheel_boundary.gradient;
   let density_rate = dot(center_gradient, velocity) - neighbor_velocity_term;
   let denominator = inverse_mass * dot(center_gradient, center_gradient)
     + gradient_norm_sum;
@@ -952,6 +1020,8 @@ fn apply_pressure(@builtin(global_invocation_id) invocation: vec3<u32>) {
       correction = correction + inverse_mass * own_lambda * gradient;
     }
   }
+  let wheel_boundary = wheel_boundary_support(position);
+  correction = correction + inverse_mass * own_lambda * wheel_boundary.gradient;
   // Retain the GPU Jacobi relaxation already used by this specialization; it
   // applies uniformly after both canonical fluid and Akinci solid terms.
   particles[index].velocity = particles[index].velocity
