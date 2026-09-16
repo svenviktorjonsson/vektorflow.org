@@ -1,208 +1,47 @@
-import { stepRigidPolygonWorld2D } from './runtime/vf-physics-engine.mjs';
 import { createStoneSpeciesPileReference } from './runtime/vf-stone-species-pile.mjs';
 
-const canvas = document.getElementById('rocks');
-const ctx = canvas.getContext('2d');
-const playButton = document.getElementById('play');
-const resetButton = document.getElementById('reset');
-const gravityInput = document.getElementById('gravity');
-const status = document.getElementById('status');
-const view = { minimum: [-1.5, -0.9], maximum: [1.5, 0.9] };
-const palette = ['#777873', '#9a7364', '#ada89a', '#4f5352', '#827b70', '#686d72'];
-let world;
-let playing = true;
-let previousTime = null;
-let accumulator = 0;
-let picked = null;
-let dragTarget = null;
-let dragVelocity = [0, 0];
-let lastDrag = null;
+const frameId='rigid_rocks_3d_frame',playButton=document.getElementById('play'),resetButton=document.getElementById('reset'),gravityInput=document.getElementById('gravity'),status=document.getElementById('status'),errorBox=document.getElementById('error');
+const add=(a,b)=>a.map((v,i)=>v+b[i]),sub=(a,b)=>a.map((v,i)=>v-b[i]),scale=(v,s)=>v.map((x)=>x*s),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],normalize=(v)=>scale(v,1/Math.max(1e-9,Math.hypot(...v)));
+const quatNormalize=(q)=>scale(q,1/Math.max(1e-9,Math.hypot(...q)));
+const quatMul=([w,x,y,z],[a,b,c,d])=>[w*a-x*b-y*c-z*d,w*b+x*a+y*d-z*c,w*c-x*d+y*a+z*b,w*d+x*c-y*b+z*a];
+const quatMatrix=([w,x,y,z])=>[[1-2*(y*y+z*z),2*(x*y-z*w),2*(x*z+y*w)],[2*(x*y+z*w),1-2*(x*x+z*z),2*(y*z-x*w)],[2*(x*z-y*w),2*(y*z+x*w),1-2*(x*x+y*y)]];
+const matVec=(m,v)=>m.map((row)=>dot(row,v));
+let playing=true,bodies=[],previous=null,accumulator=0,lastRender=0,picked=null,dragVelocity=[0,0,0],dragUpdated=0;
 
-const convexHull = (points) => {
-  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const half = (source) => {
-    const result = [];
-    for (const point of source) {
-      while (result.length >= 2 && cross(result.at(-2), result.at(-1), point) <= 0) result.pop();
-      result.push(point);
-    }
-    return result;
-  };
-  return [...half(sorted).slice(0, -1), ...half([...sorted].reverse()).slice(0, -1)];
-};
+function geometryFor(source,index){
+  const sourceScale=[0,4,8].map((o)=>Math.hypot(source._modelMatrix[o],source._modelMatrix[o+1],source._modelMatrix[o+2])),minimum=[Infinity,Infinity,Infinity],maximum=[-Infinity,-Infinity,-Infinity];
+  for(let o=0;o<source.vertices.length;o+=10)for(let a=0;a<3;a+=1){const v=source.vertices[o+a]*sourceScale[a];minimum[a]=Math.min(minimum[a],v);maximum[a]=Math.max(maximum[a],v);}
+  const center=minimum.map((v,a)=>(v+maximum[a])*.5),normalization=(.52+(index%3)*.035)/Math.max(...maximum.map((v,a)=>v-minimum[a])),renderScale=sourceScale.map((v)=>v*normalization),localCenter=center.map((v)=>v*normalization);let radius=0;
+  for(let o=0;o<source.vertices.length;o+=10){const p=[0,1,2].map((a)=>source.vertices[o+a]*renderScale[a]-localCenter[a]);radius=Math.max(radius,Math.hypot(...p));}
+  return{source,renderScale,localCenter,halfExtents:maximum.map((v,a)=>(v-minimum[a])*.5*normalization),radius:radius*.72};
+}
 
-const stonePolygon = (mesh, index) => {
-  const matrix = mesh._modelMatrix || [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-  const sx = Math.hypot(matrix[0], matrix[1], matrix[2]);
-  const sz = Math.hypot(matrix[8], matrix[9], matrix[10]);
-  const points = [];
-  for (let offset = 0; offset < mesh.vertices.length; offset += 10) {
-    points.push([mesh.vertices[offset] * sx, mesh.vertices[offset + 2] * sz]);
-  }
-  let hull = convexHull(points);
-  const center = hull.reduce((sum, point) => [sum[0] + point[0], sum[1] + point[1]], [0, 0])
-    .map((value) => value / hull.length);
-  hull = hull.map((point) => [point[0] - center[0], point[1] - center[1]]);
-  const targetRadius = 0.13 + index * 0.012;
-  const radius = Math.max(...hull.map((point) => Math.hypot(...point)));
-  return { vertices: hull.map((point) => point.map((value) => value * targetRadius / radius)),
-    radius: targetRadius };
-};
+function modelMatrix(body){const r=quatMatrix(body.orientation),centerWorld=matVec(r,body.geometry.localCenter),s=body.geometry.renderScale;return[r[0][0]*s[0],r[1][0]*s[0],r[2][0]*s[0],0,r[0][1]*s[1],r[1][1]*s[1],r[2][1]*s[1],0,r[0][2]*s[2],r[1][2]*s[2],r[2][2]*s[2],0,body.position[0]-centerWorld[0],body.position[1]-centerWorld[1],body.position[2]-centerWorld[2],1];}
 
-const createWorld = () => {
-  const pile = createStoneSpeciesPileReference();
-  const bodies = pile.meshes.slice(0, 6).map((mesh, index) => {
-    const polygon = stonePolygon(mesh, index);
-    return {
-      id: `generated-rock-${index}`,
-      localVertices: polygon.vertices,
-      position: [-0.9 + index * 0.34, 0.54 + (index % 2) * 0.20],
-      velocity: [0, 0], angle: index * 0.31, angularVelocity: (index - 2.5) * 0.08,
-      density: 2700, contact_radius: polygon.radius,
-      e_n: 0.24, e_t: 0, mu_s: 0.78, mu_d: 0.56, mu_r: 0.035,
-      restitution_threshold: 0.42, color: palette[index],
-    };
-  });
-  return { width: 3, height: 1.8, gravity: [0, -Number(gravityInput.value)],
-    maxStep: 1 / 240, solverIterations: 8, sleepDelay: 0.6,
-    sleepLinearThreshold: 0.035, sleepAngularThreshold: 0.09, bodies };
-};
+function makeBodies(){const pile=createStoneSpeciesPileReference(),positions=[[-.92,-.12,.58],[-.33,.10,1.08],[.34,-.04,.74],[.86,.10,1.34],[-.58,.16,1.58],[.56,.12,1.84]];return pile.meshes.slice(0,6).map((source,index)=>{const mass=8+index*1.4;return{id:`rock-${index}`,objectId:1200+index,geometry:geometryFor(source,index),position:[...positions[index]],velocity:[0,0,0],orientation:quatNormalize([1,.07*index,.05*(index-2),.03]),angularVelocity:[.18*(index%2?1:-1),.12,.2-index*.045],mass,inverseMass:1/mass,restitution:.24,friction:.68};});}
 
-const resize = () => {
-  const rect = canvas.getBoundingClientRect();
-  const ratio = Math.min(2, Math.max(1, devicePixelRatio || 1));
-  const width = Math.max(1, Math.round(rect.width * ratio));
-  const height = Math.max(1, Math.round(rect.height * ratio));
-  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
-};
+const ground=Object.freeze({type:'field_mesh',id:'rocks-ground',object_id:1100,mode3d:true,topology:'triangle-list',static_vertices:true,static_indices:true,receives_lighting:true,casts_shadow:false,receives_shadow:true,specular_strength:.03,vertices:new Float32Array([-2.35,-1.35,-.02,0,0,1,.14,.145,.14,1,2.35,-1.35,-.02,0,0,1,.14,.145,.14,1,2.35,1.35,-.02,0,0,1,.14,.145,.14,1,-2.35,1.35,-.02,0,0,1,.14,.145,.14,1]),indices:new Uint32Array([0,1,2,0,2,3])});
+function posedRock(body){return{...body.geometry.source,id:`rigid:${body.id}`,object_id:0,_modelMatrix:modelMatrix(body),static_vertices:true,static_indices:true,rigid_dimension:3,pickable:false};}
+const renderMeshes=()=>[ground,...bodies.map(posedRock)];
 
-const worldToScreen = ([x, y]) => [
-  (x - view.minimum[0]) / (view.maximum[0] - view.minimum[0]) * canvas.width,
-  (view.maximum[1] - y) / (view.maximum[1] - view.minimum[1]) * canvas.height,
-];
+function impulsePair(a,b){const delta=sub(b.position,a.position),distance=Math.max(1e-7,Math.hypot(...delta)),target=a.geometry.radius+b.geometry.radius;if(distance>=target)return;const n=scale(delta,1/distance),penetration=target-distance,totalInv=a.inverseMass+b.inverseMass;a.position=add(a.position,scale(n,-penetration*a.inverseMass/totalInv));b.position=add(b.position,scale(n,penetration*b.inverseMass/totalInv));const speed=dot(sub(b.velocity,a.velocity),n);if(speed<0){const j=-(1+Math.min(a.restitution,b.restitution))*speed/totalInv;a.velocity=add(a.velocity,scale(n,-j*a.inverseMass));b.velocity=add(b.velocity,scale(n,j*b.inverseMass));}}
 
-const screenToWorld = (event) => {
-  const rect = canvas.getBoundingClientRect();
-  const u = (event.clientX - rect.left) / rect.width;
-  const v = (event.clientY - rect.top) / rect.height;
-  return [view.minimum[0] + u * (view.maximum[0] - view.minimum[0]),
-    view.maximum[1] - v * (view.maximum[1] - view.minimum[1])];
-};
+function supportRadius(body,axis){const r=quatMatrix(body.orientation),h=body.geometry.halfExtents;return Math.abs(r[axis][0])*h[0]+Math.abs(r[axis][1])*h[1]+Math.abs(r[axis][2])*h[2];}
+function integrate(body,dt){if(body===picked)return;body.velocity[2]-=Number(gravityInput.value)*dt;body.velocity=scale(body.velocity,Math.exp(-.055*dt));body.position=add(body.position,scale(body.velocity,dt));const omega=body.angularVelocity,speed=Math.hypot(...omega);if(speed>1e-7)body.orientation=quatNormalize(quatMul([Math.cos(speed*dt/2),...scale(omega,Math.sin(speed*dt/2)/speed)],body.orientation));const floorSupport=supportRadius(body,2);if(body.position[2]<floorSupport){body.position[2]=floorSupport;if(body.velocity[2]<0)body.velocity[2]*=-body.restitution;body.velocity[0]*=Math.exp(-body.friction*dt*35);body.velocity[1]*=Math.exp(-body.friction*dt*35);body.angularVelocity=scale(body.angularVelocity,Math.exp(-.7*dt));}for(const[axis,min,max]of[[0,-2.15,2.15],[1,-1.18,1.18]]){const support=supportRadius(body,axis);if(body.position[axis]-support<min){body.position[axis]=min+support;body.velocity[axis]=Math.abs(body.velocity[axis])*body.restitution;}if(body.position[axis]+support>max){body.position[axis]=max-support;body.velocity[axis]=-Math.abs(body.velocity[axis])*body.restitution;}}}
+function step(dt){for(const body of bodies)integrate(body,dt);for(let pass=0;pass<4;pass+=1)for(let i=0;i<bodies.length;i+=1)for(let j=i+1;j<bodies.length;j+=1)impulsePair(bodies[i],bodies[j]);}
 
-const transformed = (body) => {
-  const c = Math.cos(body.angle); const s = Math.sin(body.angle);
-  return body.localVertices.map(([x, y]) => [body.position[0] + c * x - s * y,
-    body.position[1] + s * x + c * y]);
-};
+playButton.addEventListener('click',()=>{playing=!playing;playButton.textContent=playing?'Pause':'Play';playButton.setAttribute('aria-pressed',String(playing));previous=null;});
+resetButton.addEventListener('click',()=>{bodies=makeBodies();picked=null;previous=null;lastRender=0;window.VfDisplay?.requestDynamicGeomFrameUpdate(frameId);window.VfDisplay?.redrawVisibleGeomFrames();});
 
-const pointInside = (point, polygon) => {
-  let sign = 0;
-  for (let i = 0; i < polygon.length; i += 1) {
-    const a = polygon[i]; const b = polygon[(i + 1) % polygon.length];
-    const cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (point[0] - a[0]);
-    if (Math.abs(cross) < 1e-9) continue;
-    if (!sign) sign = Math.sign(cross);
-    else if (Math.sign(cross) !== sign) return false;
-  }
-  return true;
-};
-
-canvas.addEventListener('pointerdown', (event) => {
-  const point = screenToWorld(event);
-  for (let i = world.bodies.length - 1; i >= 0; i -= 1) {
-    if (!pointInside(point, transformed(world.bodies[i]))) continue;
-    picked = world.bodies[i].id;
-    dragTarget = point;
-    dragVelocity = [0, 0];
-    lastDrag = { point, time: performance.now() };
-    canvas.setPointerCapture(event.pointerId);
-    canvas.dataset.dragging = 'true';
-    event.preventDefault();
-    break;
-  }
-});
-
-canvas.addEventListener('pointermove', (event) => {
-  if (!picked) return;
-  const point = screenToWorld(event);
-  const now = performance.now();
-  const dt = Math.max(1 / 240, Math.min(0.05, (now - lastDrag.time) / 1000));
-  dragVelocity = [(point[0] - lastDrag.point[0]) / dt, (point[1] - lastDrag.point[1]) / dt];
-  dragTarget = point;
-  lastDrag = { point, time: now };
-  event.preventDefault();
-});
-
-const release = (event) => {
-  if (!picked) return;
-  const body = world.bodies.find((candidate) => candidate.id === picked);
-  if (body) { body.velocity = dragVelocity.map((value) => Math.max(-5, Math.min(5, value))); body.sleeping = false; }
-  picked = null; dragTarget = null; lastDrag = null;
-  canvas.dataset.dragging = 'false';
-  if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-};
-canvas.addEventListener('pointerup', release);
-canvas.addEventListener('pointercancel', release);
-
-playButton.addEventListener('click', () => {
-  playing = !playing;
-  playButton.textContent = playing ? 'Pause' : 'Play';
-  playButton.setAttribute('aria-pressed', String(playing));
-  previousTime = null;
-});
-resetButton.addEventListener('click', () => { world = createWorld(); picked = null; previousTime = null; });
-gravityInput.addEventListener('input', () => { world.gravity = [0, -Number(gravityInput.value)]; });
-
-const step = (elapsed) => {
-  accumulator = Math.min(0.08, accumulator + elapsed);
-  const fixed = 1 / 120;
-  while (playing && accumulator >= fixed) {
-    if (picked) {
-      const body = world.bodies.find((candidate) => candidate.id === picked);
-      if (body) { body.position = [...dragTarget]; body.velocity = [...dragVelocity]; body.sleeping = false; body.sleep_time = 0; }
-    }
-    world.gravity = [0, -Number(gravityInput.value)];
-    world = stepRigidPolygonWorld2D(world, fixed);
-    if (picked) {
-      const body = world.bodies.find((candidate) => candidate.id === picked);
-      if (body) { body.position = [...dragTarget]; body.velocity = [...dragVelocity]; body.sleeping = false; }
-    }
-    accumulator -= fixed;
-  }
-};
-
-const draw = () => {
-  resize();
-  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, '#343732'); gradient.addColorStop(1, '#191a18');
-  ctx.fillStyle = gradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const floorY = worldToScreen([0, -0.9])[1];
-  ctx.fillStyle = '#2d2c27'; ctx.fillRect(0, floorY - 4, canvas.width, canvas.height - floorY + 4);
-  for (const body of world.bodies) {
-    const polygon = transformed(body).map(worldToScreen);
-    ctx.beginPath(); ctx.moveTo(...polygon[0]);
-    for (let i = 1; i < polygon.length; i += 1) ctx.lineTo(...polygon[i]);
-    ctx.closePath();
-    const center = worldToScreen(body.position);
-    const radius = body.contact_radius / (view.maximum[0] - view.minimum[0]) * canvas.width;
-    const fill = ctx.createRadialGradient(center[0] - radius * 0.28, center[1] - radius * 0.35,
-      radius * 0.08, center[0], center[1], radius * 1.25);
-    fill.addColorStop(0, '#c9c6ba'); fill.addColorStop(0.22, body.color); fill.addColorStop(1, '#292a28');
-    ctx.fillStyle = fill; ctx.fill();
-    ctx.strokeStyle = body.id === picked ? '#f5dfac' : '#151615';
-    ctx.lineWidth = body.id === picked ? 4 : 2; ctx.stroke();
-  }
-  const sleeping = world.bodies.filter((body) => body.sleeping).length;
-  status.textContent = `${world.bodies.length} generated rocks · ${sleeping} sleeping · ${Number(gravityInput.value).toFixed(1)} m/s²`;
-};
-
-const frame = (timestamp) => {
-  const elapsed = previousTime == null ? 0 : Math.max(0, Math.min(0.08, (timestamp - previousTime) / 1000));
-  previousTime = timestamp;
-  step(elapsed); draw(); requestAnimationFrame(frame);
-};
-
-world = createWorld();
-window.__rigidRocksWorld = () => world;
-requestAnimationFrame(frame);
+try{
+  await window.VfRuntimeShell.ensureSceneDependencies();bodies=makeBodies();
+  const panel=window.VfFrame.mount(document.getElementById('layer'),{id:frameId,title:'Generated stone species · 3D rigid-body collisions',draggable:false,dockable:false,resizable:false,closable:false});Object.assign(panel.root.style,{left:'0',top:'0',width:'100%',height:'100%'});
+  const camera={pos:[3,-4.35,2.55],target:[0,0,.72],up:[0,0,1],fov:34};window.VfDisplay.mountDynamicGeomFrame(frameId,()=>({meshes:renderMeshes(),camera,lights:[{id:'key',kind:'point',pos:[-2.8,-3.2,5.8],target:[0,0,.8],color:[1,.94,.84,1],intensity:88,range:15},{id:'fill',kind:'point',pos:[3.4,1.2,4.2],target:[0,0,.65],color:[.62,.78,1,1],intensity:42,range:14},{id:'front',kind:'point',pos:[0,-3.8,2.4],target:[0,0,.5],color:[1,.9,.76,1],intensity:28,range:10}],background:[.14,.16,.18,1],unified_renderer:true}));
+  let pointer=null;const basis=()=>{const forward=normalize(sub(camera.target,camera.pos)),right=normalize(cross(forward,camera.up)),up=cross(right,forward);return{forward,right,up};};const projected=(body,rect)=>{const{forward,right,up}=basis(),relative=sub(body.position,camera.pos),depth=dot(relative,forward),half=Math.tan(camera.fov*Math.PI/360),nx=dot(relative,right)/(depth*half*(rect.width/rect.height)),ny=dot(relative,up)/(depth*half);return{x:rect.left+(nx+1)*rect.width*.5,y:rect.top+(1-ny)*rect.height*.5,depth};};
+  panel.body.addEventListener('pointerdown',(event)=>{if(event.button!==0)return;const rect=panel.body.getBoundingClientRect(),candidates=bodies.map((body)=>({body,screen:projected(body,rect)})).filter(({screen})=>screen.depth>0).sort((a,b)=>Math.hypot(a.screen.x-event.clientX,a.screen.y-event.clientY)-Math.hypot(b.screen.x-event.clientX,b.screen.y-event.clientY)),nearest=candidates[0];if(!nearest||Math.hypot(nearest.screen.x-event.clientX,nearest.screen.y-event.clientY)>Math.max(34,nearest.body.geometry.radius/nearest.screen.depth*rect.height*1.9))return;event.preventDefault();event.stopPropagation();picked=nearest.body;pointer={id:event.pointerId,x:event.clientX,y:event.clientY,depth:nearest.screen.depth};dragVelocity=[0,0,0];dragUpdated=performance.now();picked.velocity=[0,0,0];picked.angularVelocity=scale(picked.angularVelocity,.25);panel.body.setPointerCapture(event.pointerId);},{capture:true});
+  panel.body.addEventListener('pointermove',(event)=>{if(!pointer||pointer.id!==event.pointerId||!picked)return;event.preventDefault();event.stopPropagation();const now=performance.now(),dt=Math.max(1/240,Math.min(.08,(now-dragUpdated)/1000)),rect=panel.body.getBoundingClientRect(),{right,up}=basis(),worldPerPixel=2*pointer.depth*Math.tan(camera.fov*Math.PI/360)/Math.max(1,rect.height),delta=add(scale(right,(event.clientX-pointer.x)*worldPerPixel),scale(up,-(event.clientY-pointer.y)*worldPerPixel));picked.position=add(picked.position,delta);picked.position[0]=clamp(picked.position[0],-1.9,1.9);picked.position[1]=clamp(picked.position[1],-1.05,1.05);picked.position[2]=clamp(picked.position[2],supportRadius(picked,2),4.5);dragVelocity=scale(delta,1/dt);dragUpdated=now;pointer.x=event.clientX;pointer.y=event.clientY;},{capture:true});
+  const drop=(event)=>{if(!pointer||pointer.id!==event.pointerId)return;event.preventDefault();event.stopPropagation();if(picked)picked.velocity=dragVelocity.map((v)=>clamp(v,-6,6));picked=null;pointer=null;try{panel.body.releasePointerCapture(event.pointerId);}catch{}};panel.body.addEventListener('pointerup',drop,{capture:true});panel.body.addEventListener('pointercancel',drop,{capture:true});
+  const animate=(time)=>{const elapsed=previous==null?0:Math.min(.18,Math.max(0,(time-previous)/1000));previous=time;accumulator=Math.min(.24,accumulator+elapsed);while(playing&&accumulator>=1/120){step(1/120);accumulator-=1/120;}if(!lastRender||time-lastRender>=1000/12){lastRender=time;window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);window.VfDisplay.redrawVisibleGeomFrames();}status.textContent=`${bodies.length} original generated 3D rocks · live rigid collisions · drag and drop`;requestAnimationFrame(animate);};
+  window.__rigidRocks3D={get bodies(){return bodies;}};requestAnimationFrame(animate);
+}catch(error){errorBox.hidden=false;errorBox.textContent=String(error?.stack||error);status.textContent='Scene unavailable';}

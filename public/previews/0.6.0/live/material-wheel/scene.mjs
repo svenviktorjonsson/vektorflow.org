@@ -33,9 +33,10 @@ let device;
 let context;
 
 const fail = (error) => {
+  if (!errorBox.hidden) return;
   playing = false;
   errorBox.hidden = false;
-  errorBox.textContent = String(error?.stack || error);
+  errorBox.textContent = String(error?.message || error?.stack || error);
   status.textContent = 'WebGPU unavailable';
   window.__materialWheelResult = { outcome: 'fail', error: errorBox.textContent };
 };
@@ -143,7 +144,7 @@ const renderFrame = (timestamp) => {
     if (frameCount % 18 === 0) {
       const count = active.runtime.particleCount ?? active.runtime.primaryCount;
       status.textContent = `${material === 'water' ? 'Water' : 'Sand'} · ${count} particles · GPU compute`
-        + ` · wheel ${wheelAngularVelocity.toFixed(2)} rad/s`;
+        + ` · drum ${wheelAngularVelocity.toFixed(2)} rad/s`;
     }
     requestAnimationFrame(renderFrame);
   } catch (error) { fail(error); }
@@ -155,8 +156,11 @@ try {
   if (!adapter) throw new Error('No WebGPU adapter is available.');
   device = await adapter.requestDevice();
   device.lost.then((information) => fail(new Error(`WebGPU device lost: ${information.message}`)));
-  device.addEventListener('uncapturederror', (event) => fail(event.error));
-  waterRuntime = await createLiquidParticleWorldGpuRuntime(device, { stoneHeight: 0.0001 });
+  device.addEventListener('uncapturederror', (event) => {
+    console.error(event.error?.message || event.error);
+    fail(event.error);
+  });
+  waterRuntime = await createLiquidParticleWorldGpuRuntime(device);
   sandRuntime = await createGranularParticleWorldGpuRuntime(device);
   waterEmbedding = await createLiquidParticleEmbeddingGpu(device, canvas, waterRuntime, { maximumPixelRatio: 2 });
   sandEmbedding = await createGranularParticleEmbeddingGpu(device, canvas, sandRuntime, { maximumPixelRatio: 2 });

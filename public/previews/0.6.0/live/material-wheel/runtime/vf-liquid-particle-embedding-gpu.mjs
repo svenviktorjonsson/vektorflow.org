@@ -117,24 +117,9 @@ fn value_noise(point: vec2<f32>) -> f32 {
 }
 
 fn scene_background(world: vec2<f32>) -> vec3<f32> {
-  let bed = terrain_height(world.x);
-  if (world.y >= bed) {
-    let vertical = clamp((world.y - params.view.y) /
-      max(params.view.w - params.view.y, 1.0e-6), 0.0, 1.0);
-    return params.air_color.rgb * mix(0.74, 1.18, vertical);
-  }
-  let q = abs((world.x - params.terrain.z) / params.terrain.w);
-  let base_bed = params.terrain.y + params.terrain.x
-    * (world.x - params.terrain.z);
-  let is_stone = select(0.0, 1.0, q < 1.0
-    && terrain_height(world.x) - base_bed > 0.002
-    && world.y > params.terrain.y + params.terrain.x
-      * (world.x - params.terrain.z) - 0.035);
-  let coarse = value_noise(world * vec2<f32>(8.0, 15.0));
-  let grain = value_noise(world * vec2<f32>(51.0, 43.0) + vec2<f32>(7.1, 3.7));
-  let material = mix(params.ground_color.rgb, params.rock_color.rgb, is_stone);
-  let shallow = exp(-max(0.0, bed - world.y) * 11.0);
-  return material * (0.72 + 0.22 * coarse + 0.09 * grain + 0.12 * shallow);
+  let vertical = clamp((world.y - params.view.y) /
+    max(params.view.w - params.view.y, 1.0e-6), 0.0, 1.0);
+  return params.air_color.rgb * mix(0.68, 1.12, vertical);
 }
 
 @vertex
@@ -447,9 +432,6 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
       layout: backgroundPipeline.getBindGroupLayout(0),
       entries: [
         { binding: 1, resource: { buffer: paramsBuffer } },
-        { binding: 5, resource: makeStorageBinding(worldRuntime.surfaceBuffer,
-          (worldRuntime.boundaryPacket.segmentCount + 1)
-            * worldRuntime.abi.surfaceVertexStrideBytes) },
       ],
     });
     compositeBindGroup = device.createBindGroup({

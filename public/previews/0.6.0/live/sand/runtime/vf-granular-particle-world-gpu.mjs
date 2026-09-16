@@ -41,11 +41,11 @@ export const GRANULAR_PARTICLE_WORLD_GPU_TELEMETRY = Object.freeze({
 
 export const GRANULAR_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   dimension: 2,
-  columns: 64,
-  rows: 64,
+  columns: 36,
+  rows: 28,
   grainRadius: 0.008,
-  seedGap: 0.01,
-  seedMinimum: Object.freeze([-1.05, -0.14]),
+  seedGap: 0.002,
+  seedMinimum: Object.freeze([-0.315, -0.08]),
   seed: 0x51a7,
   particleDensity: 1600,
   gravity: Object.freeze([0, -9.82]),
@@ -60,11 +60,11 @@ export const GRANULAR_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   contactSlop: 0.000002,
   linearDamping: 0.035,
   maximumParticlesPerCell: 16,
-  worldMinimum: Object.freeze([-1.5, -0.4]),
-  worldMaximum: Object.freeze([1.5, 1.1]),
-  viewMinimum: Object.freeze([-1.3, -0.35]),
-  viewMaximum: Object.freeze([1.3, 0.95]),
-  openTop: true,
+  worldMinimum: Object.freeze([-0.70, -0.22]),
+  worldMaximum: Object.freeze([0.70, 0.86]),
+  viewMinimum: Object.freeze([-0.62, -0.20]),
+  viewMaximum: Object.freeze([0.62, 0.84]),
+  openTop: false,
 });
 
 const finiteF32 = (value) => Number.isFinite(value) && Number.isFinite(Math.fround(value));
@@ -313,9 +313,24 @@ struct Params {
 
 const PI: f32 = 3.141592653589793;
 const MAX_F32: f32 = 3.4028234663852886e+38;
-const WHEEL_CENTER: vec2<f32> = vec2<f32>(-0.12, 0.32);
-const WHEEL_RADIUS: f32 = 0.29;
+const WHEEL_CENTER: vec2<f32> = vec2<f32>(0.0, 0.32);
+const WHEEL_RADIUS: f32 = 0.50;
 const WHEEL_BAR_HALF_WIDTH: f32 = 0.012;
+
+fn rotate_local(point: vec2<f32>, angle: f32) -> vec2<f32> {
+  let c = cos(angle); let s = sin(angle);
+  return vec2<f32>(c * point.x - s * point.y, s * point.x + c * point.y);
+}
+
+fn baffle(index: u32) -> vec4<f32> {
+  if (index == 0u) { return vec4<f32>(0.500, 0.000, 0.350, 0.000); }
+  if (index == 1u) { return vec4<f32>(0.000, 0.500, 0.000, 0.350); }
+  if (index == 2u) { return vec4<f32>(-0.500, 0.000, -0.350, 0.000); }
+  if (index == 3u) { return vec4<f32>(0.000, -0.500, 0.000, -0.350); }
+  if (index == 4u) { return vec4<f32>(-0.220, 0.175, -0.075, 0.135); }
+  if (index == 5u) { return vec4<f32>(0.075, -0.055, 0.215, -0.115); }
+  return vec4<f32>(-0.105, -0.250, 0.020, -0.155);
+}
 
 fn telemetry_base() -> u32 { return params.counts.y * params.counts.z; }
 
@@ -411,30 +426,35 @@ fn project_world(position_input: vec2<f32>) -> vec2<f32> {
 fn wheel_penetration(position: vec2<f32>) -> f32 {
   let contact_radius = params.material.x + WHEEL_BAR_HALF_WIDTH;
   var maximum = 0.0;
-  for (var spoke = 0u; spoke < 3u; spoke = spoke + 1u) {
-    let theta = params.solver.z + f32(spoke) * PI / 3.0;
-    let direction = vec2<f32>(cos(theta), sin(theta));
-    let along = clamp(dot(position - WHEEL_CENTER, direction), -WHEEL_RADIUS, WHEEL_RADIUS);
-    let closest = WHEEL_CENTER + direction * along;
+  for (var segment = 0u; segment < 7u; segment = segment + 1u) {
+    let local = baffle(segment);
+    let a = WHEEL_CENTER + rotate_local(local.xy, params.solver.z);
+    let b = WHEEL_CENTER + rotate_local(local.zw, params.solver.z);
+    let edge = b - a;
+    let along = clamp(dot(position - a, edge) / max(dot(edge, edge), 1.0e-8), 0.0, 1.0);
+    let closest = a + edge * along;
     maximum = max(maximum, contact_radius - length(position - closest));
   }
-  let rim_distance = abs(length(position - WHEEL_CENTER) - WHEEL_RADIUS);
-  return max(maximum, contact_radius - rim_distance);
+  let radial_length = length(position - WHEEL_CENTER);
+  return max(maximum, radial_length - (WHEEL_RADIUS - contact_radius));
 }
 
 fn project_wheel(position_input: vec2<f32>) -> vec2<f32> {
   var position = position_input;
   let contact_radius = params.material.x + WHEEL_BAR_HALF_WIDTH;
   for (var projection = 0u; projection < 4u; projection = projection + 1u) {
-    for (var spoke = 0u; spoke < 3u; spoke = spoke + 1u) {
-      let theta = params.solver.z + f32(spoke) * PI / 3.0;
-      let direction = vec2<f32>(cos(theta), sin(theta));
-      let along = clamp(dot(position - WHEEL_CENTER, direction), -WHEEL_RADIUS, WHEEL_RADIUS);
-      let closest = WHEEL_CENTER + direction * along;
+    for (var segment = 0u; segment < 7u; segment = segment + 1u) {
+      let local = baffle(segment);
+      let a = WHEEL_CENTER + rotate_local(local.xy, params.solver.z);
+      let b = WHEEL_CENTER + rotate_local(local.zw, params.solver.z);
+      let edge = b - a;
+      let along = clamp(dot(position - a, edge) / max(dot(edge, edge), 1.0e-8), 0.0, 1.0);
+      let closest = a + edge * along;
       let separation = position - closest;
       let distance = length(separation);
       if (distance < contact_radius) {
-        let normal = select(vec2<f32>(-direction.y, direction.x),
+        let tangent = normalize(edge);
+        let normal = select(vec2<f32>(-tangent.y, tangent.x),
           separation / max(distance, 1.0e-8), distance > 1.0e-8);
         let penetration = contact_radius - distance;
         record_penetration(penetration);
@@ -443,13 +463,12 @@ fn project_wheel(position_input: vec2<f32>) -> vec2<f32> {
     }
     let radial = position - WHEEL_CENTER;
     let radial_length = length(radial);
-    let rim_distance = abs(radial_length - WHEEL_RADIUS);
-    if (rim_distance < contact_radius) {
+    let rim_limit = WHEEL_RADIUS - contact_radius;
+    if (radial_length > rim_limit) {
       let outward = radial / max(radial_length, 1.0e-8);
-      let normal = select(-outward, outward, radial_length >= WHEEL_RADIUS);
-      let penetration = contact_radius - rim_distance;
+      let penetration = radial_length - rim_limit;
       record_penetration(penetration);
-      position = position + normal * penetration;
+      position = WHEEL_CENTER + outward * rim_limit;
     }
   }
   return position;
@@ -1024,8 +1043,8 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     resetTelemetry,
     reset,
     setWheel,
-    wheel: Object.freeze({ center: Object.freeze([-0.12, 0.32]),
-      radius: 0.29, barHalfWidth: 0.012 }),
+    wheel: Object.freeze({ center: Object.freeze([0, 0.32]),
+      radius: 0.50, barHalfWidth: 0.012 }),
     destroy,
     get frameIndex() { return frameIndex; },
   });

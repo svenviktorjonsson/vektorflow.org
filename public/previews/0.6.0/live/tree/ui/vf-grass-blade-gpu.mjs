@@ -110,6 +110,7 @@ fn vf_grass_write_instance(instance_index: u32, blades_per_cell: u32) {
   let color_shift = vf_grass_bounded(cell, blade_index, 6u, -0.035, 0.035);
   let lean_amount = cell.material.x
     * vf_grass_bounded(cell, blade_index, 7u, 0.02, 0.16);
+  let wind_lean = vec2<f32>(cell.material.y, cell.color.w) * cell.material.x;
   vf_grass_blade_instances[instance_index] = VfGrassBladeInstance(
     vec4<f32>(
       f32(cell.cell.x) + vf_grass_bounded(cell, blade_index, 0u, 0.08, 0.92),
@@ -121,11 +122,11 @@ fn vf_grass_write_instance(instance_index: u32, blades_per_cell: u32) {
       cos(blade_direction),
       sin(blade_direction),
       vf_grass_bounded(cell, blade_index, 3u, 0.012, 0.028),
-      cell.material.y,
+      0.82,
     ),
     vec4<f32>(
-      cos(lean_direction) * lean_amount,
-      sin(lean_direction) * lean_amount,
+      cos(lean_direction) * lean_amount + wind_lean.x,
+      sin(lean_direction) * lean_amount + wind_lean.y,
       0.0,
       0.0,
     ),
@@ -133,7 +134,7 @@ fn vf_grass_write_instance(instance_index: u32, blades_per_cell: u32) {
       clamp(cell.color.x + color_shift * 0.4, 0.0, 1.0),
       clamp(cell.color.y + color_shift, 0.0, 1.0),
       clamp(cell.color.z + color_shift * 0.2, 0.0, 1.0),
-      cell.color.w,
+      1.0,
     ),
   );
 }

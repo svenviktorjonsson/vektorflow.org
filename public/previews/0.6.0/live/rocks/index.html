@@ -1,46 +1,17 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#171817">
-  <title>Vektor Flow · live rigid rocks</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#171817">
+  <title>Vektor Flow · live 3D rigid rocks</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: #171817; color: #f2f1ec; }
-    body { min-height: 100dvh; display: grid; place-items: center; }
-    main { width: min(100%, 1000px); padding: 10px; }
-    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 2px 3px 10px; }
-    h1 { margin: 0; font-size: clamp(18px, 4.8vw, 25px); }
-    header span { color: #b8b5aa; font-size: 13px; }
-    .stage { overflow: hidden; border: 1px solid #4b4c48; border-radius: 14px; background: #22231f; box-shadow: 0 20px 70px rgb(0 0 0 / .38); }
-    .bar { min-height: 56px; display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 8px; border-bottom: 1px solid #4b4c48; background: #292a26; }
-    button { min-height: 40px; border: 1px solid #6b6c66; border-radius: 9px; padding: 0 13px; color: inherit; background: #343530; font: inherit; font-weight: 680; }
-    button[aria-pressed="true"] { color: #20211e; background: #e6e3d8; border-color: #e6e3d8; }
-    label { display: flex; align-items: center; gap: 7px; color: #d0cec5; font-size: 13px; }
-    input { accent-color: #d6cab1; }
-    .status { margin-left: auto; color: #bbb9b0; font-size: 12px; }
-    canvas { width: 100%; aspect-ratio: 5 / 3; display: block; background: #22231f; touch-action: none; cursor: grab; }
-    canvas[data-dragging="true"] { cursor: grabbing; }
-    footer { padding: 9px 3px 0; color: #aaa89e; font-size: 13px; }
-    @media (max-width: 650px) { main { padding-left: 0; padding-right: 0; } header, footer { padding-left: 10px; padding-right: 10px; } .stage { border-left: 0; border-right: 0; border-radius: 0; } .status { width: 100%; margin-left: 2px; } canvas { aspect-ratio: 4 / 3; } }
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#171817;color:#f2f1ec}
+    #controls{position:fixed;z-index:20;inset:0 0 auto;min-height:58px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 12px;border-bottom:1px solid #4b4c48;background:rgb(23 24 23/.95)}h1{margin:0 14px 0 0;font-size:clamp(17px,3.8vw,23px)}button{min-height:38px;border:1px solid #6b6c66;border-radius:9px;padding:0 13px;color:inherit;background:#343530;font:inherit;font-weight:680}button[aria-pressed=true]{color:#20211e;background:#e6e3d8;border-color:#e6e3d8}label{display:flex;align-items:center;gap:8px;color:#d0cec5;font-size:13px}input{accent-color:#d6cab1}#status{margin-left:auto;color:#bbb9b0;font-size:12px}#layer{position:fixed;inset:58px 0 26px}#vf-screen-canvas{position:fixed;inset:58px 0 26px;pointer-events:none}#hint{position:fixed;z-index:20;inset:auto 12px 6px;color:#aaa89e;font-size:12px;text-align:center;pointer-events:none}#error{position:fixed;z-index:30;inset:70px 12px auto;padding:12px;color:#ffb4ab;background:#301c1c;white-space:pre-wrap}@media(max-width:680px){#controls{min-height:102px}#layer,#vf-screen-canvas{inset-block-start:102px}#status{width:100%;margin:0}}
   </style>
 </head>
-<body>
-  <main>
-    <header><h1>Rigid rocks</h1><span>0.6.0 research</span></header>
-    <section class="stage" aria-label="Interactive rigid rock simulation">
-      <div class="bar">
-        <button id="play" type="button" aria-pressed="true">Pause</button>
-        <button id="reset" type="button">Reset</button>
-        <label>Gravity <input id="gravity" type="range" min="0" max="15" value="9.82" step="0.1"></label>
-        <span id="status" class="status" role="status">Building generated stones…</span>
-      </div>
-      <canvas id="rocks" width="900" height="540" aria-label="Generated rocks with rigid-body collision physics"></canvas>
-    </section>
-    <footer><strong>Pick up any rock, drag it, and drop it.</strong> The generated silhouettes use the rigid polygon solver with restitution, friction, angular inertia, sleeping, and rock-to-rock contacts.</footer>
-  </main>
-  <script type="module" src="./scene.mjs"></script>
+<body data-vf-runtime-autoboot="false">
+  <div id="controls"><h1>Original 3D rigid rocks</h1><button id="play" type="button" aria-pressed="true">Pause</button><button id="reset" type="button">Reset</button><label>Gravity <input id="gravity" type="range" min="0" max="15" value="9.82" step="0.1"></label><span id="status" role="status">Loading generated stones…</span></div>
+  <div id="layer"></div><canvas id="vf-screen-canvas"></canvas><div id="hint"><strong>Pick up, drag, and drop any rock.</strong> No water in this scene.</div><pre id="error" hidden></pre>
+  <script>window.__vfRuntimeShellConfig={sceneStyleDeps:[{href:'vf-frame.css'}],sceneScriptDeps:['vf-frame.js','geom/vf-geom-math.js','geom/vf-geom-core.js','geom/vf-geom-material-arena.js','geom/vf-geom-ledger.js','geom/vf-geom-ledger-layout.js','geom/vf-geom-ledger-transport.js','geom/vf-geom-parametric-surface.js','geom/vf-geom-frame-adapter.js','geom/vf-geom-wgpu.js','vf-display.js']};</script>
+  <script src="../tree/ui/vf-runtime-shell.js?v=rocks-3d-live-1"></script><script type="module" src="./scene.mjs?v=rocks-3d-live-13"></script>
 </body>
 </html>

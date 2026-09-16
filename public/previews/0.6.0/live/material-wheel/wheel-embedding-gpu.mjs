@@ -24,6 +24,21 @@ fn segment_distance(point: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
   return length(point - (a + edge * t));
 }
 
+fn rotate_local(point: vec2<f32>, angle: f32) -> vec2<f32> {
+  let c = cos(angle); let s = sin(angle);
+  return vec2<f32>(c * point.x - s * point.y, s * point.x + c * point.y);
+}
+
+fn baffle(index: u32) -> vec4<f32> {
+  if (index == 0u) { return vec4<f32>(0.500, 0.000, 0.350, 0.000); }
+  if (index == 1u) { return vec4<f32>(0.000, 0.500, 0.000, 0.350); }
+  if (index == 2u) { return vec4<f32>(-0.500, 0.000, -0.350, 0.000); }
+  if (index == 3u) { return vec4<f32>(0.000, -0.500, 0.000, -0.350); }
+  if (index == 4u) { return vec4<f32>(-0.220, 0.175, -0.075, 0.135); }
+  if (index == 5u) { return vec4<f32>(0.075, -0.055, 0.215, -0.115); }
+  return vec4<f32>(-0.105, -0.250, 0.020, -0.155);
+}
+
 @fragment
 fn fragment_main(input: Out) -> @location(0) vec4<f32> {
   let uv = input.position.xy / params.canvas.xy;
@@ -34,13 +49,11 @@ fn fragment_main(input: Out) -> @location(0) vec4<f32> {
   let angle = params.wheel.w;
   let radial = length(world - center);
   var distance = abs(radial - radius);
-  for (var spoke = 0u; spoke < 3u; spoke = spoke + 1u) {
-    let theta = angle + f32(spoke) * 3.141592653589793 / 3.0;
-    let direction = vec2<f32>(cos(theta), sin(theta));
+  for (var segment = 0u; segment < 7u; segment = segment + 1u) {
+    let local = baffle(segment);
     distance = min(distance, segment_distance(world,
-      center - direction * radius, center + direction * radius));
+      center + rotate_local(local.xy, angle), center + rotate_local(local.zw, angle)));
   }
-  distance = min(distance, length(world - center));
   let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
   let half_width = max(0.012, pixel_world * 1.35);
   let aa = max(fwidth(distance), pixel_world);

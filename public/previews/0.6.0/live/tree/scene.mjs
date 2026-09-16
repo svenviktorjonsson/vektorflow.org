@@ -1,152 +1,63 @@
-import { createForestPopulationReference, realizeForestPatchesReference } from './runtime/vf-forest-population.mjs';
-import { createTreeGeometryPlannerReference, planTreeGeometryReference } from './runtime/vf-tree-geometry-plan.mjs';
-import { createTreeMaterialFieldReference, realizeTreeMaterialsReference } from './runtime/vf-tree-material-field.mjs';
-import { adaptTreeWorkingSetsToRetainedPacketsReference } from './runtime/vf-tree-renderer-packets.mjs';
-import { adaptTreeRenderPacketToWebGpuMeshesReference } from './runtime/vf-tree-webgpu-packets.mjs';
 import { createGrassMaterialFieldReference } from './ui/vf-grass-material-field.mjs';
 import { createGrassCameraDemandControllerReference } from './ui/vf-grass-camera-demand-runtime.mjs';
 import { createRetainedGeometryPacketRuntimeReference } from './ui/vf-rock-camera-demand-runtime.mjs';
 
-const frameId = 'tree_grass_live_frame';
-const status = document.getElementById('status');
-const errorBox = document.getElementById('error');
-const windInput = document.getElementById('wind');
-const grassButton = document.getElementById('grass');
-let grassVisible = true;
-let grassPackets = [];
-let treeMeshes = [];
-let baseVertices = [];
-let minimumZ = 0;
-let maximumZ = 1;
-let lastWindFrame = 0;
+const frameId='tree_grass_live_frame',status=document.getElementById('status'),errorBox=document.getElementById('error'),windInput=document.getElementById('wind'),windValue=document.getElementById('wind-value'),grassButton=document.getElementById('grass'),windParticlesButton=document.getElementById('wind-particles');
+let grassVisible=true,windParticlesVisible=false,windParticleMesh=null,grassPackets=[],baseGrassPacket=null,baseGrassWords=null,treeMeshes=[],baseVertices=[],vertexCells=[],vertexCompliance=[],minimum=[Infinity,Infinity,Infinity],maximum=[-Infinity,-Infinity,-Infinity],lastWindFrame=0,grassRevision=1,lastGrassDemand=0;
+const GX=5,GY=5,GZ=10,CELLS=GX*GY*GZ,fieldDisplacement=new Float32Array(CELLS*2),fieldVelocity=new Float32Array(CELLS*2),fieldForce=new Float32Array(CELLS*2),treeCollisionCells=new Uint8Array(CELLS);
+const parcels=Array.from({length:18},(_,i)=>({x:(i*.61803398875)%1,y:(i*.38196601125+.17)%1,z:(i*.754877666+.31)%1,phase:i*1.713,speedScale:.86+(i%5)*.07,vx:0,vy:0,vz:0,visibleFor:0,collisionCooldown:0}));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const cellIndex=(x,y,z)=>clamp(Math.floor(x*GX),0,GX-1)+GX*(clamp(Math.floor(y*GY),0,GY-1)+GY*clamp(Math.floor(z*GZ),0,GZ-1));
 
-grassButton.addEventListener('click', () => {
-  grassVisible = !grassVisible;
-  grassButton.setAttribute('aria-pressed', String(grassVisible));
-  window.VfDisplay?.requestDynamicGeomFrameUpdate(frameId);
-});
-
-const identity = Object.freeze({
-  generator: 'vkf.conditioned', version: 1, seed: Object.freeze([0x1f83d9ab, 269]),
-  domain: 'material', hierarchy: Object.freeze(['world:boreal', 'tree:webgpu-demo']),
-  lod: 0, channel: 'population',
-});
-
-const groundMesh = (center, span) => {
-  const radius = Math.max(7, span * 2.5);
-  const z = -0.018;
-  return Object.freeze({ id: 'tree-grass-ground', type: 'field_mesh',
-    vertices: new Float32Array([
-      center[0] - radius, center[1] - radius, z, 0, 0, 1, .11, .16, .08, 1,
-      center[0] + radius, center[1] - radius, z, 0, 0, 1, .11, .16, .08, 1,
-      center[0] + radius, center[1] + radius, z, 0, 0, 1, .11, .16, .08, 1,
-      center[0] - radius, center[1] + radius, z, 0, 0, 1, .11, .16, .08, 1,
-    ]), indices: new Uint32Array([0, 1, 2, 0, 2, 3]), cull_backfaces: false,
-    casts_shadow: false, receives_shadow: true, specular_strength: 0.02 });
-};
-
-try {
-  await window.VfRuntimeShell.ensureSceneDependencies();
-  const forest = realizeForestPatchesReference(createForestPopulationReference(identity),
-    { patches: [[0, 0]], treeBudget: 1 });
-  const geometry = planTreeGeometryReference(createTreeGeometryPlannerReference(identity, {
-    splitDepth: 7, lateralShoots: true, trunkShoots: false, foliageDensity: 0.42,
-    scaffoldBranches: 2,
-  }), forest, { treeIndices: [0], detailLevels: [2], primitiveBudget: 2400 });
-  const materials = realizeTreeMaterialsReference(createTreeMaterialFieldReference(identity),
-    forest, geometry, { materialBudget: 2400 });
-  const retained = adaptTreeWorkingSetsToRetainedPacketsReference(geometry, materials);
-  const tree = adaptTreeRenderPacketToWebGpuMeshesReference(retained.packets[0],
-    { vertexBudget: 393216, indexBudget: 2359296, leafContact: true });
-
-  const minimum = [Infinity, Infinity, Infinity];
-  const maximum = [-Infinity, -Infinity, -Infinity];
-  for (const mesh of tree.meshes) {
-    for (let offset = 0; offset < mesh.vertices.length; offset += 10) {
-      for (let axis = 0; axis < 3; axis += 1) {
-        minimum[axis] = Math.min(minimum[axis], mesh.vertices[offset + axis]);
-        maximum[axis] = Math.max(maximum[axis], mesh.vertices[offset + axis]);
-      }
-    }
-  }
-  const center = minimum.map((value, axis) => (value + maximum[axis]) * 0.5);
-  const span = Math.max(...minimum.map((value, axis) => maximum[axis] - value));
-  minimumZ = minimum[2]; maximumZ = maximum[2];
-  baseVertices = tree.meshes.map((mesh) => new Float32Array(mesh.vertices));
-  treeMeshes = tree.meshes.map((mesh, index) => ({ ...mesh,
-    vertices: new Float32Array(baseVertices[index]) }));
-  const ground = groundMesh(center, span);
-  const camera = { pos: [center[0] + span * 0.78, center[1] - span * 1.65,
-    center[2] + span * 0.32], target: [center[0], center[1], center[2] * 0.88],
-    up: [0, 0, 1], fov: 42 };
-
-  const panel = window.VfFrame.mount(document.getElementById('layer'), {
-    id: frameId, title: 'Generated tree · live grass · light wind', draggable: false,
-    dockable: false, resizable: false, closable: false,
-  });
-  panel.root.style.left = '0'; panel.root.style.top = '0';
-  panel.root.style.width = '100%'; panel.root.style.height = '100%';
-
-  window.VfDisplay.mountDynamicGeomFrame(frameId, () => ({
-    meshes: [ground, ...(grassVisible ? grassPackets : []), ...treeMeshes], camera,
-    lights: [
-      { id: 'tree_key', kind: 'point', pos: [center[0] - span * .45,
-        center[1] - span * .55, maximum[2] + span * .35], target: center,
-        color: [1, .91, .72, 1], intensity: span * span * 1.95, range: span * 3,
-        casts_shadow: false },
-      { id: 'tree_fill', kind: 'point', pos: [center[0] + span * .55,
-        center[1] - span * .5, maximum[2] + span * .08], target: center,
-        color: [.62, .78, .64, 1], intensity: span * span * 1.1, range: span * 2.5 },
-    ], background: [.065, .105, .15, 1], unified_renderer: true,
-  }));
-
-  const grassRuntime = createRetainedGeometryPacketRuntimeReference({ requestRender(packets) {
-    grassPackets = packets;
-    window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);
-  } });
-  const grassController = createGrassCameraDemandControllerReference({
-    field: createGrassMaterialFieldReference({ generator: 'vkf.conditioned', version: 1,
-      seed: [0x01234567, 0x89abcdef], domain: 'material',
-      hierarchy: ['world:boreal', 'grass-field:tree'], lod: 0, channel: 'surface' }),
-    runtime: grassRuntime, planeZ: 0, maximumDistance: Math.max(10, span * 2.2),
-    cellBudget: 64, bladeBudget: 1024,
-  });
-  const rect = panel.body.getBoundingClientRect();
-  await grassController.request({ revision: 1, camera: { eye: camera.pos, target: camera.target,
-    up: camera.up, verticalFovRadians: camera.fov * Math.PI / 180,
-    viewportWidth: Math.max(640, rect.width), viewportHeight: Math.max(360, rect.height) } });
-  status.textContent = `${tree.vertexCount.toLocaleString()} tree vertices · ${grassRuntime.packets()[0]?.instance_count?.toLocaleString() || 0} grass blades`;
-  window.__treeGrassResult = { outcome: 'ready', tree, grassRuntime };
-  window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);
-
-  const animate = (time) => {
-    if (time - lastWindFrame >= 180) {
-      lastWindFrame = time;
-      const strength = Number(windInput.value) * span * 0.0105;
-      const phase = time * 0.00115;
-      const height = Math.max(1e-6, maximumZ - minimumZ);
-      // Wind acts on the leaf embedding while the exact woody network stays
-      // fixed at its generated joints. This keeps the trunk topology intact.
-      treeMeshes.slice(1).forEach((mesh, localIndex) => {
-        const meshIndex = localIndex + 1;
-        const base = baseVertices[meshIndex];
-        for (let offset = 0; offset < base.length; offset += 10) {
-          const normalizedHeight = Math.max(0, Math.min(1, (base[offset + 2] - minimumZ) / height));
-          const bend = normalizedHeight * normalizedHeight;
-          const localPhase = phase + base[offset + 2] * 0.34 + base[offset] * 0.11;
-          mesh.vertices[offset] = base[offset] + Math.sin(localPhase) * strength * bend;
-          mesh.vertices[offset + 1] = base[offset + 1]
-            + Math.cos(localPhase * 0.83) * strength * 0.48 * bend;
-        }
-      });
-      window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);
-    }
-    requestAnimationFrame(animate);
-  };
-  requestAnimationFrame(animate);
-} catch (error) {
-  errorBox.hidden = false;
-  errorBox.textContent = String(error?.stack || error);
-  status.textContent = 'Scene unavailable';
-  window.__treeGrassResult = { outcome: 'fail', error: errorBox.textContent };
+async function loadCachedTree(){
+  const response=await fetch('./assets/tree-mesh.bin.gz?v=tree-cache-1');if(!response.ok)throw new Error(`Tree asset ${response.status}`);
+  if(typeof DecompressionStream!=='function')throw new Error('This browser cannot decode the cached tree asset.');
+  const buffer=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(),view=new DataView(buffer),decoder=new TextDecoder();let offset=0;
+  if(decoder.decode(new Uint8Array(buffer,0,8))!=='VFTREE02')throw new Error('Invalid cached tree asset');offset=8;
+  const meshCount=view.getUint32(offset,true);offset+=4;const vertexCount=view.getUint32(offset,true);offset+=4;const indexCount=view.getUint32(offset,true);offset+=4;const meshes=[];
+  for(let i=0;i<meshCount;i+=1){const metaLength=view.getUint32(offset,true);offset+=4;const verticesLength=view.getUint32(offset,true);offset+=4;const indicesLength=view.getUint32(offset,true);offset+=4;const uvsLength=view.getUint32(offset,true);offset+=4;const roughnessLength=view.getUint32(offset,true);offset+=4;const meta=JSON.parse(decoder.decode(new Uint8Array(buffer,offset,metaLength)));offset+=metaLength;offset+=(4-(metaLength%4))%4;const vertices=new Float32Array(buffer,offset,verticesLength).slice();offset+=verticesLength*4;const indices=new Uint32Array(buffer,offset,indicesLength).slice();offset+=indicesLength*4;const uvs=new Float32Array(buffer,offset,uvsLength).slice();offset+=uvsLength*4;const roughness=new Float32Array(buffer,offset,roughnessLength).slice();offset+=roughnessLength*4;meshes.push({...meta,vertices,indices,...(uvsLength?{uvs}:{}),...(roughnessLength?{roughness}:{}),static_vertices:false});}
+  let low=Infinity,high=-Infinity;for(const mesh of meshes)for(let o=2;o<mesh.vertices.length;o+=10){low=Math.min(low,mesh.vertices[o]);high=Math.max(high,mesh.vertices[o]);}const metresPerUnit=8/Math.max(1e-6,high-low);for(const mesh of meshes)for(let o=0;o<mesh.vertices.length;o+=10){mesh.vertices[o]*=metresPerUnit;mesh.vertices[o+1]*=metresPerUnit;mesh.vertices[o+2]=(mesh.vertices[o+2]-low)*metresPerUnit;}
+  return{meshes,vertexCount,indexCount};
 }
+
+function boundsAndMappings(){
+  for(const mesh of treeMeshes)for(let o=0;o<mesh.vertices.length;o+=10)for(let a=0;a<3;a+=1){minimum[a]=Math.min(minimum[a],mesh.vertices[o+a]);maximum[a]=Math.max(maximum[a],mesh.vertices[o+a]);}
+  const span=maximum.map((v,a)=>Math.max(1e-6,v-minimum[a]));baseVertices=treeMeshes.map((m)=>new Float32Array(m.vertices));
+  vertexCells=treeMeshes.map((mesh)=>{const map=new Uint16Array(mesh.vertices.length/10);for(let o=0,i=0;o<mesh.vertices.length;o+=10,i+=1){map[i]=cellIndex((mesh.vertices[o]-minimum[0])/span[0],(mesh.vertices[o+1]-minimum[1])/span[1],(mesh.vertices[o+2]-minimum[2])/span[2]);treeCollisionCells[map[i]]=1;}return map;});
+  vertexCompliance=treeMeshes.map((mesh,meshIndex)=>{const values=new Float32Array(mesh.vertices.length/10);for(let o=0,i=0;o<mesh.vertices.length;o+=10,i+=1){const h=clamp((mesh.vertices[o+2]-minimum[2])/span[2],0,1);values[i]=(meshIndex===0?.48:1.28)*h*h;}return values;});return span;
+}
+
+function advanceWind(dt,speedMetersPerSecond,time){
+  const spanX=Math.max(1e-6,maximum[0]-minimum[0]),forceScale=.12+.68*(speedMetersPerSecond/8)**2;fieldForce.fill(0);for(let i=0;i<parcels.length;i+=1){const p=parcels[i],targetVx=speedMetersPerSecond*p.speedScale/spanX,old=[p.x,p.y,p.z];p.visibleFor=Math.max(0,p.visibleFor-dt);p.collisionCooldown=Math.max(0,p.collisionCooldown-dt);p.vx+=(targetVx-p.vx)*Math.min(1,dt*7);p.vy+=(Math.sin(time*.00047+p.phase)*.018-p.vy)*Math.min(1,dt*4);p.vz+=(Math.cos(time*.00039+p.phase*1.3)*.014-p.vz)*Math.min(1,dt*4);p.x+=p.vx*dt;p.y=clamp(p.y+p.vy*dt,.025,.975);p.z+=p.vz*dt;let collided=p.z<=.012;if(collided){p.z=.012;p.vz=Math.abs(p.vz)*.45+.006;}const insideDomain=p.x>=0&&p.x<=1&&p.y>=0&&p.y<=1&&p.z>=0&&p.z<=1,hitTree=insideDomain&&treeCollisionCells[cellIndex(p.x,p.y,p.z)]===1;if(hitTree&&p.collisionCooldown<=0){collided=true;p.x=old[0];p.y=old[1];p.z=old[2];p.vx=-Math.abs(p.vx)*.42;p.vy+=(i%2?1:-1)*targetVx*.08;p.vz+=targetVx*.045;}if(collided&&p.collisionCooldown<=0){p.visibleFor=.25;p.collisionCooldown=.18;}if(p.x>1){p.x=0;p.y=(i*.38196601125+time*.000031)%1;p.z=(i*.754877666+time*.000019)%1;p.vx=targetVx;p.visibleFor=0;p.collisionCooldown=0;}if(p.x<0)p.x=0;}
+  // Particle shifting keeps the carrier sampling regular. This is a numerical
+  // anti-clumping correction, not inter-particle friction.
+  for(let i=0;i<parcels.length;i+=1)for(let j=i+1;j<parcels.length;j+=1){const a=parcels[i],b=parcels[j],dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z,d2=dx*dx+dy*dy+dz*dz;if(d2>1e-8&&d2<.018){const push=(.018-d2)*dt*.22/Math.sqrt(d2);a.y=clamp(a.y+dy*push,.02,.98);b.y=clamp(b.y-dy*push,.02,.98);a.z=clamp(a.z+dz*push,.02,.98);b.z=clamp(b.z-dz*push,.02,.98);}}
+  for(let z=0;z<GZ;z+=1)for(let y=0;y<GY;y+=1)for(let x=0;x<GX;x+=1){const i=x+GX*(y+GY*z),cx=(x+.5)/GX,cy=(y+.5)/GY,cz=(z+.5)/GZ;let fx=0,fy=0;for(const p of parcels){const dx=cx-p.x,dy=cy-p.y,dz=(cz-p.z)*.72,w=Math.exp(-(dx*dx+dy*dy+dz*dz)/.055),impact=p.visibleFor>0?1.15*(p.visibleFor/.25):0;fx+=w*(.56+.18*Math.sin(p.phase+time*.001)+impact);fy+=w*(.24*Math.sin(p.phase*1.9+time*.0013+cz*4)+impact*p.vy*.8);}fieldForce[i*2]=fx*forceScale;fieldForce[i*2+1]=fy*forceScale;}
+  const prior=new Float32Array(fieldDisplacement);for(let z=0;z<GZ;z+=1)for(let y=0;y<GY;y+=1)for(let x=0;x<GX;x+=1){const i=x+GX*(y+GY*z);for(let a=0;a<2;a+=1){let sum=0,count=0;for(const[nx,ny,nz]of[[x-1,y,z],[x+1,y,z],[x,y-1,z],[x,y+1,z],[x,y,z-1],[x,y,z+1]])if(nx>=0&&nx<GX&&ny>=0&&ny<GY&&nz>=0&&nz<GZ){sum+=prior[(nx+GX*(ny+GY*nz))*2+a];count+=1;}const o=i*2+a,elasticCoupling=count?((sum/count)-prior[o])*7.5:0;fieldVelocity[o]+=(fieldForce[o]*.62-fieldDisplacement[o]*11-fieldVelocity[o]*3.4+elasticCoupling)*dt;fieldDisplacement[o]=clamp(fieldDisplacement[o]+fieldVelocity[o]*dt,-.11,.11);}}
+}
+
+function deformTree(){const worldSpan=Math.max(...maximum.map((v,a)=>v-minimum[a]));for(let m=0;m<treeMeshes.length;m+=1){const mesh=treeMeshes[m],base=baseVertices[m],cells=vertexCells[m],compliance=vertexCompliance[m];for(let o=0,i=0;o<base.length;o+=10,i+=1){const c=cells[i]*2,k=compliance[i]*worldSpan*.23;mesh.vertices[o]=base[o]+fieldDisplacement[c]*k;mesh.vertices[o+1]=base[o+1]+fieldDisplacement[c+1]*k;}}}
+
+function windAtWorld(x,y,z=0){const nx=(x-minimum[0])/Math.max(1e-6,maximum[0]-minimum[0]),ny=(y-minimum[1])/Math.max(1e-6,maximum[1]-minimum[1]),nz=(z-minimum[2])/Math.max(1e-6,maximum[2]-minimum[2]),i=cellIndex(nx,ny,nz)*2;return[fieldDisplacement[i],fieldDisplacement[i+1]];}
+function updateGrassWind(){if(!baseGrassPacket||!baseGrassWords)return;const words=new Uint32Array(baseGrassWords),signed=new Int32Array(words.buffer),floats=new Float32Array(words.buffer);for(let base=0;base<words.length;base+=12){const wind=windAtWorld(signed[base]+.5,signed[base+1]+.5,0);floats[base+7]=wind[0]*2.8;floats[base+11]=wind[1]*2.8;}grassPackets=[{...baseGrassPacket,grass_gpu:{...baseGrassPacket.grass_gpu,cell_records:words}}];}
+
+function createWindParticleMesh(){const vertices=new Float32Array(parcels.length*6*10),indices=new Uint32Array(parcels.length*8*3);for(let p=0;p<parcels.length;p+=1){const v=p*6;indices.set([v,v+2,v+4,v+2,v+1,v+4,v+1,v+3,v+4,v+3,v,v+4,v+2,v,v+5,v+1,v+2,v+5,v+3,v+1,v+5,v,v+3,v+5],p*24);}return{id:'visible-wind-impacts',type:'field_mesh',object_id:990,mode3d:true,topology:'triangle-list',static_vertices:false,static_indices:true,transparent:true,receives_lighting:false,casts_shadow:false,receives_shadow:false,cull_backfaces:false,vertices,indices};}
+function updateWindParticleMesh(){if(!windParticleMesh)return;const span=maximum.map((v,a)=>v-minimum[a]),radius=Math.max(...span)*.0065;for(let p=0;p<parcels.length;p+=1){const parcel=parcels[p],alpha=.5*clamp(parcel.visibleFor/.25,0,1),color=[.42*alpha,.87*alpha,alpha,alpha],c=[minimum[0]+parcel.x*span[0],minimum[1]+parcel.y*span[1],minimum[2]+parcel.z*span[2]],points=[[c[0]+radius,c[1],c[2]],[c[0]-radius,c[1],c[2]],[c[0],c[1]+radius,c[2]],[c[0],c[1]-radius,c[2]],[c[0],c[1],c[2]+radius],[c[0],c[1],c[2]-radius]];for(let i=0;i<6;i+=1){const o=(p*6+i)*10,n=[(points[i][0]-c[0])/radius,(points[i][1]-c[1])/radius,(points[i][2]-c[2])/radius];windParticleMesh.vertices.set([...points[i],...n,...color],o);}}}
+
+function groundMesh(center,span){const radius=Math.max(7,Math.max(...span)*2.5),z=-.018;return{id:'tree-grass-ground',type:'field_mesh',vertices:new Float32Array([center[0]-radius,center[1]-radius,z,0,0,1,.11,.16,.08,1,center[0]+radius,center[1]-radius,z,0,0,1,.11,.16,.08,1,center[0]+radius,center[1]+radius,z,0,0,1,.11,.16,.08,1,center[0]-radius,center[1]+radius,z,0,0,1,.11,.16,.08,1]),indices:new Uint32Array([0,1,2,0,2,3]),cull_backfaces:false,casts_shadow:false,receives_shadow:true,specular_strength:.02};}
+
+grassButton.addEventListener('click',()=>{grassVisible=!grassVisible;grassButton.setAttribute('aria-pressed',String(grassVisible));window.VfDisplay?.requestDynamicGeomFrameUpdate(frameId);});
+windParticlesButton.addEventListener('click',()=>{windParticlesVisible=!windParticlesVisible;windParticlesButton.setAttribute('aria-pressed',String(windParticlesVisible));window.VfDisplay?.requestDynamicGeomFrameUpdate(frameId);});
+windInput.addEventListener('input',()=>{windValue.value=`${Number(windInput.value).toFixed(1)} m/s`;});
+
+try{
+  const started=performance.now(),[tree]=await Promise.all([loadCachedTree(),window.VfRuntimeShell.ensureSceneDependencies()]);treeMeshes=tree.meshes;const span=boundsAndMappings(),center=minimum.map((v,a)=>(v+maximum[a])*.5),ground=groundMesh(center,span),camera={pos:[center[0]+Math.max(...span)*.78,center[1]-Math.max(...span)*1.65,center[2]+Math.max(...span)*.32],target:[center[0],center[1],center[2]*.88],up:[0,0,1],fov:42};windParticleMesh=createWindParticleMesh();updateWindParticleMesh();
+  const panel=window.VfFrame.mount(document.getElementById('layer'),{id:frameId,title:'Cached generated tree · local parcel wind · camera-demanded grass',draggable:false,dockable:false,resizable:false,closable:false});Object.assign(panel.root.style,{left:'0',top:'0',width:'100%',height:'100%'});
+  let orbitDrag=null;panel.body.addEventListener('pointerdown',(event)=>{if(event.button!==0)return;orbitDrag={id:event.pointerId,x:event.clientX,y:event.clientY};panel.body.setPointerCapture(event.pointerId);},{capture:true});panel.body.addEventListener('pointermove',(event)=>{if(!orbitDrag||orbitDrag.id!==event.pointerId||(event.buttons&1)===0)return;const dx=event.clientX-orbitDrag.x,dy=event.clientY-orbitDrag.y;orbitDrag.x=event.clientX;orbitDrag.y=event.clientY;const vx=camera.pos[0]-camera.target[0],vy=camera.pos[1]-camera.target[1],vz=camera.pos[2]-camera.target[2],distance=Math.hypot(vx,vy,vz),yaw=Math.atan2(vy,vx)-dx*.008,pitch=clamp(Math.asin(vz/distance)+dy*.006,-1.22,1.22),cp=Math.cos(pitch);camera.pos=[camera.target[0]+Math.cos(yaw)*cp*distance,camera.target[1]+Math.sin(yaw)*cp*distance,camera.target[2]+Math.sin(pitch)*distance];window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);},{capture:true});const endOrbit=(event)=>{if(!orbitDrag||orbitDrag.id!==event.pointerId)return;orbitDrag=null;try{panel.body.releasePointerCapture(event.pointerId);}catch{}};panel.body.addEventListener('pointerup',endOrbit,{capture:true});panel.body.addEventListener('pointercancel',endOrbit,{capture:true});
+  window.VfDisplay.mountDynamicGeomFrame(frameId,()=>({meshes:[ground,...(grassVisible?grassPackets:[]),...(windParticlesVisible?[windParticleMesh]:[]),...treeMeshes],camera,lights:[{id:'tree_key',kind:'point',pos:[center[0]-Math.max(...span)*.45,center[1]-Math.max(...span)*.55,maximum[2]+Math.max(...span)*.35],target:center,color:[1,.91,.72,1],intensity:Math.max(...span)**2*1.95,range:Math.max(...span)*3},{id:'tree_fill',kind:'point',pos:[center[0]+Math.max(...span)*.55,center[1]-Math.max(...span)*.5,maximum[2]+Math.max(...span)*.08],target:center,color:[.62,.78,.64,1],intensity:Math.max(...span)**2*1.1,range:Math.max(...span)*2.5}],background:[.065,.105,.15,1],unified_renderer:true}));
+  const grassRuntime=createRetainedGeometryPacketRuntimeReference({requestRender(packets){baseGrassPacket=packets[0];baseGrassWords=baseGrassPacket?.grass_gpu?.cell_records?new Uint32Array(baseGrassPacket.grass_gpu.cell_records):null;grassPackets=packets;updateGrassWind();window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);}});
+  const grassController=createGrassCameraDemandControllerReference({field:createGrassMaterialFieldReference({generator:'vkf.conditioned',version:1,seed:[0x01234567,0x89abcdef],domain:'material',hierarchy:['world:boreal','grass-field:tree'],lod:0,channel:'surface'}),runtime:grassRuntime,planeZ:0,maximumDistance:Math.max(10,Math.max(...span)*2.2),cellBudget:64,bladeBudget:1024});
+  const requestGrass=async()=>{const rect=panel.body.getBoundingClientRect();await grassController.request({revision:grassRevision++,camera:{eye:camera.pos,target:camera.target,up:camera.up,verticalFovRadians:camera.fov*Math.PI/180,viewportWidth:Math.max(640,rect.width),viewportHeight:Math.max(360,rect.height)}});};await requestGrass();
+  status.textContent=`Ready in ${((performance.now()-started)/1000).toFixed(1)}s · 8 m tree · swipe to orbit · ${tree.vertexCount.toLocaleString()} vertices`;window.__treeGrassResult={outcome:'ready',tree,grassRuntime,windModel:'advected-parcels-local-transfer',parcels,treeCollisionCells};window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);
+  const animate=(time)=>{if(time-lastWindFrame>=72){const dt=lastWindFrame?Math.min(.12,(time-lastWindFrame)/1000):.072;lastWindFrame=time;advanceWind(dt,Number(windInput.value),time);deformTree();updateGrassWind();updateWindParticleMesh();window.VfDisplay.requestDynamicGeomFrameUpdate(frameId);}if(time-lastGrassDemand>1250){lastGrassDemand=time;requestGrass().catch(()=>{});}window.VfDisplay.redrawVisibleGeomFrames();requestAnimationFrame(animate);};requestAnimationFrame(animate);
+}catch(error){errorBox.hidden=false;errorBox.textContent=String(error?.stack||error);status.textContent='Scene unavailable';window.__treeGrassResult={outcome:'fail',error:errorBox.textContent};}

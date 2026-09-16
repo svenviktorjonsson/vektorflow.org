@@ -146,8 +146,23 @@ const PI: f32 = 3.141592653589793;
 const SPRAY: u32 = 1u;
 const FOAM: u32 = 2u;
 const BUBBLE: u32 = 3u;
-const WHEEL_RADIUS: f32 = 0.29;
+const WHEEL_RADIUS: f32 = 0.50;
 const WHEEL_BAR_HALF_WIDTH: f32 = 0.012;
+
+fn rotate_local(point: vec2<f32>, angle: f32) -> vec2<f32> {
+  let c = cos(angle); let s = sin(angle);
+  return vec2<f32>(c * point.x - s * point.y, s * point.x + c * point.y);
+}
+
+fn baffle(index: u32) -> vec4<f32> {
+  if (index == 0u) { return vec4<f32>(0.500, 0.000, 0.350, 0.000); }
+  if (index == 1u) { return vec4<f32>(0.000, 0.500, 0.000, 0.350); }
+  if (index == 2u) { return vec4<f32>(-0.500, 0.000, -0.350, 0.000); }
+  if (index == 3u) { return vec4<f32>(0.000, -0.500, 0.000, -0.350); }
+  if (index == 4u) { return vec4<f32>(-0.220, 0.175, -0.075, 0.135); }
+  if (index == 5u) { return vec4<f32>(0.075, -0.055, 0.215, -0.115); }
+  return vec4<f32>(-0.105, -0.250, 0.020, -0.155);
+}
 
 fn surface_point(index: u32) -> vec2<f32> {
   let packed = solid_data[index >> 1u];
@@ -677,18 +692,20 @@ fn resolve_wheel_motion(position_input: vec2<f32>, velocity_input: vec2<f32>,
   let angular_velocity = params.terrain.y;
   let contact_radius = particle_radius + WHEEL_BAR_HALF_WIDTH;
 
-  // Three diameters form six rigid spokes. Repeating the projection resolves
-  // co-temporal contacts at the hub and at spoke/rim junctions.
+  // Repeated projections resolve simultaneous baffle/rim contacts.
   for (var projection = 0u; projection < 4u; projection = projection + 1u) {
-    for (var spoke = 0u; spoke < 3u; spoke = spoke + 1u) {
-      let theta = angle + f32(spoke) * PI / 3.0;
-      let direction = vec2<f32>(cos(theta), sin(theta));
-      let along = clamp(dot(position - center, direction), -WHEEL_RADIUS, WHEEL_RADIUS);
-      let closest = center + direction * along;
+    for (var segment = 0u; segment < 7u; segment = segment + 1u) {
+      let local = baffle(segment);
+      let a = center + rotate_local(local.xy, angle);
+      let b = center + rotate_local(local.zw, angle);
+      let edge = b - a;
+      let along = clamp(dot(position - a, edge) / max(dot(edge, edge), 1.0e-8), 0.0, 1.0);
+      let closest = a + edge * along;
       let separation = position - closest;
       let distance = length(separation);
       if (distance < contact_radius) {
-        let normal = select(vec2<f32>(-direction.y, direction.x),
+        let tangent = normalize(edge);
+        let normal = select(vec2<f32>(-tangent.y, tangent.x),
           separation / max(distance, 1.0e-8), distance > 1.0e-8);
         position = position + normal * (contact_radius - distance);
         let radius_vector = closest - center;
@@ -702,11 +719,11 @@ fn resolve_wheel_motion(position_input: vec2<f32>, velocity_input: vec2<f32>,
     }
     let radial = position - center;
     let radial_length = length(radial);
-    let rim_distance = abs(radial_length - WHEEL_RADIUS);
-    if (rim_distance < contact_radius) {
+    let rim_limit = WHEEL_RADIUS - contact_radius;
+    if (radial_length > rim_limit) {
       let outward = radial / max(radial_length, 1.0e-8);
-      let normal = select(-outward, outward, radial_length >= WHEEL_RADIUS);
-      position = position + normal * (contact_radius - rim_distance);
+      let normal = -outward;
+      position = center + outward * rim_limit;
       let closest = center + outward * WHEEL_RADIUS;
       let radius_vector = closest - center;
       let surface_velocity = angular_velocity
@@ -1144,7 +1161,7 @@ const MAXIMUM_LIQUID_GRID_CELL_COUNT = 1048576;
 
 export const LIQUID_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   dimension: 2,
-  columns: 66,
+  columns: 36,
   rows: 14,
   particleSpacing: 0.018,
   supportScale: 2.35,
@@ -1158,17 +1175,18 @@ export const LIQUID_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   maximumCourantNumber: 0.1,
   divergenceIterations: 5,
   densityIterations: 4,
-  worldMinimum: Object.freeze([-1.68, -0.26]),
-  worldMaximum: Object.freeze([1.92, 0.92]),
-  viewMinimum: Object.freeze([-1.28, -0.18]),
-  viewMaximum: Object.freeze([1.72, 0.72]),
-  bedSlope: -0.08,
-  bedAtStone: 0.04,
+  worldMinimum: Object.freeze([-0.70, -0.45]),
+  worldMaximum: Object.freeze([0.70, 0.86]),
+  viewMinimum: Object.freeze([-0.62, -0.20]),
+  viewMaximum: Object.freeze([0.62, 0.84]),
+  bedSlope: 0,
+  bedAtStone: -0.35,
   stoneCenterX: 0,
   stoneHalfWidth: 0.23,
-  stoneHeight: 0.18,
-  seedMaximumX: -0.28,
-  initialSpeed: 0.82,
+  stoneHeight: 0.0001,
+  seedMaximumX: 0.315,
+  seedMinimumY: -0.10,
+  initialSpeed: 0,
   maximumParticlesPerCell: 16,
   boundaryProfileSegments: 160,
   diffuseCapacity: 1024,
@@ -1234,7 +1252,7 @@ function normalizePolicy(overrides = {}) {
       throw new RangeError(`Liquid particle world ${name} must be nonnegative`);
     }
   }
-  for (const name of ['bedSlope', 'bedAtStone', 'stoneCenterX', 'seedMaximumX']) {
+  for (const name of ['bedSlope', 'bedAtStone', 'stoneCenterX', 'seedMaximumX', 'seedMinimumY']) {
     if (!finiteF32(policy[name])) {
       throw new TypeError(`Liquid particle world ${name} must be finite`);
     }
@@ -1348,7 +1366,7 @@ export function createLiquidParticleWorldGpuSeedReference(options = {}) {
       const particle = row * policy.columns + column;
       const offset = particle * stride;
       const x = minimumX + column * policy.particleSpacing;
-      const y = channel.surfaceHeightAt(x) + (row + 1) * policy.particleSpacing;
+      const y = policy.seedMinimumY + row * policy.particleSpacing;
       floats[offset] = x; floats[offset + 1] = y;
       floats[offset + 2] = vx; floats[offset + 3] = vy;
       floats[offset + 4] = x; floats[offset + 5] = y;
@@ -1654,7 +1672,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
   let frameIndex = 0;
   let wheelAngle = 0;
   let wheelAngularVelocity = 0;
-  const wheelCenter = Object.freeze([-0.12, 0.32]);
+  const wheelCenter = Object.freeze([0, 0.32]);
   const paramsBytes = new ArrayBuffer(128);
   const paramsU32 = new Uint32Array(paramsBytes);
   const paramsF32 = new Float32Array(paramsBytes);
@@ -1806,7 +1824,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
       byteOffset: telemetryByteOffset, byteLength: telemetryByteLength,
       ...LIQUID_PARTICLE_WORLD_GPU_TELEMETRY }),
     readTelemetry, resetTelemetry, reset, setWheel,
-    wheel: Object.freeze({ center: wheelCenter, radius: 0.29, barHalfWidth: 0.012 }),
+    wheel: Object.freeze({ center: wheelCenter, radius: 0.50, barHalfWidth: 0.012 }),
     destroy,
     get frameIndex() { return frameIndex; } });
 }

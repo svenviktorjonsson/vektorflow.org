@@ -8,6 +8,7 @@
   <title>Coming soon · Vektor Flow</title>
   <link rel="canonical" href="https://vektorflow.org/coming-soon.html">
   <link rel="stylesheet" href="./site.css">
+  <link rel="prefetch" href="./previews/0.6.0/live/tree/assets/tree-mesh.bin.gz" as="fetch" crossorigin>
   <style>
     .live-intro { max-width: 74ch; }
     .session-picker { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.4rem 0 .9rem; }
@@ -40,23 +41,23 @@
       <h1>Coming soon</h1>
       <p class="live-intro"><strong>Live research sessions only.</strong> Choose a scene and interact with the running simulation directly—there are no stills or prerecorded videos here.</p>
       <div class="session-picker" role="tablist" aria-label="Live research sessions">
-        <button type="button" role="tab" aria-selected="true" data-session="material" data-src="./previews/0.6.0/live/material-wheel/">Water · Sand · Wheel</button>
+        <button type="button" role="tab" aria-selected="true" data-session="material" data-src="./previews/0.6.0/live/material-wheel/">Water · Sand · Drum</button>
         <button type="button" role="tab" aria-selected="false" data-session="rocks" data-src="./previews/0.6.0/live/rocks/">Rigid Rocks</button>
         <button type="button" role="tab" aria-selected="false" data-session="tree" data-src="./previews/0.6.0/live/tree/">Tree · Grass · Wind</button>
       </div>
       <section class="session-shell" aria-label="Selected live session">
-        <iframe id="session-frame" title="Water, sand, and rigid wheel live session" src="./previews/0.6.0/live/material-wheel/" allow="fullscreen"></iframe>
+        <iframe id="session-frame" title="Water, sand, and rotating drum live session" src="./previews/0.6.0/live/material-wheel/" allow="fullscreen"></iframe>
       </section>
-      <p class="session-note"><span id="session-description">Choose water or sand, expose the particles, and drag the rigid wheel to spin it.</span><a id="open-session" href="./previews/0.6.0/live/material-wheel/">Open session full page</a></p>
+      <p class="session-note"><span id="session-description">Choose water or sand, expose the particles, and rotate the circular drum around its short internal baffles.</span><a id="open-session" href="./previews/0.6.0/live/material-wheel/">Open session full page</a></p>
     </article>
   </main>
   <footer class="site-footer">Experimental software · <a href="./origins.html">Origins</a></footer>
   <script type="module" src="./release-selector.mjs"></script>
   <script>
     const descriptions = {
-      material: ['Water, sand, and rigid wheel live session', 'Choose water or sand, expose the particles, and drag the rigid wheel to spin it.'],
-      rocks: ['Rigid rocks live session', 'Pick up generated rocks, drag them, and drop them into the running rigid-body collision world.'],
-      tree: ['Tree, grass, and wind live session', 'Orbit the existing generated 3D tree, adjust the light wind, and toggle the live grass field.'],
+      material: ['Water, sand, and rotating drum live session', 'Choose water or sand, expose the particles, and rotate the large circular drum. Its short disconnected baffles catch and release the material.'],
+      rocks: ['3D rigid rocks live session', 'Pick up the original generated 3D rocks, drag them, and drop them into the running rigid-body collision world.'],
+      tree: ['Tree, grass, and local wind live session', 'Swipe to orbit the cached generated 3D tree. Invisible wind parcels transfer momentum locally to the tree and camera-demanded grass.'],
     };
     const frame = document.getElementById('session-frame');
     const description = document.getElementById('session-description');

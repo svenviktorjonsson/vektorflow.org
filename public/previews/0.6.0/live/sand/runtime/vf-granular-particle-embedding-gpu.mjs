@@ -113,20 +113,6 @@ fn background_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let vertical = clamp((world.y - params.view.y) / view_height, 0.0, 1.0);
   var color = params.air_color.rgb * mix(0.68, 1.16, vertical);
 
-  let thickness = max(params.canvas.w * 2.6,
-    (params.chamber.w - params.chamber.y) * 0.018);
-  let left_wall = 1.0 - smoothstep(params.chamber.x,
-    params.chamber.x + thickness, world.x);
-  let right_wall = smoothstep(params.chamber.z - thickness,
-    params.chamber.z, world.x);
-  let floor_mask = 1.0 - smoothstep(params.chamber.y,
-    params.chamber.y + thickness, world.y);
-  let side_mask = max(left_wall, right_wall);
-  let chamber_mask = clamp(max(side_mask, floor_mask), 0.0, 1.0);
-  let checker = chamber_checker(world);
-  let side_color = params.wall_color.rgb * mix(0.84, 1.08, checker);
-  let floor_color = params.floor_color.rgb * mix(0.86, 1.10, checker);
-  color = mix(color, mix(side_color, floor_color, floor_mask), chamber_mask);
   return vec4<f32>(color, 1.0);
 }
 

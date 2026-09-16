@@ -25,9 +25,10 @@
 <body data-vf-runtime-autoboot="false">
   <div id="controls">
     <h1>Tree and grass</h1>
-    <label>Wind <input id="wind" type="range" min="0" max="1" value="0.32" step="0.01"></label>
+    <label>Wind <input id="wind" type="range" min="1" max="8" value="3.5" step="0.1"> <output id="wind-value">3.5 m/s</output></label>
     <button id="grass" type="button" aria-pressed="true">Grass</button>
-    <span id="status" role="status">Growing the retained tree…</span>
+    <button id="wind-particles" type="button" aria-pressed="false">Wind impacts</button>
+    <span id="status" role="status">Loading cached tree…</span>
   </div>
   <div id="layer"></div>
   <canvas id="vf-screen-canvas"></canvas>
@@ -50,7 +51,7 @@
       ],
     };
   </script>
-  <script src="./ui/vf-runtime-shell.js?v=tree-grass-live-4"></script>
-  <script type="module" src="./scene.mjs"></script>
+  <script src="./ui/vf-runtime-shell.js?v=tree-grass-live-5"></script>
+  <script type="module" src="./scene.mjs?v=tree-local-wind-5"></script>
 </body>
 </html>
