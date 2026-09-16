@@ -31,6 +31,8 @@ let waterClock;
 let sandClock;
 let device;
 let context;
+const MAX_DRUM_ANGULAR_SPEED = 2.4;
+const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 
 const fail = (error) => {
   if (!errorBox.hidden) return;
@@ -78,6 +80,7 @@ resetButton.addEventListener('click', () => {
 const normalizeAngle = (value) => Math.atan2(Math.sin(value), Math.cos(value));
 
 canvas.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
   if (!wheelEmbedding) return;
   const active = selected();
   const point = wheelEmbedding.screenToWorld(event, active.runtime.policy);
@@ -89,10 +92,10 @@ canvas.addEventListener('pointerdown', (event) => {
   wheelAngularVelocity = 0;
   canvas.setPointerCapture(event.pointerId);
   canvas.dataset.dragging = 'true';
-  event.preventDefault();
 });
 
 canvas.addEventListener('pointermove', (event) => {
+  event.preventDefault();
   if (!wheelDrag || event.pointerId !== wheelDrag.pointerId) return;
   const active = selected();
   const point = wheelEmbedding.screenToWorld(event, active.runtime.policy);
@@ -102,16 +105,18 @@ canvas.addEventListener('pointermove', (event) => {
   const now = performance.now();
   const dt = Math.max(1 / 240, Math.min(0.05, (now - wheelDrag.lastTime) / 1000));
   const delta = normalizeAngle(next - wheelDrag.lastAngle);
-  wheelAngularVelocity = wheelAngularVelocity * 0.35 + delta / dt * 0.65;
+  wheelAngularVelocity = clamp(wheelAngularVelocity * 0.35 + delta / dt * 0.65,
+    -MAX_DRUM_ANGULAR_SPEED, MAX_DRUM_ANGULAR_SPEED);
   wheelAngle = next;
   wheelDrag.lastAngle = next;
   wheelDrag.lastTime = now;
-  event.preventDefault();
 });
 
 const releaseWheel = (event) => {
+  event.preventDefault();
   if (!wheelDrag || event.pointerId !== wheelDrag.pointerId) return;
   wheelDrag = null;
+  wheelAngularVelocity = 0;
   canvas.dataset.dragging = 'false';
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
 };

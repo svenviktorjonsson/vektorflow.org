@@ -14,7 +14,7 @@
     header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 2px 3px 10px; }
     h1 { margin: 0; font-size: clamp(18px, 4.8vw, 25px); }
     header span { color: #a9bab5; font-size: 13px; }
-    .stage { overflow: hidden; border: 1px solid #354348; border-radius: 14px; background: #10191d; box-shadow: 0 20px 70px rgb(0 0 0 / .38); }
+    .stage { overflow: hidden; border: 1px solid #354348; border-radius: 14px; background: #10191d; box-shadow: 0 20px 70px rgb(0 0 0 / .38); touch-action: none; overscroll-behavior: contain; }
     .bar { min-height: 56px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; border-bottom: 1px solid #354348; background: #152126; }
     button { min-height: 40px; border: 1px solid #58696e; border-radius: 9px; padding: 0 13px; color: inherit; background: #1c2a2f; font: inherit; font-weight: 680; touch-action: manipulation; }
     button[aria-pressed="true"] { color: #102025; background: #dcebe7; border-color: #dcebe7; }
@@ -51,6 +51,6 @@
     </section>
     <footer><strong>Drag the circle to rotate the drum.</strong> Water and sand use different local particle rules and embeddings. Short disconnected baffles—never longer than one third of the radius—block and release the material as the drum turns.</footer>
   </main>
-  <script type="module" src="./scene.mjs?v=drum-live-3"></script>
+  <script type="module" src="./scene.mjs?v=drum-live-6"></script>
 </body>
 </html>

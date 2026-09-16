@@ -711,10 +711,14 @@ fn resolve_wheel_motion(position_input: vec2<f32>, velocity_input: vec2<f32>,
         let radius_vector = closest - center;
         let surface_velocity = angular_velocity
           * vec2<f32>(-radius_vector.y, radius_vector.x);
-        let inward_speed = dot(velocity - surface_velocity, normal);
+        var relative_velocity = velocity - surface_velocity;
+        let inward_speed = dot(relative_velocity, normal);
         if (inward_speed < 0.0) {
-          velocity = velocity - normal * inward_speed;
+          relative_velocity = relative_velocity - normal * inward_speed;
         }
+        let tangent_velocity = relative_velocity
+          - normal * dot(relative_velocity, normal);
+        velocity = surface_velocity + relative_velocity - tangent_velocity * 0.18;
       }
     }
     let radial = position - center;
@@ -728,12 +732,20 @@ fn resolve_wheel_motion(position_input: vec2<f32>, velocity_input: vec2<f32>,
       let radius_vector = closest - center;
       let surface_velocity = angular_velocity
         * vec2<f32>(-radius_vector.y, radius_vector.x);
-      let inward_speed = dot(velocity - surface_velocity, normal);
+      var relative_velocity = velocity - surface_velocity;
+      let inward_speed = dot(relative_velocity, normal);
       if (inward_speed < 0.0) {
-        velocity = velocity - normal * inward_speed;
+        relative_velocity = relative_velocity - normal * inward_speed;
       }
+      let tangent_velocity = relative_velocity
+        - normal * dot(relative_velocity, normal);
+      velocity = surface_velocity + relative_velocity - tangent_velocity * 0.18;
     }
   }
+  // A bounded contact response prevents a bad pointer sample or a deeply
+  // overlapping seed from injecting an unbounded rim-following velocity.
+  let speed = length(velocity);
+  if (speed > 4.0) { velocity = velocity * (4.0 / speed); }
   return ContactResult(position, velocity);
 }
 
@@ -1352,7 +1364,45 @@ export function createLiquidParticleWorldGpuSeedReference(options = {}) {
   if (!boundaryPacket.uniformX) {
     throw new Error('GPU liquid boundary lowering requires uniform-x Transport vertices');
   }
-  const count = policy.columns * policy.rows;
+  const initialWheelAngle = 0.22;
+  const wheelCenter = [0, 0.32];
+  const wheelRadius = 0.50;
+  const barHalfWidth = 0.012;
+  const physicalRadius = policy.particleSpacing * 0.46;
+  const contactRadius = physicalRadius + barHalfWidth;
+  const baffles = [
+    [[0.500, 0.000], [0.350, 0.000]], [[0.000, 0.500], [0.000, 0.350]],
+    [[-0.500, 0.000], [-0.350, 0.000]], [[0.000, -0.500], [0.000, -0.350]],
+    [[-0.220, 0.175], [-0.075, 0.135]], [[0.075, -0.055], [0.215, -0.115]],
+    [[-0.105, -0.250], [0.020, -0.155]],
+  ];
+  const rotate = ([x, y]) => [Math.cos(initialWheelAngle) * x - Math.sin(initialWheelAngle) * y,
+    Math.sin(initialWheelAngle) * x + Math.cos(initialWheelAngle) * y];
+  const distanceToSegment = ([x, y], a, b) => {
+    const dx = b[0] - a[0]; const dy = b[1] - a[1];
+    const along = Math.max(0, Math.min(1,
+      ((x - a[0]) * dx + (y - a[1]) * dy) / Math.max(dx * dx + dy * dy, 1e-12)));
+    return Math.hypot(x - (a[0] + dx * along), y - (a[1] + dy * along));
+  };
+  const candidates = [];
+  const minimumX = policy.seedMaximumX - (policy.columns - 1) * policy.particleSpacing;
+  for (let row = 0; row < policy.rows; row += 1) {
+    for (let column = 0; column < policy.columns; column += 1) {
+      const point = [minimumX + column * policy.particleSpacing,
+        policy.seedMinimumY + row * policy.particleSpacing];
+      if (Math.hypot(point[0] - wheelCenter[0], point[1] - wheelCenter[1])
+          > wheelRadius - contactRadius) continue;
+      const overlapsBaffle = baffles.some(([localA, localB]) => {
+        const rotatedA = rotate(localA); const rotatedB = rotate(localB);
+        const a = [wheelCenter[0] + rotatedA[0], wheelCenter[1] + rotatedA[1]];
+        const b = [wheelCenter[0] + rotatedB[0], wheelCenter[1] + rotatedB[1]];
+        return distanceToSegment(point, a, b) < contactRadius;
+      });
+      if (!overlapsBaffle) candidates.push(point);
+    }
+  }
+  const count = candidates.length;
+  if (count < 1) throw new RangeError('Liquid drum seed contains no valid particles');
   const stride = 12;
   const bytes = new ArrayBuffer(count * stride * 4);
   const floats = new Float32Array(bytes);
@@ -1360,20 +1410,15 @@ export function createLiquidParticleWorldGpuSeedReference(options = {}) {
   const tangentNorm = Math.hypot(1, policy.bedSlope);
   const vx = policy.initialSpeed / tangentNorm;
   const vy = policy.initialSpeed * policy.bedSlope / tangentNorm;
-  const minimumX = policy.seedMaximumX - (policy.columns - 1) * policy.particleSpacing;
-  for (let row = 0; row < policy.rows; row += 1) {
-    for (let column = 0; column < policy.columns; column += 1) {
-      const particle = row * policy.columns + column;
+  for (let particle = 0; particle < candidates.length; particle += 1) {
       const offset = particle * stride;
-      const x = minimumX + column * policy.particleSpacing;
-      const y = policy.seedMinimumY + row * policy.particleSpacing;
+      const [x, y] = candidates[particle];
       floats[offset] = x; floats[offset + 1] = y;
       floats[offset + 2] = vx; floats[offset + 3] = vy;
       floats[offset + 4] = x; floats[offset + 5] = y;
       floats[offset + 6] = 0; floats[offset + 7] = policy.restDensity;
       floats[offset + 8] = 0; integers[offset + 9] = 0;
       integers[offset + 10] = PRIMARY_LIQUID; floats[offset + 11] = 0;
-    }
   }
   const supportRadius = policy.particleSpacing * policy.supportScale;
   const particleMass = calibrateUniformLocalLiquidParticleMassReference({

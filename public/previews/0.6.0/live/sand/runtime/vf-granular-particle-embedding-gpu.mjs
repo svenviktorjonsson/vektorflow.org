@@ -123,7 +123,9 @@ fn grain_vertex(@builtin(vertex_index) vertex_index: u32,
   let local = quad_corner(vertex_index);
   let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
   let physical_radius = params.canvas.w;
-  let visible_radius = max(physical_radius, pixel_world * 0.65);
+  // The solver keeps the full contact radius; only the embedding is reduced
+  // so the material reads as fine sand rather than a bed of large beads.
+  let visible_radius = max(physical_radius * 0.42, pixel_world * 0.42);
   // Inflate subpixel footprints only for rasterization; inverse-square alpha
   // keeps their approximate integrated coverage instead of growing sand mass.
   let ratio = physical_radius / visible_radius;
