@@ -56,8 +56,8 @@
       <section id="wheel" class="application-section" aria-labelledby="wheel-heading">
         <h2 id="wheel-heading">Water and sand · rotating wheel</h2>
         <p class="application-description">A one-metre circular drum with short disconnected baffles. Drag the rim to rotate it, switch between water and sand, and choose raw simulation particles or the material embedding. The two materials share the wheel geometry but keep separate constitutive laws and World state.</p>
-        <div class="session-shell"><iframe title="Water and sand rotating wheel live session" src="./previews/0.6.0/live/material-wheel/?v=physical-feedback-3" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Drag inside the wheel to rotate. Water and sand are compatible alternatives within this application.</span><a href="./previews/0.6.0/live/material-wheel/?v=physical-feedback-3">Open wheel full page</a></p>
+        <div class="session-shell"><iframe title="Water and sand rotating wheel live session" src="./previews/0.6.0/live/material-wheel/?v=physical-feedback-4" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Drag inside the wheel to rotate. Water and sand are compatible alternatives within this application. Unresolved particle contacts reject the frame rather than display overlapping particles.</span><a href="./previews/0.6.0/live/material-wheel/?v=physical-feedback-4">Open wheel full page</a></p>
         <div class="source-browser" data-source-app="wheel">
           <div class="source-heading"><h3>Executable VKF application</h3><p>These are the files compiled into this live view. Geometry and particles use the same add call; named properties select the material and the World supplies the laws.</p></div>
           <div class="source-tabs" role="tablist" aria-label="wheel VKF source files"></div>
@@ -68,8 +68,8 @@
       <section id="stones" class="application-section" aria-labelledby="stones-heading">
         <h2 id="stones-heading">Five stones · lift and drop</h2>
         <p class="application-description">A pile of five seeded 3D stones with different sizes and irregular, near-spherical shapes. Touch a stone, lift it vertically and release it into the pile. Periodic radial shape functions vary the geometry; roughness supplies surface detail without repeated wavy bands. There is no water in this application.</p>
-        <div class="session-shell"><iframe title="Five 3D stones lift and drop live session" src="./previews/0.6.0/live/rocks/?v=physical-feedback-3" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Touch a stone, drag it upwards and release. GPU rigid-body contacts use the irregular shapes’ support geometry, with gravity, friction and angular response.</span><a href="./previews/0.6.0/live/rocks/?v=physical-feedback-3">Open stones full page</a></p>
+        <div class="session-shell"><iframe title="Five 3D stones lift and drop live session" src="./previews/0.6.0/live/rocks/?v=physical-feedback-4" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Touch a stone, drag it upwards and release. GPU rigid-body contacts use the irregular shapes’ support geometry, with gravity, friction and angular response.</span><a href="./previews/0.6.0/live/rocks/?v=physical-feedback-4">Open stones full page</a></p>
         <div class="source-browser" data-source-app="stones">
           <div class="source-heading"><h3>Executable VKF application</h3><p>Added body positions and named stone properties define the initial condition. The immutable geometry asset contains seeded shape data, normals and collision supports—not an animation.</p></div>
           <div class="source-tabs" role="tablist" aria-label="stones VKF source files"></div>
@@ -80,8 +80,8 @@
       <section id="tree" class="application-section" aria-labelledby="tree-heading">
         <h2 id="tree-heading">Tree, lawn and wind · procedural generation</h2>
         <p class="application-description">An eight-metre generated tree above a dense lawn. Swipe inside the view to orbit, choose a seeded branch-and-leaf distribution, and adjust wind between 1 and 8 m/s. The particle switch reveals only parcels that have hit the scene: they are half-transparent and fade after 0.25 seconds. Wind interaction and elastic response are separate from shape generation.</p>
-        <div class="session-shell"><iframe title="Procedural tree grass and wind live session" src="./previews/0.6.0/live/tree/?v=physical-feedback-3" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Swipe to orbit; pinch to zoom. Choose Original, Uniform, Normal or Triangular branching and leaf variation.</span><a href="./previews/0.6.0/live/tree/?v=physical-feedback-3">Open tree full page</a></p>
+        <div class="session-shell"><iframe title="Procedural tree grass and wind live session" src="./previews/0.6.0/live/tree/?v=physical-feedback-4" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Swipe to orbit; pinch to zoom. Choose Original, Uniform, Normal or Triangular branching and leaf variation.</span><a href="./previews/0.6.0/live/tree/?v=physical-feedback-4">Open tree full page</a></p>
         <div class="source-browser" data-source-app="tree">
           <div class="source-heading"><h3>Executable VKF application</h3><p>Tree, lawn, elastic nodes and inlet parcels are added layers of one World. GPU parcel impacts drive the local spring response; the embedding reads that state directly, without an animated wind wave.</p></div>
           <div class="source-tabs" role="tablist" aria-label="tree VKF source files"></div>
@@ -93,6 +93,6 @@
   </main>
   <footer class="site-footer">Experimental software · <a href="./origins.html">Origins</a></footer>
   <script type="module" src="./release-selector.mjs"></script>
-  <script type="module" src="./coming-soon.mjs?v=physical-feedback-3"></script>
+  <script type="module" src="./coming-soon.mjs?v=physical-feedback-4"></script>
 </body>
 </html>

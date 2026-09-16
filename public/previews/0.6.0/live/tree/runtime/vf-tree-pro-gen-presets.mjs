@@ -2,7 +2,10 @@ import { proGen } from './vf-pro-gen-distribution-reference.mjs';
 
 // Cached initial conditions, not a replacement wind law or animated shape.
 export const treeProGenPresets = Object.freeze({
-  original: Object.freeze({ branching: {}, leafShape: {} }),
+  original: Object.freeze({ branching: {}, leafShape: {
+    widthRatio: proGen.uniform(0.3,0.62), roundness: proGen.uniform(0.52,0.9),
+    asymmetry: proGen.uniform(-0.13,0.13), camberRatio: proGen.uniform(-0.06,0.06),
+  } }),
   uniform: Object.freeze({
     branching: { mainAngle: proGen.uniform(0.07, 0.22), lateralAngle: proGen.uniform(0.35, 0.85),
       areaLoss: proGen.uniform(0.79, 0.89), mainAreaShare: proGen.uniform(0.58, 0.72) },
