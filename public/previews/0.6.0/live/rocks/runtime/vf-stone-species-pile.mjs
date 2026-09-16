@@ -1,19 +1,22 @@
 import {
   createWeatheredGraniteSpecimenReference,
-} from './vf-weathered-granite-specimen.mjs';
+} from './vf-weathered-granite-specimen.mjs?v=fourier-4';
 
 export const STONE_SPECIES_PROFILES = Object.freeze([
-  Object.freeze({ id: 'gray-granite', aspect: [1.00, 0.94, 1.15], aspectVariation: Object.freeze({ planar: [0.92, 1.08], vertical: [0.96, 1.26] }), tilt: 0.28, macroForm: Object.freeze({ facetCount: 7, facetStrength: 0.035, profileExponent: 0.76, latitudeWarp: 0.030, latitudeTwist: 8.0 }), roughness: [0.70, 0.94], albedo: [0.28, 0.82] }),
-  Object.freeze({ id: 'red-granite', aspect: [1.08, 0.90, 1.08], aspectVariation: Object.freeze({ planar: [0.91, 1.09], vertical: [0.98, 1.31] }), tilt: 0.35, macroForm: Object.freeze({ facetCount: 8, facetStrength: 0.05, profileExponent: 0.72, latitudeWarp: 0.034, latitudeTwist: 9.5 }), roughness: [0.68, 0.93], albedo: [0.22, 0.74] }),
-  Object.freeze({ id: 'pale-quartzite', aspect: [0.92, 1.04, 1.35], aspectVariation: Object.freeze({ planar: [0.93, 1.07], vertical: [0.94, 1.22] }), tilt: 0.25, macroForm: Object.freeze({ facetCount: 6, facetStrength: 0.08, profileExponent: 0.86, latitudeWarp: 0.038, latitudeTwist: 11.0 }), roughness: [0.66, 0.90], albedo: [0.52, 0.84] }),
-  Object.freeze({ id: 'dark-basalt', aspect: [0.90, 0.92, 1.65], aspectVariation: Object.freeze({ planar: [0.91, 1.09], vertical: [0.92, 1.24] }), tilt: 0.42, macroForm: Object.freeze({ facetCount: 9, facetStrength: 0.11, profileExponent: 0.92, latitudeWarp: 0.042, latitudeTwist: 13.0 }), roughness: [0.80, 0.94], albedo: [0.10, 0.34] }),
-  Object.freeze({ id: 'banded-gneiss', aspect: [1.16, 0.86, 0.90], aspectVariation: Object.freeze({ planar: [0.90, 1.10], vertical: [1.00, 1.38] }), tilt: 0.32, macroForm: Object.freeze({ facetCount: 5, facetStrength: 0.02, profileExponent: 0.62, latitudeWarp: 0.024, latitudeTwist: 7.0 }), roughness: [0.70, 0.90], albedo: [0.25, 0.68] }),
+  Object.freeze({ id: 'gray-granite', aspect: [1.02, 0.96, 0.98], aspectVariation: Object.freeze({ planar: [0.91, 1.10], vertical: [0.94, 1.08] }), tilt: 0.25, macroForm: Object.freeze({ facetCount: 7, facetStrength: 0, profileExponent: 1, latitudeWarp: 0, latitudeTwist: 0 }), roughness: [0.70, 0.94], albedo: [0.28, 0.82] }),
+  Object.freeze({ id: 'red-granite', aspect: [1.08, 0.92, 1.00], aspectVariation: Object.freeze({ planar: [0.90, 1.11], vertical: [0.94, 1.08] }), tilt: 0.30, macroForm: Object.freeze({ facetCount: 8, facetStrength: 0, profileExponent: 1, latitudeWarp: 0, latitudeTwist: 0 }), roughness: [0.68, 0.93], albedo: [0.22, 0.74] }),
+  Object.freeze({ id: 'pale-quartzite', aspect: [0.94, 1.04, 1.06], aspectVariation: Object.freeze({ planar: [0.91, 1.09], vertical: [0.95, 1.09] }), tilt: 0.22, macroForm: Object.freeze({ facetCount: 6, facetStrength: 0, profileExponent: 1, latitudeWarp: 0, latitudeTwist: 0 }), roughness: [0.66, 0.90], albedo: [0.52, 0.84] }),
+  Object.freeze({ id: 'dark-basalt', aspect: [0.96, 0.92, 1.08], aspectVariation: Object.freeze({ planar: [0.90, 1.10], vertical: [0.94, 1.08] }), tilt: 0.34, macroForm: Object.freeze({ facetCount: 9, facetStrength: 0, profileExponent: 1, latitudeWarp: 0, latitudeTwist: 0 }), roughness: [0.80, 0.94], albedo: [0.10, 0.34] }),
+  Object.freeze({ id: 'warm-granite', aspect: [1.06, 0.94, 0.97], aspectVariation: Object.freeze({ planar: [0.91, 1.09], vertical: [0.94, 1.08] }), tilt: 0.27, macroForm: Object.freeze({ facetCount: 5, facetStrength: 0, profileExponent: 1, latitudeWarp: 0, latitudeTwist: 0 }), roughness: [0.70, 0.90], albedo: [0.25, 0.68] }),
 ]);
 
-const PILE_SPECIES_COMPOSITION = Object.freeze([
-  3, 0, 4, 1, 3, 2, 4, 0, 3, 1, 4, 2,
-  2, 3, 4, 0, 1, 2,
-  0, 1,
+const PILE_SPECIES_COMPOSITION = Object.freeze([0, 3, 1, 2, 0]);
+const PILE_LAYOUT = Object.freeze([
+  Object.freeze({ center: [-1.20, 0.02], size: 0.54, layer: 0 }),
+  Object.freeze({ center: [0.00, -0.04], size: 0.68, layer: 0 }),
+  Object.freeze({ center: [1.25, 0.04], size: 0.48, layer: 0 }),
+  Object.freeze({ center: [-0.43, 0.01], size: 0.43, layer: 1 }),
+  Object.freeze({ center: [0.44, -0.01], size: 0.35, layer: 1 }),
 ]);
 
 function mix32(value) {
@@ -67,7 +70,7 @@ export function createStoneSpeciesPileReference() {
   const meshes = [];
   const individuals = [];
   const speciesOccurrences = STONE_SPECIES_PROFILES.map(() => 0);
-  for (let index = 0; index < 20; index += 1) {
+  for (let index = 0; index < PILE_LAYOUT.length; index += 1) {
     const speciesIndex = PILE_SPECIES_COMPOSITION[index];
     const individualIndex = speciesOccurrences[speciesIndex];
     speciesOccurrences[speciesIndex] += 1;
@@ -83,29 +86,26 @@ export function createStoneSpeciesPileReference() {
     });
     const specimen = createWeatheredGraniteSpecimenReference(identity, {
       granularMicrorelief: true,
-      microshadow: true,
+      microshadow: false,
       roundedUnderside: true,
       macroForm: profile.macroForm,
     });
-    const layer = index < 12 ? 0 : (index < 18 ? 1 : 2);
-    const layerIndex = layer === 0 ? index : (layer === 1 ? index - 12 : index - 18);
-    const layerCount = layer === 0 ? 10 : (layer === 1 ? 6 : 2);
-    const baseScale = 0.205 + layer * 0.010 + unit(seed0, 1) * 0.022;
+    const layout = PILE_LAYOUT[index];
+    const layer = layout.layer;
+    const sizeRatio = (layout.size - 0.35) / (0.68 - 0.35);
     const scale = profile.aspect.map((value, axis) => {
       const bounds = axis === 2
         ? profile.aspectVariation.vertical : profile.aspectVariation.planar;
-      return value * baseScale * (bounds[0] + unit(seed0, 3 + axis) * (bounds[1] - bounds[0]));
+      const individualVariation = bounds[0]
+        + unit(seed0, 3 + axis) * (bounds[1] - bounds[0]);
+      // Small stones are modestly flatter, while the entire set stays close
+      // to spherical rather than becoming the previous stack of flat slabs.
+      const flattening = axis === 2 ? 0.84 + 0.18 * sizeRatio : 1;
+      return value * layout.size * individualVariation * flattening;
     });
-    const angle = layerIndex / layerCount * Math.PI * 2
-      + (layer === 1 ? 0.31 : 0) + (unit(seed1, 7) - 0.5) * 0.09;
-    const innerBase = layer === 0 && layerIndex >= 10;
-    const radiusX = layer === 0 ? 1.55 : (layer === 1 ? 0.76 : 0.19);
-    const radiusY = layer === 0 ? 0.98 : (layer === 1 ? 0.48 : 0.09);
     const horizontalCenter = [
-      (innerBase ? (layerIndex === 10 ? -0.43 : 0.43) : Math.cos(angle) * radiusX)
-        + (unit(seed1, 8) - 0.5) * 0.06,
-      (innerBase ? 0 : Math.sin(angle) * radiusY)
-        + (unit(seed1, 10) - 0.5) * 0.05,
+      layout.center[0] + (unit(seed1, 8) - 0.5) * 0.035,
+      layout.center[1] + (unit(seed1, 10) - 0.5) * 0.035,
     ];
     const supportRadius = Math.max(
       specimen.metrics.maximumRadius * scale[0],
@@ -119,8 +119,8 @@ export function createStoneSpeciesPileReference() {
     const formExtents = bounds.maximum.map((value, axis) => value - bounds.minimum[axis]);
     const formAspectRatio = formExtents[2] / Math.max(formExtents[0], formExtents[1]);
     const localMidZ = (bounds.minimum[2] + bounds.maximum[2]) * 0.5;
-    const halfHeight = (bounds.maximum[2] - bounds.minimum[2]) * 0.25;
-    const collisionRadius = supportRadius * 0.5;
+    const halfHeight = (bounds.maximum[2] - bounds.minimum[2]) * 0.5;
+    const collisionRadius = supportRadius * 0.72;
     const groundTranslation = -bounds.minimum[2];
     let translationZ = groundTranslation;
     const candidates = [];
@@ -138,10 +138,16 @@ export function createStoneSpeciesPileReference() {
       candidates.push({ supportIndex: support.index, requiredTranslation });
       translationZ = Math.max(translationZ, requiredTranslation);
     }
+    if (layer > 0) {
+      translationZ = Math.max(groundTranslation, translationZ - layout.size * 0.42);
+    }
     const center = [horizontalCenter[0], horizontalCenter[1], translationZ];
     const proxyCenterZ = translationZ + localMidZ;
+    const contactSlack = layer > 0 ? layout.size * 0.43 : 2e-6;
     const contacts = candidates
-      .filter(({ requiredTranslation }) => Math.abs(requiredTranslation - translationZ) < 2e-6)
+      .filter(({ requiredTranslation }) => (
+        Math.abs(requiredTranslation - translationZ) <= contactSlack
+      ))
       .map(({ supportIndex }) => {
         const support = individuals[supportIndex];
         const horizontalPart = Math.hypot(
@@ -173,6 +179,8 @@ export function createStoneSpeciesPileReference() {
       macroFacetDisplacementSpan: specimen.metrics.macroFacetDisplacementSpan,
       latitudeContourHeightSpan: specimen.metrics.latitudeContourHeightSpan,
       latitudeProfileDisplacementMaximum: specimen.metrics.latitudeProfileDisplacementMaximum,
+      thetaPeriodicityError: specimen.metrics.thetaPeriodicityError,
+      phiPeriodicityError: specimen.metrics.phiPeriodicityError,
       collisionRadius, halfHeight, proxyCenterZ,
       minimumWorldZ: bounds.minimum[2] + translationZ,
       contacts: Object.freeze(contacts),

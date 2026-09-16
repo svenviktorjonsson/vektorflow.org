@@ -103,15 +103,11 @@ export function createWeatheredGraniteSpecimenReference(
     segment: 'stone:weathered-granite:surface',
     channel: 'mineral-fracture-weathering',
   });
-  const formShape = macroForm ?? Object.freeze({
-    facetCount: 8, facetStrength: 0, profileExponent: 0.62, latitudeWarp: 0,
-    latitudeTwist: 0,
-  });
-  const radiusX = 2.25 + unit(formNode, 1) * 0.45;
-  const radiusY = 1.65 + unit(formNode, 2) * 0.42;
-  const height = 1.68 + unit(formNode, 3) * 0.34;
-  const leanX = (unit(formNode, 4) - 0.5) * 0.34;
-  const leanY = (unit(formNode, 5) - 0.5) * 0.28;
+  const radiusX = 0.94 + unit(formNode, 1) * 0.16;
+  const radiusY = 0.90 + unit(formNode, 2) * 0.17;
+  const radiusZ = 0.91 + unit(formNode, 3) * 0.18;
+  const leanX = (unit(formNode, 4) - 0.5) * 0.15;
+  const leanY = (unit(formNode, 5) - 0.5) * 0.13;
   const phase = unit(formNode, 6) * Math.PI * 2;
   const fractureCount = 3 + Math.floor(unit(formNode, 7) * 5);
   const fractures = Array.from({ length: fractureCount }, (_, index) => ({
@@ -119,6 +115,32 @@ export function createWeatheredGraniteSpecimenReference(
     height: 0.22 + unit(formNode, 21 + index * 3) * 0.66,
     depth: 0.055 + unit(formNode, 22 + index * 3) * 0.085,
   }));
+  // r(theta, phi) is a finite spherical Fourier field. Every polar term uses
+  // 2*n*theta and every azimuthal term uses integer*m*phi, so the deformation
+  // closes exactly after pi and 2*pi respectively. Non-axisymmetric modes are
+  // attenuated at the poles to keep a single watertight vertex there.
+  const fourierModes = Object.freeze([
+    [0, 1, 0.240], [0, 2, 0.180], [1, 1, 0.145], [1, 2, 0.115],
+    [1, 3, 0.092], [2, 1, 0.072], [2, 3, 0.056], [3, 2, 0.042],
+  ]);
+  const fourierTerms = fourierModes.map(([polar, azimuthal, maximum], index) => ({
+    polar,
+    azimuthal,
+    amplitude: (unit(formNode, 70 + index * 2) < 0.5 ? -1 : 1)
+      * (0.55 + unit(formNode, 100 + index) * 0.45) * maximum,
+    phase: unit(formNode, 71 + index * 2) * Math.PI * 2,
+  }));
+  const fourierRadius = (theta, phi) => {
+    let value = 1;
+    const polarEnvelope = Math.abs(Math.sin(theta)) ** 1.35;
+    for (const term of fourierTerms) {
+      value += term.amplitude * polarEnvelope
+        * Math.cos(2 * term.polar * theta + term.azimuthal * phi + term.phase);
+    }
+    return clamp(value, 0.62, 1.38);
+  };
+  const poleRadius = fourierRadius(0, 0);
+  const height = 2 * radiusZ * poleRadius;
   const baseContactScores = Array.from({ length: SECTORS }, (_, sector) => {
     const u = sector / SECTORS;
     const angle = u * Math.PI * 2;
@@ -155,70 +177,46 @@ export function createWeatheredGraniteSpecimenReference(
   const flecks = [false];
   const cracks = [false];
   for (let ring = 0; ring < RINGS; ring += 1) {
-    const path = roundedUnderside ? (ring + 1) / (RINGS + 1) : ring / RINGS;
-    const t = roundedUnderside ? path : 1 - ((1 - path) ** 1.55);
+    const path = (ring + 1) / (RINGS + 1);
+    const theta = path * Math.PI;
+    const sinTheta = Math.sin(theta);
+    const cosTheta = Math.cos(theta);
     let previousRadius = null;
     const contourHeights = [];
     for (let sector = 0; sector < SECTORS; sector += 1) {
       const u = sector / SECTORS;
       const angle = u * Math.PI * 2;
-      const latitudeOffset = formShape.latitudeWarp * Math.sin(Math.PI * t) * (
-        0.45 * correlation(formNode, u * 5.7 + 1.3, t * 4.3 - 0.7, 0.28)
-        + 0.35 * Math.sin(angle * 2 + phase * 0.43 + t * (2.1 + formShape.latitudeTwist))
-        + 0.20 * Math.sin(
-          angle * 3 - phase * 0.61 + t * (3.4 + formShape.latitudeTwist * 1.43),
-        )
-      );
-      const shapeT = clamp(t + latitudeOffset, 0, 1);
-      const profile = roundedUnderside
-        ? Math.sin(Math.PI * shapeT) ** formShape.profileExponent * (0.94 + 0.08 * shapeT)
-        : ((1 - shapeT) ** 0.58) * (0.82 + 0.54 * shapeT);
-      const unwarpedProfile = roundedUnderside
-        ? Math.sin(Math.PI * t) ** formShape.profileExponent * (0.94 + 0.08 * t)
-        : ((1 - t) ** 0.58) * (0.82 + 0.54 * t);
-      const broad = 0.20 * correlation(formNode, u * 2.4, shapeT * 1.7, 0.62)
-        + 0.110 * correlation(formNode, u * 4.7 + 3.1, shapeT * 3.1 - 1.9, 0.34)
-        + 0.040 * Math.sin(angle * 3 + phase + shapeT * 2.2)
-        + 0.025 * Math.sin(angle * 5 - phase * 0.7 - shapeT * 4.1);
-      let chip = 0;
+      const broad = fourierRadius(theta, angle) - 1;
       let cracked = false;
       for (const fracture of fractures) {
         const angular = Math.atan2(
           Math.sin(angle - fracture.angle),
           Math.cos(angle - fracture.angle),
         );
-        const distance = (angular / 0.23) ** 2 + ((shapeT - fracture.height) / 0.19) ** 2;
+        const distance = (angular / 0.23) ** 2 + ((path - fracture.height) / 0.19) ** 2;
         const influence = Math.exp(-distance * 0.5);
-        chip += fracture.depth * influence;
         cracked ||= influence > 0.72;
       }
-      chip = Math.min(chip, 0.22);
-      const fine = 0.032 * correlation(detailNode, u * 8, shapeT * 6, 0.23);
-      const facetPeriod = Math.PI * 2 / formShape.facetCount;
-      const facetAngle = Math.abs(
-        ((angle + phase * 0.17 + facetPeriod * 0.5) % facetPeriod) - facetPeriod * 0.5,
-      );
-      const polygonRadius = Math.cos(Math.PI / formShape.facetCount) / Math.cos(facetAngle);
-      const facet = -formShape.facetStrength * (1 - polygonRadius)
-        / (1 - Math.cos(Math.PI / formShape.facetCount));
-      const radialScale = Math.max(0.58, 1 + broad + fine - chip + facet);
-      const radial = profile * radialScale;
-      const centerX = leanX * shapeT + 0.06 * Math.sin(shapeT * 5 + phase);
-      const centerY = leanY * shapeT + 0.04 * Math.sin(shapeT * 4 - phase);
+      // Fine geometry breaks the silhouette without introducing repeated
+      // latitudinal waves; mineral-scale roughness remains in the material.
+      const fine = 0.010 * correlation(detailNode, u * 8, path * 6, 0.23)
+        * sinTheta;
+      const radialScale = clamp(1 + broad + fine, 0.62, 1.38);
+      const centerX = leanX * path;
+      const centerY = leanY * path;
       positions.push([
-        centerX + Math.cos(angle) * radiusX * radial,
-        centerY + Math.sin(angle) * radiusY * radial,
-        height * shapeT
-          + (ring === 0 && !roundedUnderside ? baseLifts[sector] : 0),
+        centerX + Math.cos(angle) * radiusX * sinTheta * radialScale,
+        centerY + Math.sin(angle) * radiusY * sinTheta * radialScale,
+        radiusZ * (poleRadius - cosTheta * radialScale),
       ]);
-      contourHeights.push(height * shapeT);
-      surfaceCoordinates.push([u, shapeT]);
+      contourHeights.push(radiusZ * (poleRadius - cosTheta * radialScale));
+      surfaceCoordinates.push([u, path]);
       radialValues.push(radialScale);
-      macroFacetDisplacements.push(facet);
-      latitudeProfileDisplacements.push(Math.abs(profile - unwarpedProfile));
-      geologicalDisplacement.push(broad + fine - chip);
+      macroFacetDisplacements.push(0);
+      latitudeProfileDisplacements.push(0);
+      geologicalDisplacement.push(broad + fine);
       cracks.push(cracked);
-      const mineral = correlation(detailNode, u * 23 + 7.3, t * 19 - 2.1, 0.16);
+      const mineral = correlation(detailNode, u * 23 + 7.3, path * 19 - 2.1, 0.16);
       flecks.push(mineral > 0.63 || mineral < -0.68);
       if (previousRadius !== null) neighborSteps.push(Math.abs(radialScale - previousRadius));
       previousRadius = radialScale;
@@ -226,8 +224,8 @@ export function createWeatheredGraniteSpecimenReference(
     latitudeContourHeightSpans.push(range(contourHeights));
   }
   const topU = 0.37;
-  const topBroad = 0.10 * correlation(formNode, topU * 2.4, 1.7, 0.62);
-  positions.push([leanX, leanY, height * (1 + clamp(topBroad, -0.02, 0.02))]);
+  const topBroad = fourierRadius(Math.PI, 0) - 1;
+  positions.push([leanX, leanY, height]);
   surfaceCoordinates.push([topU, 1]);
   geologicalDisplacement.push(topBroad);
   flecks.push(false);
@@ -356,6 +354,20 @@ export function createWeatheredGraniteSpecimenReference(
   const vectorBytes = vertices.byteLength + indices.byteLength
     + roughness.byteLength + displacement.byteLength
     + packedCoordinates.byteLength + baseNormals.byteLength;
+  let thetaPeriodicityError = 0;
+  let phiPeriodicityError = 0;
+  for (let sampleIndex = 0; sampleIndex <= 24; sampleIndex += 1) {
+    const sampleTheta = sampleIndex / 24 * Math.PI;
+    const samplePhi = sampleIndex / 24 * Math.PI * 2;
+    thetaPeriodicityError = Math.max(thetaPeriodicityError, Math.abs(
+      fourierRadius(sampleTheta, samplePhi)
+        - fourierRadius(sampleTheta + Math.PI, samplePhi),
+    ));
+    phiPeriodicityError = Math.max(phiPeriodicityError, Math.abs(
+      fourierRadius(sampleTheta, samplePhi)
+        - fourierRadius(sampleTheta, samplePhi + Math.PI * 2),
+    ));
+  }
   if (vectorBytes > MAX_VECTOR_BYTES) {
     throw new RangeError('weathered granite specimen exceeds 256 KiB');
   }
@@ -366,6 +378,8 @@ export function createWeatheredGraniteSpecimenReference(
     vectorBytes,
     metrics: Object.freeze({
       minimumTriangleArea,
+      thetaPeriodicityError,
+      phiPeriodicityError,
       minimumZ: Math.min(...positions.map((position) => position[2])),
       baseVertexCount: baseContactSectors.length,
       baseHeightSpan: range(baseHeights),
