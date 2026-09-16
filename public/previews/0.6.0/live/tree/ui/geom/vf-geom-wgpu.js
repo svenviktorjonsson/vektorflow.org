@@ -149,7 +149,7 @@
 
   function loadGrassBladeComputeShaderSource() {
     if (!grassBladeComputeShaderPromise) {
-      grassBladeComputeShaderPromise = import(runtimeAssetUrl("../vf-grass-blade-gpu.mjs")).then(function (moduleApi) {
+      grassBladeComputeShaderPromise = import(runtimeAssetUrl("../vf-grass-blade-gpu.mjs?v=lawn-11")).then(function (moduleApi) {
         var source = moduleApi && moduleApi.GRASS_BLADE_COMPUTE_WGSL;
         if (typeof source !== "string" || source.indexOf("fn vf_grass_blade_compute(") < 0) {
           throw new Error("grass-blade GPU module does not export valid WGSL");

@@ -142,7 +142,7 @@ export function sampleGrassMaterialReference(
     patchVariation,
     surfaceVariation,
     coverage: clamp(0.68 + 0.22 * fieldVariation + 0.1 * patchVariation, 0, 1),
-    bladeHeight: clamp(0.2 + 0.44 * vigor + 0.05 * surfaceVariation, 0.18, 0.72),
+    bladeHeight: clamp(0.10 + 0.18 * vigor + 0.02 * surfaceVariation, 0.09, 0.32),
     roughness: clamp(0.94 - 0.16 * vigor + 0.03 * surfaceVariation, 0.72, 0.98),
     baseColor: Object.freeze([
       DRY_COLOR[0] + (LUSH_COLOR[0] - DRY_COLOR[0]) * colorBlend,
@@ -267,10 +267,10 @@ function sampleBlade(cellNode, material, cellX, cellY, bladeIndex) {
   );
   const colorShift = sample(6, -0.035, 0.035);
   return Object.freeze({
-    x: cellX + sample(0, 0.08, 0.92),
-    y: cellY + sample(1, 0.08, 0.92),
+    x: cellX + sample(0, 0, 1),
+    y: cellY + sample(1, 0, 1),
     height: material.bladeHeight * sample(2, 0.72, 1.28),
-    halfWidth: sample(3, 0.012, 0.028),
+    halfWidth: sample(3, 0.0035, 0.009),
     direction: sample(4, 0, Math.PI),
     lean: Object.freeze({
       direction: sample(5, 0, Math.PI * 2),
@@ -297,7 +297,8 @@ export function createGrassRendererPacketsReference(
   requireOptions({ detailLevel, footprint });
   requireBladeBudget(bladeBudget);
   const demandedCells = requireDemandedCells(cells);
-  const bladesPerCell = 2 ** Math.min(4, detailLevel);
+  const bladesPerCell = Math.min(768 * (2 ** Math.min(2, detailLevel)),
+    Math.max(1, Math.floor(bladeBudget / Math.max(1, demandedCells.length))));
   const packets = [];
   let bladeCount = 0;
   let vertexBytes = 0;
@@ -356,7 +357,8 @@ export function createGrassRendererInstancePacketsReference(
   requireOptions({ detailLevel, footprint });
   requireBladeBudget(bladeBudget);
   const demandedCells = requireDemandedCells(cells);
-  const bladesPerCell = 2 ** Math.min(4, detailLevel);
+  const bladesPerCell = Math.min(768 * (2 ** Math.min(2, detailLevel)),
+    Math.max(1, Math.floor(bladeBudget / Math.max(1, demandedCells.length))));
   const packets = [];
   let bladeCount = 0;
   let templateVertexBytes = 0;
@@ -509,8 +511,9 @@ export function createGrassRendererGpuBatchPacketsReference(
   requireOptions({ detailLevel, footprint });
   requireBladeBudget(bladeBudget);
   const demandedCells = requireDemandedCells(cells);
-  const bladesPerCell = 2 ** Math.min(4, detailLevel);
-  const shadowBladesPerCell = 2 ** Math.max(0, Math.min(4, detailLevel) - 1);
+  const bladesPerCell = Math.min(768 * (2 ** Math.min(2, detailLevel)),
+    Math.max(1, Math.floor(bladeBudget / Math.max(1, demandedCells.length))));
+  const shadowBladesPerCell = Math.max(384, Math.floor(bladesPerCell * 0.5));
   const activeCells = [];
   let bladeCount = 0;
   let shadowBladeCount = 0;

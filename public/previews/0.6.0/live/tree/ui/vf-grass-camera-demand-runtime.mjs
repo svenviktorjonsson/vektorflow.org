@@ -1,6 +1,6 @@
 import {
   createGrassRendererGpuBatchPacketsReference,
-} from './vf-grass-material-field.mjs';
+} from './vf-grass-material-field.mjs?v=lawn-11';
 import {
   selectGrassViewDemandReference,
 } from './vf-grass-view-demand.mjs';

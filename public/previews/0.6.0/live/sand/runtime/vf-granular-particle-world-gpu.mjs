@@ -41,24 +41,24 @@ export const GRANULAR_PARTICLE_WORLD_GPU_TELEMETRY = Object.freeze({
 
 export const GRANULAR_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   dimension: 2,
-  columns: 36,
-  rows: 28,
-  grainRadius: 0.008,
+  columns: 72,
+  rows: 56,
+  grainRadius: 0.004,
   seedGap: 0.002,
   seedMinimum: Object.freeze([-0.315, -0.08]),
   seed: 0x51a7,
   particleDensity: 1600,
   gravity: Object.freeze([0, -9.82]),
   timeStep: 1 / 240,
-  friction: 0.82,
-  boundaryFriction: 0.55,
-  rollingResistance: 0.14,
+  friction: 0.90,
+  boundaryFriction: 0.78,
+  rollingResistance: 0.20,
   restitution: 0.005,
-  projectionRelaxation: 0.96,
-  contactIterations: 8,
+  projectionRelaxation: 0.98,
+  contactIterations: 10,
   gridRebuildInterval: 1,
   contactSlop: 0.000002,
-  linearDamping: 0.14,
+  linearDamping: 0.18,
   maximumParticlesPerCell: 16,
   worldMinimum: Object.freeze([-0.70, -0.22]),
   worldMaximum: Object.freeze([0.70, 0.86]),
@@ -721,6 +721,7 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
   let center_cell = cell_coordinate(grain.position);
   var velocity_delta = vec2<f32>(0.0);
   var impulse_contact_count = 0u;
+  var support_load = 0.0;
   for (var offset_y = -1; offset_y <= 1; offset_y = offset_y + 1) {
     for (var offset_x = -1; offset_x <= 1; offset_x = offset_x + 1) {
       let cell = center_cell + vec2<i32>(offset_x, offset_y);
@@ -745,14 +746,16 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
           normal_impulse = -0.5 * (1.0 + params.material.z) * normal_speed;
           velocity_delta = velocity_delta + normal * normal_impulse;
         }
+        let gravity_support = max(0.0,
+          -dot(params.force.xy * params.force.z, normal)) * 0.5;
+        support_load = support_load + gravity_support;
         let tangent_velocity = relative_velocity - normal * normal_speed;
         let tangent_speed = length(tangent_velocity);
         if (tangent_speed > 1.0e-12) {
           // Resting grains still carry normal load. Including the gravity load
           // gives the contact network a true static Coulomb yield threshold,
           // so a heap keeps its angle of repose instead of flowing like water.
-          let support_impulse = max(normal_impulse,
-            max(0.0, -dot(params.force.xy * params.force.z, normal)) * 0.5);
+          let support_impulse = max(normal_impulse, gravity_support);
           let tangent_impulse = min(tangent_speed * 0.5,
             params.material.y * support_impulse);
           velocity_delta = velocity_delta - tangent_velocity / tangent_speed * tangent_impulse;
@@ -800,23 +803,23 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let tangent_velocity = relative_velocity
       - wheel_contact.normal * dot(relative_velocity, wheel_contact.normal);
     let tangent_speed = length(tangent_velocity);
+    let gravity_support = max(0.0,
+      -dot(params.force.xy * params.force.z, wheel_contact.normal));
+    support_load = support_load + gravity_support;
     if (tangent_speed > 1.0e-12) {
-      // The drum rim is smooth and cannot hold a vertical sand coating. The
-      // internal baffles retain ordinary boundary friction so they can lift
-      // and release grains as intended.
-      let friction = select(params.solver.y, 0.025, wheel_contact.kind == 1u);
-      let support_impulse = max(normal_impulse,
-        max(0.0, -dot(params.force.xy * params.force.z, wheel_contact.normal)));
+      // Coulomb friction is proportional to actual normal load. It arrests
+      // grains on the floor without creating adhesion on a vertical wall.
+      let support_impulse = max(normal_impulse, gravity_support);
       relative_velocity = relative_velocity - tangent_velocity / tangent_speed
-        * min(tangent_speed, friction * support_impulse);
+        * min(tangent_speed, params.solver.y * support_impulse);
     }
     velocity = wheel_contact.surface_velocity + relative_velocity;
   }
   // Rolling resistance is represented as low-speed contact damping in this
   // 2D sphere specialization. It arrests settled piles without damping grains
   // that are airborne or avalanching above the yield threshold.
-  if (grain.contact_count > 1u && length(velocity) < 0.14) {
-    velocity = velocity * 0.72;
+  if (support_load > 1.0e-7 && length(velocity) < 0.22) {
+    velocity = velocity * 0.58;
   }
   grain.velocity = velocity;
   record_nonfinite(grain);

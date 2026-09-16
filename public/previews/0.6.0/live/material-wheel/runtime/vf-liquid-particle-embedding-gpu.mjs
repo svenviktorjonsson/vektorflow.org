@@ -167,14 +167,19 @@ fn composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
 
   let texel = 1.0 / params.canvas.xy;
   let field = field_at(screen_uv);
+  // A one-layer wetting correction prevents the visual field from pulling
+  // away from the non-hydrophobic drum floor. Particle contact stays exact.
+  let rim_gap = max(0.0, 0.50 - length(world - vec2<f32>(0.0, 0.32)));
+  let wetting = 1.0 + 0.18 * (1.0 - smoothstep(0.0, params.fluid.x * 1.35, rim_gap));
+  let embedded_density = field.x * wetting;
   let gradient = vec2<f32>(
     field_at(screen_uv + vec2<f32>(texel.x, 0.0)).x
       - field_at(screen_uv - vec2<f32>(texel.x, 0.0)).x,
     field_at(screen_uv + vec2<f32>(0.0, texel.y)).x
       - field_at(screen_uv - vec2<f32>(0.0, texel.y)).x);
-  let edge_width = max(fwidth(field.x) * 1.4, 0.018);
+  let edge_width = max(fwidth(embedded_density) * 1.4, 0.018);
   let coverage = smoothstep(params.fluid.z - edge_width,
-    params.fluid.z + edge_width, field.x);
+    params.fluid.z + edge_width, embedded_density);
   if (coverage <= 0.001) { return vec4<f32>(color, 1.0); }
 
   let normal = normalize(vec2<f32>(-gradient.x,
@@ -183,7 +188,7 @@ fn composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
     * params.fluid.w / max(field.x, 0.35);
   let refracted = cached_background_at(refract_uv);
   let surface_band = 1.0 - smoothstep(params.fluid.z,
-    params.fluid.z + 1.35, field.x);
+    params.fluid.z + 1.35, embedded_density);
   let fresnel = 0.0204 + 0.9796 * pow(1.0 - clamp(normal.y, 0.0, 1.0), 5.0);
   let light_direction = normalize(vec2<f32>(-0.42, 0.91));
   let specular = pow(max(dot(normal, light_direction), 0.0), 72.0)
@@ -191,7 +196,7 @@ fn composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   // Beer-Lambert transmission uses the reconstructed column optical depth.
   // The field is dimensionless density support, so the coefficient is the
   // calibrated embedding scale rather than a physics force.
-  let absorption = 1.0 - exp(-0.34 * max(field.x - params.fluid.z, 0.0));
+  let absorption = 1.0 - exp(-0.34 * max(embedded_density - params.fluid.z, 0.0));
   var water = mix(refracted, params.water_color.rgb,
     clamp(0.16 + 0.52 * absorption, 0.0, 0.66));
   let reflected_air = params.air_color.rgb * 1.75
@@ -234,8 +239,10 @@ fn primary_fragment(input: PrimaryOut) -> @location(0) vec4<f32> {
   if (coverage <= 0.001) { discard; }
   let rim = 1.0 - smoothstep(0.76 - aa, 0.89 + aa, radial);
   let isolated = select(0.0, 1.0, input.phase > 0.5);
-  let fill = mix(params.water_color.rgb, params.foam_color.rgb,
+  let embedded_fill = mix(params.water_color.rgb, params.foam_color.rgb,
     clamp(input.foam * 0.55 + isolated * 0.38, 0.0, 0.72));
+  let diagnostic_fill = vec3<f32>(0.24, 0.76, 0.93);
+  let fill = select(diagnostic_fill, embedded_fill, params.canvas.w > 0.5);
   let alpha = coverage * mix(0.70 + 0.20 * rim, 0.88, isolated);
   return vec4<f32>(fill * alpha, alpha);
 }
@@ -561,16 +568,18 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
       backgroundPass.end();
       backgroundDirty = false;
     }
-    const densityPass = encoder.beginRenderPass({
-      label: 'VKF Liquid continuous field pass',
-      colorAttachments: [{ view: densityView,
-        clearValue: { r: 0, g: 0, b: 0, a: 0 },
-        loadOp: 'clear', storeOp: 'store' }],
-    });
-    densityPass.setPipeline(densityPipeline);
-    densityPass.setBindGroup(0, densityBindGroup);
-    densityPass.draw(4, worldRuntime.primaryCount);
-    densityPass.end();
+    if (mode === 'fluid') {
+      const densityPass = encoder.beginRenderPass({
+        label: 'VKF Liquid continuous field pass',
+        colorAttachments: [{ view: densityView,
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear', storeOp: 'store' }],
+      });
+      densityPass.setPipeline(densityPipeline);
+      densityPass.setBindGroup(0, densityBindGroup);
+      densityPass.draw(4, worldRuntime.primaryCount);
+      densityPass.end();
+    }
 
     const target = context.getCurrentTexture().createView();
     const scenePass = encoder.beginRenderPass({
@@ -585,9 +594,11 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
     scenePass.setPipeline(primaryPipeline);
     scenePass.setBindGroup(0, primaryBindGroup);
     scenePass.draw(4, worldRuntime.primaryCount);
-    scenePass.setPipeline(diffusePipeline);
-    scenePass.setBindGroup(0, diffuseBindGroup);
-    scenePass.draw(4, worldRuntime.diffuseCapacity);
+    if (mode === 'fluid') {
+      scenePass.setPipeline(diffusePipeline);
+      scenePass.setBindGroup(0, diffuseBindGroup);
+      scenePass.draw(4, worldRuntime.diffuseCapacity);
+    }
     scenePass.end();
   };
 

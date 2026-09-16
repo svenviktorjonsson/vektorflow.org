@@ -170,10 +170,10 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   let motion_direction = select(vec2<f32>(0.0, 1.0),
     grain.velocity / max(speed, 1.0e-6), speed > 1.0e-6);
   let motion_normal = vec2<f32>(-motion_direction.y, motion_direction.x);
-  // A reconstruction support of roughly 2.35 grain spacings matches the
-  // continuous liquid embedding. The physical contact radius is unchanged.
-  let radius = params.canvas.w * 4.75;
-  let stretch = 1.0 + clamp(speed * 0.075, 0.0, 0.52);
+  // A granular reconstruction closes sub-grain gaps without the broad kernel
+  // that makes a heap resemble a cohesive liquid.
+  let radius = params.canvas.w * 4.15;
+  let stretch = 1.0 + clamp(speed * 0.055, 0.0, 0.34);
   let offset = (motion_normal * local.x + motion_direction * local.y * stretch) * radius;
   var output: DensitySplatOut;
   output.position = vec4<f32>(world_to_clip(grain.position + offset), 0.0, 1.0);
@@ -282,13 +282,23 @@ fn field_at(uv: vec2<f32>) -> vec4<f32> {
     clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
 }
 
+fn closed_density_at(uv: vec2<f32>) -> f32 {
+  let offset = 2.0 / params.canvas.xy;
+  let center = field_at(uv).x;
+  let enclosed = min(min(field_at(uv - vec2<f32>(offset.x, 0.0)).x,
+    field_at(uv + vec2<f32>(offset.x, 0.0)).x),
+    min(field_at(uv - vec2<f32>(0.0, offset.y)).x,
+      field_at(uv + vec2<f32>(0.0, offset.y)).x));
+  return max(center, enclosed * 0.97);
+}
+
 @fragment
 fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let uv = input.position.xy / params.canvas.xy;
   let field = field_at(uv);
-  let density = field.x;
-  let edge_width = max(fwidth(density) * 1.35, 0.026);
-  let coverage = smoothstep(1.18 - edge_width, 1.18 + edge_width, density);
+  let density = closed_density_at(uv);
+  let edge_width = max(fwidth(density) * 1.15, 0.018);
+  let coverage = smoothstep(1.06 - edge_width, 1.06 + edge_width, density);
 
   let screen_uv = input.position.xy / params.canvas.xy;
   let world = vec2<f32>(
@@ -301,10 +311,10 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
 
   let texel = 1.0 / params.canvas.xy;
   let gradient_step = texel * 2.0;
-  let density_left = field_at(uv - vec2<f32>(gradient_step.x, 0.0)).x;
-  let density_right = field_at(uv + vec2<f32>(gradient_step.x, 0.0)).x;
-  let density_up = field_at(uv - vec2<f32>(0.0, gradient_step.y)).x;
-  let density_down = field_at(uv + vec2<f32>(0.0, gradient_step.y)).x;
+  let density_left = closed_density_at(uv - vec2<f32>(gradient_step.x, 0.0));
+  let density_right = closed_density_at(uv + vec2<f32>(gradient_step.x, 0.0));
+  let density_up = closed_density_at(uv - vec2<f32>(0.0, gradient_step.y));
+  let density_down = closed_density_at(uv + vec2<f32>(0.0, gradient_step.y));
   let gradient = vec2<f32>(density_right - density_left,
     density_down - density_up);
   let normal = normalize(vec3<f32>(-gradient.x * 2.4,

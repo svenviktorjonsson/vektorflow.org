@@ -249,7 +249,7 @@ fn wheel_boundary_support(position: vec2<f32>) -> WheelBoundarySample {
   // Matches the calibrated volume of the canonical 2D Akinci boundary. The
   // samples are evaluated only near the analytic wheel, so the drum becomes a
   // pressure boundary without changing the liquid particle rules.
-  let boundary_volume = 0.000142;
+  let boundary_volume = 0.000112;
   let sample_spacing = 0.009;
 
   let radial = position - center;

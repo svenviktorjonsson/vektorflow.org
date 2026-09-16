@@ -17,7 +17,7 @@
     .session-shell { overflow: hidden; overscroll-behavior: none; touch-action: none; border: 1px solid var(--border, #666); border-radius: .85rem; background: #0b1113; box-shadow: 0 24px 70px rgb(0 0 0 / .18); }
     .session-shell iframe { display: block; width: 100%; height: min(76vh, 760px); min-height: 560px; border: 0; background: #0b1113; overscroll-behavior: none; touch-action: none; }
     .session-note { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; margin: .75rem 0 0; color: var(--muted, #687274); font-size: .92rem; }
-    @media (max-width: 680px) { .session-shell { margin-inline: calc(50% - 50vw); border-radius: 0; border-inline: 0; } .session-shell iframe { height: 72vh; min-height: 540px; } .session-note { display: block; } }
+    @media (max-width: 680px) { .session-shell { margin-inline: -16px; border-radius: 0; border-inline: 0; } .session-shell iframe { height: 72vh; min-height: 540px; } .session-note { display: block; } }
   </style>
 </head>
 <body>
@@ -41,14 +41,14 @@
       <h1>Coming soon</h1>
       <p class="live-intro"><strong>Live research sessions only.</strong> Choose a scene and interact with the running simulation directly—there are no stills or prerecorded videos here.</p>
       <div class="session-picker" role="tablist" aria-label="Live research sessions">
-        <button type="button" role="tab" aria-selected="true" data-session="material" data-src="./previews/0.6.0/live/material-wheel/?v=touch-physics-11">Water · Sand · Drum</button>
+        <button type="button" role="tab" aria-selected="true" data-session="material" data-src="./previews/0.6.0/live/material-wheel/?v=touch-physics-12">Water · Sand · Drum</button>
         <button type="button" role="tab" aria-selected="false" data-session="rocks" data-src="./previews/0.6.0/live/rocks/?v=touch-physics-11">Rigid Rocks</button>
-        <button type="button" role="tab" aria-selected="false" data-session="tree" data-src="./previews/0.6.0/live/tree/?v=touch-physics-11">Tree · Grass · Wind</button>
+        <button type="button" role="tab" aria-selected="false" data-session="tree" data-src="./previews/0.6.0/live/tree/?v=touch-physics-12">Tree · Grass · Wind</button>
       </div>
       <section class="session-shell" aria-label="Selected live session">
-        <iframe id="session-frame" title="Water, sand, and rotating drum live session" src="./previews/0.6.0/live/material-wheel/?v=touch-physics-11" allow="fullscreen" scrolling="no"></iframe>
+        <iframe id="session-frame" title="Water, sand, and rotating drum live session" src="./previews/0.6.0/live/material-wheel/?v=touch-physics-12" allow="fullscreen" scrolling="no"></iframe>
       </section>
-      <p class="session-note"><span id="session-description">Choose water or sand, expose the particles, and rotate the circular drum around its short internal baffles.</span><a id="open-session" href="./previews/0.6.0/live/material-wheel/?v=touch-physics-11">Open session full page</a></p>
+      <p class="session-note"><span id="session-description">Choose water or sand, expose the particles, and rotate the circular drum around its short internal baffles.</span><a id="open-session" href="./previews/0.6.0/live/material-wheel/?v=touch-physics-12">Open session full page</a></p>
     </article>
   </main>
   <footer class="site-footer">Experimental software · <a href="./origins.html">Origins</a></footer>

@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
+      - name: Verify live preview invariants
+        run: node scripts/test-live-preview-invariants.mjs
       - name: Verify retained 0.6.0 previews
         shell: bash
         run: |

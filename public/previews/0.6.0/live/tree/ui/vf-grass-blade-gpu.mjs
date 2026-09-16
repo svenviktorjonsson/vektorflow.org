@@ -113,15 +113,15 @@ fn vf_grass_write_instance(instance_index: u32, blades_per_cell: u32) {
   let wind_lean = vec2<f32>(cell.material.y, cell.color.w) * cell.material.x;
   vf_grass_blade_instances[instance_index] = VfGrassBladeInstance(
     vec4<f32>(
-      f32(cell.cell.x) + vf_grass_bounded(cell, blade_index, 0u, 0.08, 0.92),
-      f32(cell.cell.y) + vf_grass_bounded(cell, blade_index, 1u, 0.08, 0.92),
+      f32(cell.cell.x) + vf_grass_bounded(cell, blade_index, 0u, 0.0, 1.0),
+      f32(cell.cell.y) + vf_grass_bounded(cell, blade_index, 1u, 0.0, 1.0),
       0.0,
       cell.material.x * vf_grass_bounded(cell, blade_index, 2u, 0.72, 1.28),
     ),
     vec4<f32>(
       cos(blade_direction),
       sin(blade_direction),
-      vf_grass_bounded(cell, blade_index, 3u, 0.012, 0.028),
+      vf_grass_bounded(cell, blade_index, 3u, 0.0035, 0.009),
       0.82,
     ),
     vec4<f32>(
@@ -193,13 +193,13 @@ export function reconstructGrassBladeGpuInstancesReference(grassGpu, instanceCou
     const colorShift = bounded(6, -0.035, 0.035);
     const leanAmount = bladeHeight * bounded(7, 0.02, 0.16);
     output.set([
-      signed[base] + bounded(0, 0.08, 0.92),
-      signed[base + 1] + bounded(1, 0.08, 0.92),
+      signed[base] + bounded(0, 0, 1),
+      signed[base + 1] + bounded(1, 0, 1),
       0,
       bladeHeight * bounded(2, 0.72, 1.28),
       Math.cos(bladeDirection),
       Math.sin(bladeDirection),
-      bounded(3, 0.012, 0.028),
+      bounded(3, 0.0035, 0.009),
       floats[base + 7],
       Math.cos(leanDirection) * leanAmount,
       Math.sin(leanDirection) * leanAmount,
