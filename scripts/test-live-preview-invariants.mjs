@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
+import { treeProGenPresets, treeProGenAsset } from '../public/previews/0.6.0/live/tree/runtime/vf-tree-pro-gen-presets.mjs';
 import { createVfLiveWorldStackReference } from '../public/previews/0.6.0/live/runtime/vf-live-world-stack.mjs';
 import { createGranularParticleWorldGpuSeedReference } from '../public/previews/0.6.0/live/sand/runtime/vf-granular-particle-world-gpu.mjs';
 import { createGrassMaterialFieldReference, createGrassRendererGpuBatchPacketsReference } from '../public/previews/0.6.0/live/tree/ui/vf-grass-material-field.mjs';
@@ -44,3 +48,33 @@ assert.ok(Math.min(...rootsX) < 0.08 && Math.max(...rootsX) > 0.92,
 console.log(JSON.stringify({ worlds: stack.snapshots(), sandGrains: sand.count,
   initialSandOverlaps: sand.initialOverlapPairCount, grassBlades: packet.instance_count,
   grassCells: 96, bladesPerCell: 512 }));
+
+const variants = new Set();
+for (const name of Object.keys(treeProGenPresets)) {
+  const bytes = gunzipSync(readFileSync(new URL(`../public/previews/0.6.0/live/tree/assets/${treeProGenAsset(name)}`, import.meta.url)));
+  assert.equal(bytes.subarray(0, 8).toString(), 'VFTREE02');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  assert.equal(view.getUint32(8, true), 2);
+  assert.ok(view.getUint32(12, true) <= 393216);
+  assert.ok(view.getUint32(16, true) <= 2359296);
+  let offset = 20; let vertices = 0; let indices = 0;
+  for (let mesh = 0; mesh < 2; mesh++) {
+    const metaLength = view.getUint32(offset, true), words = view.getUint32(offset + 4, true);
+    const indexCount = view.getUint32(offset + 8, true), uvCount = view.getUint32(offset + 12, true);
+    const roughnessCount = view.getUint32(offset + 16, true); offset += 20;
+    JSON.parse(bytes.subarray(offset, offset + metaLength).toString());
+    offset += metaLength + ((4 - metaLength % 4) % 4);
+    assert.equal(words % 10, 0); const count = words / 10;
+    for (let i = 0; i < words; i++) assert.ok(Number.isFinite(view.getFloat32(offset + i * 4, true)), `${name}: finite vertex`);
+    offset += words * 4;
+    for (let i = 0; i < indexCount; i++) assert.ok(view.getUint32(offset + i * 4, true) < count, `${name}: valid index`);
+    offset += (indexCount + uvCount + roughnessCount) * 4;
+    vertices += count; indices += indexCount;
+  }
+  assert.equal(offset, bytes.length); assert.equal(vertices, view.getUint32(12, true));
+  assert.equal(indices, view.getUint32(16, true));
+  variants.add(createHash('sha256').update(bytes).digest('hex'));
+}
+assert.equal(variants.size, 4, 'all distribution variants must generate different geometry');
+assert.throws(() => treeProGenAsset('../bad'), /Unknown/);
+console.log('Four distinct, finite, bounded pro-gen tree assets verified');

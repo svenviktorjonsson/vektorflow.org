@@ -1,3 +1,4 @@
+import { proGenDistributionReference, sampleProGenDistributionReference } from './vf-pro-gen-distribution-reference.mjs';
 const MAX_VERTEX_BUDGET = 393_216;
 const MAX_INDEX_BUDGET = 2_359_296;
 const KIND_TRUNK = 0;
@@ -1057,16 +1058,18 @@ function addLeafBody(body, physics) {
   }
 }
 
-function leafParameters(leafNode, transform) {
+function leafParameters(leafNode, transform, controls) {
   const scaleHint = transform[7];
-  const bladeLength = boundedNormal(
-    leafNode, 0, scaleHint * 0.9, scaleHint * 0.12, scaleHint * 0.6, scaleHint * 1.2,
-  );
-  const widthRatio = boundedNormal(leafNode, 1, 0.46, 0.06, 0.28, 0.65);
-  const baseRoundness = boundedNormal(leafNode, 2, 0.72, 0.07, 0.5, 0.92);
-  const asymmetry = boundedNormal(leafNode, 3, 0, 0.05, -0.16, 0.16);
-  const petioleRatio = boundedNormal(leafNode, 4, 0.27, 0.04, 0.16, 0.4);
-  const camberRatio = boundedNormal(leafNode, 5, 0, 0.025, -0.08, 0.08);
+  const choose = (name, lane, mean, deviation, minimum, maximum) => controls[name]
+    ? clamp(sampleProGenDistributionReference(leafNode, [0, lane], controls[name]), minimum, maximum)
+    : boundedNormal(leafNode, lane, mean, deviation, minimum, maximum);
+  const bladeLength = controls.lengthRatio ? scaleHint * choose('lengthRatio', 0, 0.9, 0.12, 0.6, 1.2)
+    : boundedNormal(leafNode, 0, scaleHint * 0.9, scaleHint * 0.12, scaleHint * 0.6, scaleHint * 1.2);
+  const widthRatio = choose('widthRatio', 1, 0.46, 0.06, 0.28, 0.65);
+  const baseRoundness = choose('roundness', 2, 0.72, 0.07, 0.5, 0.92);
+  const asymmetry = choose('asymmetry', 3, 0, 0.05, -0.16, 0.16);
+  const petioleRatio = choose('petioleRatio', 4, 0.27, 0.04, 0.16, 0.4);
+  const camberRatio = choose('camberRatio', 5, 0, 0.025, -0.08, 0.08);
   const attachment = boundedNormal(leafNode, 6, 0.68, 0.18, 0.12, 0.98);
   const orientationOffset = boundedNormal(leafNode, 7, 0, 0.34, -0.9, 0.9);
   const colorVariation = boundedNormal(leafNode, 8, 0, 0.025, -0.06, 0.06);
@@ -1220,7 +1223,7 @@ function appendLeaves(builder, transform, color, roughness, clusterNode, paramet
       segment: `leaf:${leaf}`,
       channel: 'leaf-geometry',
     });
-    const parameters = leafParameters(leafNode, transform);
+    const parameters = leafParameters(leafNode, transform, physics.shape);
     const pose = resolveLeafPose(transform, parameters, leaf, physics);
     if (!pose) continue;
     // Rejected hard-contact candidates emit no geometry and must consume no
@@ -1255,10 +1258,17 @@ function finishMesh(packet, suffix, objectId, builder) {
 
 export function adaptTreeRenderPacketToWebGpuMeshesReference(
   packet,
-  { vertexBudget, indexBudget, leafContact = false },
+  { vertexBudget, indexBudget, leafContact = false, leafShape = {} },
 ) {
   const sourceCounts = requirePacket(packet);
   requireBudgets(vertexBudget, indexBudget);
+  if (!leafShape || typeof leafShape !== 'object' || Array.isArray(leafShape)) throw new Error('invalid leaf shape controls');
+  const shape = Object.freeze(Object.fromEntries(Object.entries(leafShape).map(([name, pdf]) => {
+    if (!['lengthRatio', 'widthRatio', 'roundness', 'asymmetry', 'petioleRatio', 'camberRatio'].includes(name)) {
+      throw new Error(`unknown leaf shape control ${name}`);
+    }
+    return [name, proGenDistributionReference(pdf)];
+  })));
   const usage = { vertices: 0, indices: 0 };
   const wood = meshBuilder(vertexBudget, indexBudget, usage);
   const foliage = meshBuilder(vertexBudget, indexBudget, usage);
@@ -1310,6 +1320,7 @@ export function adaptTreeRenderPacketToWebGpuMeshesReference(
   const woodNetwork = appendWoodyNetwork(wood, packet, bark);
   const leafParameterValues = [];
   const leafPhysics = {
+    shape,
     solver: 'petiole-torsion-hard-contact:v1',
     enabled: leafContact === true,
     bodies: [], cells: new Map(), candidateTests: 0, bentLeaves: 0,

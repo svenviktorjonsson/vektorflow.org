@@ -13,13 +13,14 @@
     h1 { margin: 0 14px 0 0; font-size: clamp(17px, 3.8vw, 23px); }
     label { display: flex; align-items: center; gap: 8px; color: #c8d4ca; font-size: 13px; }
     input { accent-color: #b8d692; }
+    select { min-height: 38px; max-width: 145px; border: 1px solid #64766a; border-radius: 9px; padding: 0 8px; background: #203029; color: inherit; font: inherit; }
     button { min-height: 38px; border: 1px solid #64766a; border-radius: 9px; padding: 0 13px; background: #203029; color: inherit; font: inherit; font-weight: 670; }
     button[aria-pressed="true"] { background: #dcebd6; color: #152019; border-color: #dcebd6; }
     #status { margin-left: auto; color: #aebdaf; font-size: 12px; }
     #layer { position: fixed; inset: 58px 0 0; touch-action: none; overscroll-behavior: contain; }
     #vf-screen-canvas { position: fixed; inset: 58px 0 0; pointer-events: none; }
     #error { position: fixed; z-index: 30; inset: 70px 12px auto; padding: 12px; color: #ffb4ab; background: #301c1c; white-space: pre-wrap; }
-    @media (max-width: 680px) { #controls { min-height: 102px; } #layer, #vf-screen-canvas { inset-block-start: 102px; } #status { width: 100%; margin: 0; } }
+    @media (max-width: 680px) { #controls { min-height: 146px; } #layer, #vf-screen-canvas { inset-block-start: 146px; } #status { width: 100%; margin: 0; } }
   </style>
 </head>
 <body data-vf-runtime-autoboot="false">
@@ -28,6 +29,7 @@
     <label>Wind <input id="wind" type="range" min="1" max="8" value="3.5" step="0.1"> <output id="wind-value">3.5 m/s</output></label>
     <button id="grass" type="button" aria-pressed="true">Grass</button>
     <button id="wind-particles" type="button" aria-pressed="false">Particles</button>
+    <label>Branch + leaf distribution <select id="generation" aria-label="Branch and leaf shape distribution"><option value="original">Original</option><option value="uniform">Uniform</option><option value="normal">Normal</option><option value="triangular">Triangular</option></select></label>
     <span id="status" role="status">Loading cached tree…</span>
   </div>
   <div id="layer"></div>
@@ -52,6 +54,6 @@
     };
   </script>
   <script src="./ui/vf-runtime-shell.js?v=tree-grass-live-5"></script>
-  <script type="module" src="./scene.mjs?v=tree-local-wind-11"></script>
+  <script type="module" src="./scene.mjs?v=pro-gen-1"></script>
 </body>
 </html>

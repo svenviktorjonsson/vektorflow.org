@@ -2,6 +2,7 @@ import { createGrassMaterialFieldReference } from './ui/vf-grass-material-field.
 import { createGrassCameraDemandControllerReference } from './ui/vf-grass-camera-demand-runtime.mjs?v=lawn-11';
 import { createRetainedGeometryPacketRuntimeReference } from './ui/vf-rock-camera-demand-runtime.mjs';
 import { createVfLiveWorldStackReference } from '../runtime/vf-live-world-stack.mjs?v=world-stack-1';
+import { treeProGenPresets, treeProGenAsset } from './runtime/vf-tree-pro-gen-presets.mjs';
 
 const frameId = 'tree_grass_live_frame';
 const status = document.getElementById('status');
@@ -10,6 +11,21 @@ const windInput = document.getElementById('wind');
 const windValue = document.getElementById('wind-value');
 const grassButton = document.getElementById('grass');
 const windParticlesButton = document.getElementById('wind-particles');
+const generationInput = document.getElementById('generation');
+const requestedGeneration = new URLSearchParams(location.search).get('generation') ?? 'original';
+const generation = Object.hasOwn(treeProGenPresets, requestedGeneration) ? requestedGeneration : 'original';
+generationInput.value = generation;
+const fitControls = () => {
+  const top = `${Math.ceil(document.getElementById('controls').getBoundingClientRect().height)}px`;
+  for (const id of ['layer', 'vf-screen-canvas']) document.getElementById(id).style.top = top;
+};
+new ResizeObserver(fitControls).observe(document.getElementById('controls'));
+fitControls();
+generationInput.addEventListener('change', () => {
+  const url = new URL(location.href);
+  url.searchParams.set('generation', generationInput.value);
+  location.replace(url.href);
+});
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
 let grassVisible = true;
@@ -71,7 +87,7 @@ function requestFrame() {
 }
 
 async function loadCachedTree() {
-  const response = await fetch('./assets/tree-mesh.bin.gz?v=tree-cache-1');
+  const response = await fetch(`./assets/${treeProGenAsset(generation)}?v=pro-gen-1`);
   if (!response.ok) throw new Error(`Tree asset ${response.status}`);
   if (typeof DecompressionStream !== 'function') {
     throw new Error('This browser cannot decode the cached tree asset.');
@@ -529,10 +545,10 @@ try {
   const grassCount = grassRuntime.packets()[0]?.instance_count ?? 0;
   status.textContent = `Ready in ${((performance.now() - started) / 1000).toFixed(1)}s`
     + ` · 8 m tree · ${grassCount.toLocaleString()} grass blades`
-    + ` · ${WIND_PARCEL_COUNT} wind parcels · swipe to orbit`;
+    + ` · ${generation} branching + leaf variation · ${WIND_PARCEL_COUNT} wind parcels · swipe to orbit`;
   window.__treeGrassResult = { outcome: 'ready', tree, grassRuntime,
     worldStack, treeWorld, windModel: 'advected-parcels-local-transfer',
-    parcels, treeCollisionCells };
+    parcels, treeCollisionCells, generation };
   requestFrame();
 
   const animate = (time) => {

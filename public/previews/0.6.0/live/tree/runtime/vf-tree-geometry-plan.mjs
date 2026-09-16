@@ -5,6 +5,7 @@ import {
   sampleNormalReference,
 } from './vf-conditioned-distribution.mjs';
 import { treeSpeciesProfileReference } from './vf-tree-species-profile.mjs';
+import { proGenDistributionReference, sampleProGenDistributionReference } from './vf-pro-gen-distribution-reference.mjs';
 
 const plannerState = new WeakMap();
 const floatBitsBuffer = new ArrayBuffer(8);
@@ -128,6 +129,12 @@ function boundedNormal(node, lane, mean, standardDeviation, minimum, maximum) {
     minimum,
     maximum,
   );
+}
+
+function branchSample(tree, name, node, lane, mean, deviation, minimum, maximum) {
+  const pdf = tree.branching[name];
+  return pdf ? clamp(sampleProGenDistributionReference(node, [0, lane], pdf), minimum, maximum)
+    : boundedNormal(node, lane, mean, deviation, minimum, maximum);
 }
 
 function ellipsoidCoordinates(envelope, point) {
@@ -494,6 +501,7 @@ function treeRealization(state, forest, treeIndex) {
     lateralShoots: state.lateralShoots,
     trunkShoots: state.trunkShoots,
     scaffoldBranches: state.scaffoldBranches,
+    branching: state.branching,
   };
   state.treeCache.set(cacheKey, tree);
   if (state.treeCache.size > MAX_CACHED_TREES) {
@@ -554,21 +562,21 @@ function splitChildren(tree, parent, path, generation) {
   const node = branchNode(tree, ['split', ...path]);
   const parentDirection = parent.curve?.tangents.at(-1) ?? parent.transform.slice(3, 6);
   const profile = tree.profile;
-  const mainAngle = boundedNormal(
-    node, 1, profile.split.mainAngleMean, profile.split.mainAngleDeviation,
+  const mainAngle = branchSample(
+    tree, 'mainAngle', node, 1, profile.split.mainAngleMean, profile.split.mainAngleDeviation,
     ...profile.split.mainAngleBounds,
   );
-  const lateralAngle = boundedNormal(
-    node, 2, profile.split.lateralAngleMean, profile.split.lateralAngleDeviation,
+  const lateralAngle = branchSample(
+    tree, 'lateralAngle', node, 2, profile.split.lateralAngleMean, profile.split.lateralAngleDeviation,
     ...profile.split.lateralAngleBounds,
   );
   const azimuth = sample(node, 0, 3, 0, Math.PI * 2);
-  const loss = boundedNormal(
-    node, 4, profile.split.areaLossMean, profile.split.areaLossDeviation,
+  const loss = branchSample(
+    tree, 'areaLoss', node, 4, profile.split.areaLossMean, profile.split.areaLossDeviation,
     ...profile.split.areaLossBounds,
   );
-  const mainShare = boundedNormal(
-    node, 5, profile.split.mainAreaShareMean, profile.split.mainAreaShareDeviation,
+  const mainShare = branchSample(
+    tree, 'mainAreaShare', node, 5, profile.split.mainAreaShareMean, profile.split.mainAreaShareDeviation,
     ...profile.split.mainAreaShareBounds,
   );
   const parentRadius = parent.transform[7];
@@ -848,6 +856,7 @@ export function createTreeGeometryPlannerReference(
     trunkShoots = true,
     foliageDensity = 1,
     scaffoldBranches = 0,
+    branching = {},
   } = {},
 ) {
   if (!Number.isSafeInteger(splitDepth) || splitDepth < 6 || splitDepth > 8) {
@@ -866,6 +875,11 @@ export function createTreeGeometryPlannerReference(
     throw new RangeError('tree scaffoldBranches must be an integer in [0, 4]');
   }
   const root = createConditionedRoot(identity);
+  if (!branching || typeof branching !== 'object' || Array.isArray(branching)) throw new Error('invalid branching controls');
+  const branchingControls = Object.freeze(Object.fromEntries(Object.entries(branching).map(([name, pdf]) => {
+    if (!['mainAngle', 'lateralAngle', 'areaLoss', 'mainAreaShare'].includes(name)) throw new Error(`unknown branching control ${name}`);
+    return [name, proGenDistributionReference(pdf)];
+  })));
   const planner = Object.freeze({
     kind: 'tree-geometry-planner:v1',
     identity: root,
@@ -882,6 +896,7 @@ export function createTreeGeometryPlannerReference(
     trunkShoots,
     foliageDensity,
     scaffoldBranches,
+    branching: branchingControls,
   });
   return planner;
 }

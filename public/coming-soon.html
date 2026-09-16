@@ -43,7 +43,7 @@
       <div class="session-picker" role="tablist" aria-label="Live research sessions">
         <button type="button" role="tab" aria-selected="true" data-session="material" data-src="./previews/0.6.0/live/material-wheel/?v=touch-physics-12">Water · Sand · Drum</button>
         <button type="button" role="tab" aria-selected="false" data-session="rocks" data-src="./previews/0.6.0/live/rocks/?v=touch-physics-11">Rigid Rocks</button>
-        <button type="button" role="tab" aria-selected="false" data-session="tree" data-src="./previews/0.6.0/live/tree/?v=touch-physics-12">Tree · Grass · Wind</button>
+        <button type="button" role="tab" aria-selected="false" data-session="tree" data-src="./previews/0.6.0/live/tree/?v=pro-gen-1">Tree · Grass · Wind</button>
       </div>
       <section class="session-shell" aria-label="Selected live session">
         <iframe id="session-frame" title="Water, sand, and rotating drum live session" src="./previews/0.6.0/live/material-wheel/?v=touch-physics-12" allow="fullscreen" scrolling="no"></iframe>
@@ -57,7 +57,7 @@
     const descriptions = {
       material: ['Water, sand, and rotating drum live session', 'Choose water or sand, expose the particles, and rotate the large circular drum. Its short disconnected baffles catch and release the material.'],
       rocks: ['Five 3D rock pile live session', 'Touch one of the five generated stones, lift it straight up, and release it to drop back into the pile.'],
-      tree: ['Tree, grass, and local wind live session', 'Swipe to orbit the cached generated 3D tree. Invisible wind parcels transfer momentum locally to the tree and camera-demanded grass.'],
+      tree: ['Tree, grass, and local wind live session', 'Choose a seeded branch and leaf distribution, then swipe to orbit the cached 3D tree. Invisible wind parcels transfer momentum locally to the tree and camera-demanded grass.'],
     };
     const frame = document.getElementById('session-frame');
     const description = document.getElementById('session-description');
