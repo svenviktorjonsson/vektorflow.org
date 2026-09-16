@@ -1,11 +1,12 @@
 // Immutable initial shape producer, not a simulation or runtime integrator.
 import { mkdir,writeFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
+const surfaceContacts=!process.argv.includes('--legacy');
 const centers=[[-1.12,0,.69],[0,.08,.91],[1.15,0,.65],[-.63,0,2.15],[.64,0,2.04]];
 const sizes=[.72,.91,.64,.54,.44],colors=[[.39,.40,.38],[.24,.25,.23],[.49,.39,.31],[.58,.56,.49],[.36,.38,.35]];
 const hash=x=>{x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return (x^(x>>>16))>>>0;};
 const unit=x=>hash(x)/4294967296;
-const chunks=[];let vertices=0,indices=0;
+const chunks=[],supports=[];let vertices=0,indices=0;
 for(let i=0;i<5;i++){
   const center=centers[i],lat=40,lon=64,seed=hash(8187+i*1193),positions=[],triangles=[];
   const terms=Array.from({length:5},(_,k)=>({n:1+k%3,m:1+k%4,a:(.045+unit(seed+k)*.055)*(k%2?1:-1),phase:unit(seed+k*17)*Math.PI*2}));
@@ -27,6 +28,17 @@ for(let i=0;i<5;i++){
     data.set([...p,...n.map(v=>v/length),...colors[i].map(v=>v+noise),1],j*10);
   }
   const source={indices:new Uint32Array(triangles)};
+  // Place the initial pile on its actual surface, not a spherical height proxy.
+  // This is an offline initial-condition calculation, never an animation.
+  if(surfaceContacts)center[2]=-Math.min(...positions.map(p=>p[2]));
+  if(surfaceContacts&&i>=3)for(const p of positions){const x=p[0]+center[0],y=p[1]+center[1];for(const base of supports){for(let t=0;t<base.indices.length;t+=3){
+    const a=base.positions[base.indices[t]],b=base.positions[base.indices[t+1]],c=base.positions[base.indices[t+2]],px=x-base.center[0],py=y-base.center[1];
+    if(px<Math.min(a[0],b[0],c[0])||px>Math.max(a[0],b[0],c[0])||py<Math.min(a[1],b[1],c[1])||py>Math.max(a[1],b[1],c[1]))continue;
+    const denominator=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);if(Math.abs(denominator)<1e-12)continue;
+    const u=((b[1]-c[1])*(px-c[0])+(c[0]-b[0])*(py-c[1]))/denominator,v=((c[1]-a[1])*(px-c[0])+(a[0]-c[0])*(py-c[1]))/denominator;
+    if(u>=0&&v>=0&&u+v<=1)center[2]=Math.max(center[2],base.center[2]+u*a[2]+v*b[2]+(1-u-v)*c[2]-p[2]);
+  }}}
+  supports.push({positions,indices:source.indices,center});
   const hull=[];let radius=0;for(let j=0;j<data.length;j+=10)radius=Math.max(radius,Math.hypot(data[j],data[j+1],data[j+2]));
   for(let k=0;k<96;k++){const z=1-2*k/95,theta=k*2.399963229728653,r=Math.sqrt(1-z*z),n=[r*Math.cos(theta),r*Math.sin(theta),z];let best=-Infinity,at=0;
     for(let j=0;j<data.length;j+=10){const d=data[j]*n[0]+data[j+1]*n[1]+data[j+2]*n[2];if(d>best){best=d;at=j;}}
@@ -42,5 +54,5 @@ for(let i=0;i<5;i++){
 }
 const header=Buffer.alloc(20);header.write('VFTREE02');header.writeUInt32LE(5,8);header.writeUInt32LE(vertices,12);header.writeUInt32LE(indices,16);
 await mkdir(new URL('../public/previews/0.6.0/live/rocks/assets/',import.meta.url),{recursive:true});
-const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/rigid-stones.bin.gz',import.meta.url),output);
+const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-surface.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
 console.log(JSON.stringify({centers,vertices,indices,compressedBytes:output.length}));

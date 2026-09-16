@@ -12,12 +12,12 @@
       }
     },
     "stones": {
-      "wasm": "634e8ed85af21e8d69664980de043566fffe018758fb999e6cf244afef381658",
-      "manifest": "db01227082eab47a7c7b410d21aec6ffeb399697c1d3921cd8dc39924ae93e6d",
+      "wasm": "7e0acd9ea25fbc114aeb4d7aedcc331fa6672ea0aa804ce25d26659e3c2709f8",
+      "manifest": "8f1c91164d586b2206da2138fc79e1cc4383eb2037a950bf023a5b7761343f96",
       "sources": {
-        "geometry.vkf": "63aa4fbdcd1b27d821880502eea7a0a8742932006a1987a563569595feb94c0b",
+        "geometry.vkf": "713a86000beee5f6985fd7daaacb8ca3b236ae359c95be50500ca24cbdc33737",
         "main.vkf": "b70eb3a7819d24b0873f31cd0d2b0ac86b6055cfcd4913b08395d051fd2075e1",
-        "materials.vkf": "360a4e44286231d157e27037ea2c1a713ee47615da23b8fbba81f126d84450ec"
+        "materials.vkf": "17cf0972d79d7d32078961b9e2f818eaabd0324498880f51f707004e75fef3ca"
       }
     },
     "tree": {
@@ -47,5 +47,12 @@
     "vf-world-mechanical-runtime.mjs": "6203a3702cdef4110899e578b2df1d44bf97dc09f1440d07da1da816643e4e85",
     "vf-world-mechanical-gpu.mjs": "3b0ed067970112955edc50daa5c9aa6a78a940e1a5649945ace3f7279ddbc875",
     "vf-world-scene-embedding-gpu.mjs": "04b93c27bbc66b156ece8e78cd27e7256efe5b19a65a55c9df92a34c967388b1"
+  },
+  "assets": {
+    "previews/0.6.0/live/rocks/assets/rigid-stones-surface.bin.gz": "56b97b8208d0d964c5ba4a4cb03433528774df50c54bb599159ea717a1593c33",
+    "previews/0.6.0/live/tree/assets/tree-mesh.bin.gz": "f33ce4c88ef43d1a64606a824edde435d134fb405881fdf56ac5655fbf52e2b9",
+    "previews/0.6.0/live/tree/assets/tree-mesh-normal.bin.gz": "5fe0966e049b3381d7d97b0f02a2d6b665ea7568c3e6d5bcd0e186b7a320d8cd",
+    "previews/0.6.0/live/tree/assets/tree-mesh-triangular.bin.gz": "b0b19f5dd5b9d50e354ef9a282983c5246978b0791590f3f5169d7869cf87e81",
+    "previews/0.6.0/live/tree/assets/tree-mesh-uniform.bin.gz": "c53bc824fade2e7744939ec727d76fb8a37ce13a11733453c9bf8bf7bedd8dde"
   }
 }

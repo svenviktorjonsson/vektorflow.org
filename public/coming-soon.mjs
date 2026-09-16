@@ -13,7 +13,7 @@ function mountSourceTabs({ id, files }) {
   const cache = new Map(); let request = 0;
   async function select(index, focus = false) {
     const current = ++request; const name = files[index];
-    const url = `./sources/coming-soon/${id}/${name}`;
+    const url = `./sources/coming-soon/${id}/${name}?v=surface-contacts-2`;
     for (const [i, button] of [...tabs.children].entries()) {
       button.setAttribute('aria-selected', String(i === index)); button.tabIndex = i === index ? 0 : -1;
     }

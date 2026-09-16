@@ -1,11 +1,11 @@
 {
-  "artifact_content_sha256": "e0b380f73f55ff5b",
+  "artifact_content_sha256": "9b61c672d5b9b2cc",
   "artifact_kind": "wasm",
   "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\.vkf-coming-snapshot\\examples\\world-stones\\.vkfbuild\\main\\main.wasm",
   "compiler_version": "vkf-wasm-artifact-smoke-0.2",
   "dependencies": [],
-  "manifest_hash": "7e107e0e0fdabd5a",
-  "runtime_hash": "e0b380f73f55ff5b",
+  "manifest_hash": "c4a2d580c97f61b8",
+  "runtime_hash": "9b61c672d5b9b2cc",
   "runtime_surface": {
     "bindings": [
       {
@@ -122,5 +122,5 @@
   "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\.vkf-coming-snapshot\\examples\\world-stones\\main.vkf",
   "source_sha256": "e6bcfbc385baf401",
   "status": "compiled",
-  "typed_ir_sha256": "7ea8b5be25902577"
+  "typed_ir_sha256": "65068d4f636c9ea1"
 }
