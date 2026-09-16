@@ -50,15 +50,15 @@ export const GRANULAR_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   particleDensity: 1600,
   gravity: Object.freeze([0, -9.82]),
   timeStep: 1 / 240,
-  friction: 0.58,
-  boundaryFriction: 0.62,
-  rollingResistance: 0,
-  restitution: 0.015,
-  projectionRelaxation: 0.92,
-  contactIterations: 6,
+  friction: 0.82,
+  boundaryFriction: 0.55,
+  rollingResistance: 0.14,
+  restitution: 0.005,
+  projectionRelaxation: 0.96,
+  contactIterations: 8,
   gridRebuildInterval: 1,
   contactSlop: 0.000002,
-  linearDamping: 0.035,
+  linearDamping: 0.14,
   maximumParticlesPerCell: 16,
   worldMinimum: Object.freeze([-0.70, -0.22]),
   worldMaximum: Object.freeze([0.70, 0.86]),
@@ -203,10 +203,43 @@ export function normalizeGranularParticleWorldGpuPolicy(overrides = {}) {
 
 export function createGranularParticleWorldGpuSeedReference(options = {}) {
   const policy = normalizeGranularParticleWorldGpuPolicy(options);
-  const count = policy.columns * policy.rows;
   const diameter = policy.grainRadius * 2;
   const spacing = diameter * (1 + policy.seedGap);
   const rowPitch = spacing * Math.sqrt(3) * 0.5;
+  const initialWheelAngle = 0.22;
+  const contactRadius = policy.grainRadius + 0.012;
+  const baffles = [
+    [[0.500, 0.000], [0.350, 0.000]], [[0.000, 0.500], [0.000, 0.350]],
+    [[-0.500, 0.000], [-0.350, 0.000]], [[0.000, -0.500], [0.000, -0.350]],
+    [[-0.220, 0.175], [-0.075, 0.135]], [[0.075, -0.055], [0.215, -0.115]],
+    [[-0.105, -0.250], [0.020, -0.155]],
+  ];
+  const rotate = ([x, y]) => [Math.cos(initialWheelAngle) * x
+    - Math.sin(initialWheelAngle) * y,
+  Math.sin(initialWheelAngle) * x + Math.cos(initialWheelAngle) * y];
+  const distanceToSegment = ([x, y], a, b) => {
+    const dx = b[0] - a[0]; const dy = b[1] - a[1];
+    const along = Math.max(0, Math.min(1,
+      ((x - a[0]) * dx + (y - a[1]) * dy) / Math.max(dx * dx + dy * dy, 1e-12)));
+    return Math.hypot(x - (a[0] + dx * along), y - (a[1] + dy * along));
+  };
+  const candidates = [];
+  for (let row = 0; row < policy.rows; row += 1) {
+    for (let column = 0; column < policy.columns; column += 1) {
+      const point = [policy.seedMinimum[0] + column * spacing
+        + (row & 1) * spacing * 0.5,
+      policy.seedMinimum[1] + row * rowPitch];
+      if (Math.hypot(point[0], point[1] - 0.32) > 0.50 - contactRadius) continue;
+      const overlapsBaffle = baffles.some(([localA, localB]) => {
+        const rotatedA = rotate(localA); const rotatedB = rotate(localB);
+        return distanceToSegment(point, [rotatedA[0], rotatedA[1] + 0.32],
+          [rotatedB[0], rotatedB[1] + 0.32]) < contactRadius;
+      });
+      if (!overlapsBaffle) candidates.push(point);
+    }
+  }
+  const count = candidates.length;
+  if (count < 1) throw new RangeError('Granular drum seed contains no valid grains');
   const particleMass = policy.particleDensity * Math.PI * policy.grainRadius ** 2;
   const contactLaw = createCohesionlessGranularContactLawReference({
     friction: policy.friction,
@@ -232,12 +265,8 @@ export function createGranularParticleWorldGpuSeedReference(options = {}) {
   const bytes = new ArrayBuffer(count * GRANULAR_PARTICLE_WORLD_GPU_ABI.particleStrideBytes);
   const floats = new Float32Array(bytes);
   const integers = new Uint32Array(bytes);
-  for (let row = 0; row < policy.rows; row += 1) {
-    for (let column = 0; column < policy.columns; column += 1) {
-      const grain = row * policy.columns + column;
-      const x = policy.seedMinimum[0] + column * spacing
-        + (row & 1) * spacing * 0.5;
-      const y = policy.seedMinimum[1] + row * rowPitch;
+  for (let grain = 0; grain < candidates.length; grain += 1) {
+      const [x, y] = candidates[grain];
       const offset = grain * stride;
       floats[offset] = x;
       floats[offset + 1] = y;
@@ -252,7 +281,6 @@ export function createGranularParticleWorldGpuSeedReference(options = {}) {
       referenceState.positions[referenceOffset + 1] = 0;
       referenceState.positions[referenceOffset + 2] = y;
       referenceState.ids[grain] = grain;
-    }
   }
   referenceState.stateHash = hashPhysicsStateBufferReference(referenceState);
   const initialContacts = enumerateGranularSphereContactPairsReference({
@@ -275,6 +303,7 @@ export function createGranularParticleWorldGpuSeedReference(options = {}) {
     diameter,
     spacing,
     rowPitch,
+    filteredWheelOverlapCount: policy.columns * policy.rows - count,
     minimumSeedSeparation: spacing,
     initialOverlapPairCount: initialContacts.length,
     particleMass,
@@ -303,6 +332,13 @@ struct Params {
   material: vec4<f32>,
   force: vec4<f32>,
   solver: vec4<f32>,
+};
+
+struct WheelContact {
+  is_active: u32,
+  kind: u32,
+  normal: vec2<f32>,
+  surface_velocity: vec2<f32>,
 };
 
 @group(0) @binding(0) var<storage, read> source_grains: array<Grain>;
@@ -472,6 +508,45 @@ fn project_wheel(position_input: vec2<f32>) -> vec2<f32> {
     }
   }
   return position;
+}
+
+fn sample_wheel_contact(position: vec2<f32>, tolerance: f32) -> WheelContact {
+  let contact_radius = params.material.x + WHEEL_BAR_HALF_WIDTH;
+  var best_gap = MAX_F32;
+  var result = WheelContact(0u, 0u, vec2<f32>(0.0), vec2<f32>(0.0));
+  for (var segment = 0u; segment < 7u; segment = segment + 1u) {
+    let local = baffle(segment);
+    let a = WHEEL_CENTER + rotate_local(local.xy, params.solver.z);
+    let b = WHEEL_CENTER + rotate_local(local.zw, params.solver.z);
+    let edge = b - a;
+    let tangent = normalize(edge);
+    let along = clamp(dot(position - a, edge) / max(dot(edge, edge), 1.0e-8), 0.0, 1.0);
+    let closest = a + edge * along;
+    let separation = position - closest;
+    let distance = length(separation);
+    let gap = distance - contact_radius;
+    if (gap <= tolerance && gap < best_gap) {
+      let normal = select(vec2<f32>(-tangent.y, tangent.x),
+        separation / max(distance, 1.0e-8), distance > 1.0e-8);
+      let radius_vector = closest - WHEEL_CENTER;
+      let surface_velocity = params.solver.w
+        * vec2<f32>(-radius_vector.y, radius_vector.x);
+      result = WheelContact(1u, 2u, normal, surface_velocity);
+      best_gap = gap;
+    }
+  }
+  let radial = position - WHEEL_CENTER;
+  let radial_length = length(radial);
+  let rim_limit = WHEEL_RADIUS - contact_radius;
+  let rim_gap = rim_limit - radial_length;
+  if (rim_gap <= tolerance && rim_gap < best_gap) {
+    let outward = radial / max(radial_length, 1.0e-8);
+    let radius_vector = outward * WHEEL_RADIUS;
+    let surface_velocity = params.solver.w
+      * vec2<f32>(-radius_vector.y, radius_vector.x);
+    result = WheelContact(1u, 1u, -outward, surface_velocity);
+  }
+  return result;
 }
 
 @compute @workgroup_size(128)
@@ -665,14 +740,21 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
         let other_velocity = (other.position - other.previous_position) / params.force.z;
         let relative_velocity = velocity - other_velocity;
         let normal_speed = dot(relative_velocity, normal);
-        if (normal_speed >= 0.0) { continue; }
-        let normal_impulse = -0.5 * (1.0 + params.material.z) * normal_speed;
-        velocity_delta = velocity_delta + normal * normal_impulse;
+        var normal_impulse = 0.0;
+        if (normal_speed < 0.0) {
+          normal_impulse = -0.5 * (1.0 + params.material.z) * normal_speed;
+          velocity_delta = velocity_delta + normal * normal_impulse;
+        }
         let tangent_velocity = relative_velocity - normal * normal_speed;
         let tangent_speed = length(tangent_velocity);
         if (tangent_speed > 1.0e-12) {
+          // Resting grains still carry normal load. Including the gravity load
+          // gives the contact network a true static Coulomb yield threshold,
+          // so a heap keeps its angle of repose instead of flowing like water.
+          let support_impulse = max(normal_impulse,
+            max(0.0, -dot(params.force.xy * params.force.z, normal)) * 0.5);
           let tangent_impulse = min(tangent_speed * 0.5,
-            params.material.y * normal_impulse);
+            params.material.y * support_impulse);
           velocity_delta = velocity_delta - tangent_velocity / tangent_speed * tangent_impulse;
         }
         impulse_contact_count = impulse_contact_count + 1u;
@@ -704,6 +786,37 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let normal_speed = velocity.y;
     velocity.y = -normal_speed * params.material.z;
     velocity.x = velocity.x * max(0.0, 1.0 - params.solver.y);
+  }
+  let wheel_contact = sample_wheel_contact(grain.position, tolerance);
+  if (wheel_contact.is_active != 0u) {
+    var relative_velocity = velocity - wheel_contact.surface_velocity;
+    let normal_speed = dot(relative_velocity, wheel_contact.normal);
+    var normal_impulse = 0.0;
+    if (normal_speed < 0.0) {
+      normal_impulse = -(1.0 + params.material.z) * normal_speed;
+      relative_velocity = relative_velocity
+        + wheel_contact.normal * normal_impulse;
+    }
+    let tangent_velocity = relative_velocity
+      - wheel_contact.normal * dot(relative_velocity, wheel_contact.normal);
+    let tangent_speed = length(tangent_velocity);
+    if (tangent_speed > 1.0e-12) {
+      // The drum rim is smooth and cannot hold a vertical sand coating. The
+      // internal baffles retain ordinary boundary friction so they can lift
+      // and release grains as intended.
+      let friction = select(params.solver.y, 0.025, wheel_contact.kind == 1u);
+      let support_impulse = max(normal_impulse,
+        max(0.0, -dot(params.force.xy * params.force.z, wheel_contact.normal)));
+      relative_velocity = relative_velocity - tangent_velocity / tangent_speed
+        * min(tangent_speed, friction * support_impulse);
+    }
+    velocity = wheel_contact.surface_velocity + relative_velocity;
+  }
+  // Rolling resistance is represented as low-speed contact damping in this
+  // 2D sphere specialization. It arrests settled piles without damping grains
+  // that are airborne or avalanching above the yield threshold.
+  if (grain.contact_count > 1u && length(velocity) < 0.14) {
+    velocity = velocity * 0.72;
   }
   grain.velocity = velocity;
   record_nonfinite(grain);

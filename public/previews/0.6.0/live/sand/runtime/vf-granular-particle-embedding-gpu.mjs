@@ -1,4 +1,5 @@
 const PARTICLE_STRIDE_BYTES = 32;
+const GRANULAR_FIELD_FORMAT_GPU = 'rgba16float';
 
 const DEFAULT_COLORS = Object.freeze({
   air: Object.freeze([0.035, 0.043, 0.048, 1]),
@@ -46,10 +47,21 @@ struct GrainOut {
   @location(1) area_scale: f32,
   @interpolate(flat) @location(2) id: u32,
   @interpolate(flat) @location(3) contact_count: u32,
+  @location(4) world_position: vec2<f32>,
+  @location(5) velocity: vec2<f32>,
+};
+
+struct DensitySplatOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) local: vec2<f32>,
+  @location(1) velocity: vec2<f32>,
+  @location(2) contact_count: f32,
 };
 
 @group(0) @binding(0) var<storage, read> grains: array<Grain>;
 @group(0) @binding(1) var<uniform> params: RenderParams;
+@group(0) @binding(2) var field_texture: texture_2d<f32>;
+@group(0) @binding(3) var field_sampler: sampler;
 
 fn world_to_clip(world: vec2<f32>) -> vec2<f32> {
   return (world - params.view.xy) / (params.view.zw - params.view.xy) * 2.0 - 1.0;
@@ -123,20 +135,61 @@ fn grain_vertex(@builtin(vertex_index) vertex_index: u32,
   let local = quad_corner(vertex_index);
   let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
   let physical_radius = params.canvas.w;
-  // The solver keeps the full contact radius; only the embedding is reduced
-  // so the material reads as fine sand rather than a bed of large beads.
-  let visible_radius = max(physical_radius * 0.42, pixel_world * 0.42);
-  // Inflate subpixel footprints only for rasterization; inverse-square alpha
-  // keeps their approximate integrated coverage instead of growing sand mass.
-  let ratio = physical_radius / visible_radius;
+  let particle_mode = params.canvas.z > 0.5;
+  // Material mode embeds the discrete state as an overlapping density field;
+  // particle mode exposes the actual contact disks. These are two views of
+  // the same solver state, not two different grain sizes.
+  let visible_radius = select(max(physical_radius * 1.62, pixel_world * 1.35),
+    max(physical_radius, pixel_world * 0.72), particle_mode);
+  let speed = length(grain.velocity);
+  let motion_direction = select(vec2<f32>(0.0, 1.0), grain.velocity / max(speed, 1.0e-6),
+    speed > 1.0e-6);
+  let motion_normal = vec2<f32>(-motion_direction.y, motion_direction.x);
+  let stretch = select(1.0 + clamp(speed * 0.10, 0.0, 0.65), 1.0, particle_mode);
+  let offset = select((motion_normal * local.x + motion_direction * local.y * stretch)
+    * visible_radius, local * visible_radius, particle_mode);
+  let world_position = grain.position + offset;
   var output: GrainOut;
-  output.position = vec4<f32>(world_to_clip(grain.position + local * visible_radius),
+  output.position = vec4<f32>(world_to_clip(world_position),
     0.0, 1.0);
   output.local = local;
-  output.area_scale = min(1.0, ratio * ratio);
+  output.area_scale = 1.0;
   output.id = grain.id;
   output.contact_count = grain.contact_count;
+  output.world_position = world_position;
+  output.velocity = grain.velocity;
   return output;
+}
+
+@vertex
+fn density_vertex(@builtin(vertex_index) vertex_index: u32,
+  @builtin(instance_index) instance_index: u32) -> DensitySplatOut {
+  let grain = grains[instance_index];
+  let local = quad_corner(vertex_index);
+  let speed = length(grain.velocity);
+  let motion_direction = select(vec2<f32>(0.0, 1.0),
+    grain.velocity / max(speed, 1.0e-6), speed > 1.0e-6);
+  let motion_normal = vec2<f32>(-motion_direction.y, motion_direction.x);
+  // A reconstruction support of roughly 2.35 grain spacings matches the
+  // continuous liquid embedding. The physical contact radius is unchanged.
+  let radius = params.canvas.w * 4.75;
+  let stretch = 1.0 + clamp(speed * 0.075, 0.0, 0.52);
+  let offset = (motion_normal * local.x + motion_direction * local.y * stretch) * radius;
+  var output: DensitySplatOut;
+  output.position = vec4<f32>(world_to_clip(grain.position + offset), 0.0, 1.0);
+  output.local = local;
+  output.velocity = grain.velocity;
+  output.contact_count = f32(grain.contact_count);
+  return output;
+}
+
+@fragment
+fn density_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
+  let radius_squared = dot(input.local, input.local);
+  if (radius_squared >= 1.0) { discard; }
+  let weight = pow(1.0 - radius_squared, 3.0);
+  return vec4<f32>(weight, input.velocity * weight,
+    input.contact_count * weight);
 }
 
 fn fresnel_schlick(cosine: f32, f0: f32) -> f32 {
@@ -217,23 +270,137 @@ fn sand_shading(local: vec2<f32>, id: u32, contact_count: u32) -> vec3<f32> {
     + vec3<f32>((specular * 0.62 + glint) * params.light.w);
 }
 
+fn pixel_noise(pixel: vec2<f32>, phase: u32) -> f32 {
+  let x = u32(max(pixel.x, 0.0));
+  let y = u32(max(pixel.y, 0.0));
+  return stable_unit((x * 0x9e3779b9u) ^ (y * 0x85ebca6bu)
+    ^ (phase * 0xc2b2ae35u));
+}
+
+fn field_at(uv: vec2<f32>) -> vec4<f32> {
+  return textureSampleLevel(field_texture, field_sampler,
+    clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
+}
+
+@fragment
+fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
+  let uv = input.position.xy / params.canvas.xy;
+  let field = field_at(uv);
+  let density = field.x;
+  let edge_width = max(fwidth(density) * 1.35, 0.026);
+  let coverage = smoothstep(1.18 - edge_width, 1.18 + edge_width, density);
+
+  let screen_uv = input.position.xy / params.canvas.xy;
+  let world = vec2<f32>(
+    mix(params.view.x, params.view.z, screen_uv.x),
+    mix(params.view.w, params.view.y, screen_uv.y));
+  let view_height = max(params.view.w - params.view.y, 1.0e-6);
+  let vertical = clamp((world.y - params.view.y) / view_height, 0.0, 1.0);
+  let background = params.air_color.rgb * mix(0.68, 1.16, vertical);
+  if (coverage <= 0.001) { return vec4<f32>(background, 1.0); }
+
+  let texel = 1.0 / params.canvas.xy;
+  let gradient_step = texel * 2.0;
+  let density_left = field_at(uv - vec2<f32>(gradient_step.x, 0.0)).x;
+  let density_right = field_at(uv + vec2<f32>(gradient_step.x, 0.0)).x;
+  let density_up = field_at(uv - vec2<f32>(0.0, gradient_step.y)).x;
+  let density_down = field_at(uv + vec2<f32>(0.0, gradient_step.y)).x;
+  let gradient = vec2<f32>(density_right - density_left,
+    density_down - density_up);
+  let normal = normalize(vec3<f32>(-gradient.x * 2.4,
+    gradient.y * 2.4, 1.0));
+  let light_direction = normalize(params.light.xyz);
+  let diffuse = 0.42 + 0.58 * max(dot(normal, light_direction), 0.0);
+
+  let velocity = field.yz / max(density, 1.0e-5);
+  let speed = length(velocity);
+  let motion = smoothstep(0.035, 0.82, speed);
+  let direction = select(vec2<f32>(0.0, 1.0), velocity / max(speed, 1.0e-6),
+    speed > 1.0e-6);
+  let across = vec2<f32>(-direction.y, direction.x);
+  let time = params.floor_color.w;
+  let settled_phase = u32(floor(time * 1.2));
+  let moving_phase = u32(floor(time * (7.0 + speed * 10.0)));
+  let phase = select(settled_phase, moving_phase, motion > 0.04);
+  let pixel = floor(input.position.xy);
+  let fine = pixel_noise(pixel, phase);
+  let fine_next = pixel_noise(pixel + direction, phase + 1u);
+  let mineral_noise = pixel_noise(floor(pixel * 0.37), 0u);
+  let stream = 0.5 + 0.5 * sin(dot(pixel, across) * 2.9
+    - time * speed * 27.0 + fine * 3.4);
+
+  var sand = params.sand_color.rgb * (0.91 + fine * 0.12);
+  sand = mix(sand, vec3<f32>(0.80, 0.71, 0.55),
+    smoothstep(0.965, 0.998, mineral_noise) * 0.38);
+  let contacts = field.w / max(density, 1.0e-5);
+  let contact_ao = mix(1.0, 0.88, clamp(contacts / 12.0, 0.0, 1.0));
+  sand *= diffuse * contact_ao;
+  sand *= 0.96 + 0.08 * mix(fine, stream, motion);
+
+  let sparkle = smoothstep(0.982, 0.9995, fine);
+  let motion_shimmer = abs(fine - fine_next) * motion;
+  let glimmer = sparkle * (0.16 + params.material.w * 0.72)
+    + motion_shimmer * 0.15;
+  sand += vec3<f32>(1.0, 0.84, 0.56) * glimmer * params.light.w;
+  return vec4<f32>(mix(background, sand, coverage), 1.0);
+}
+
+fn sand_material_shading(input: GrainOut) -> vec3<f32> {
+  let speed = length(input.velocity);
+  let motion = smoothstep(0.04, 0.85, speed);
+  let direction = select(vec2<f32>(0.0, 1.0), input.velocity / max(speed, 1.0e-6),
+    speed > 1.0e-6);
+  let cross_direction = vec2<f32>(-direction.y, direction.x);
+  let time = params.floor_color.w;
+  let settled_phase = u32(floor(time * 1.5));
+  let moving_phase = u32(floor(time * (5.0 + speed * 7.0)));
+  let phase = select(settled_phase, moving_phase, motion > 0.05);
+  let fine = pixel_noise(floor(input.position.xy), phase);
+  let neighbor_fine = pixel_noise(floor(input.position.xy) + vec2<f32>(1.0, 0.0), phase);
+  let stream_phase = dot(input.position.xy, cross_direction) * 2.35
+    - time * speed * 18.0 + stable_unit(input.id ^ 0xa511e9b3u) * 6.28318531;
+  let stream_detail = sin(stream_phase) * 0.5 + 0.5;
+  let mineral_variation = pixel_noise(floor(input.position.xy * 0.5), 0u);
+  var mineral = params.sand_color.rgb * (0.94 + fine * 0.10);
+  mineral = mix(mineral, vec3<f32>(0.78, 0.69, 0.52),
+    smoothstep(0.965, 0.998, mineral_variation) * 0.42);
+  let contact_ao = mix(1.0, 0.95,
+    clamp(f32(input.contact_count) / 12.0, 0.0, 1.0));
+  let light_direction = normalize(params.light.xyz);
+  let surface_normal = normalize(vec3<f32>(input.local * 0.025, 1.0));
+  let diffuse = 0.38 + 0.62 * max(dot(surface_normal, light_direction), 0.0);
+  var color = mineral * diffuse * contact_ao;
+  color = color * (0.94 + 0.10 * mix(fine, stream_detail, motion));
+  // Sparse sub-grain highlights form a high-frequency mineral glimmer. During
+  // pouring the neighboring-pixel difference becomes a directional shimmer,
+  // preserving motion below the physical grain footprint.
+  let sparkle_gate = smoothstep(0.975, 0.999, fine);
+  let motion_shimmer = abs(fine - neighbor_fine) * motion;
+  let glimmer = (sparkle_gate * (0.22 + params.material.w)
+    + motion_shimmer * 0.20) * params.light.w;
+  return color + vec3<f32>(1.0, 0.84, 0.55) * glimmer;
+}
+
 @fragment
 fn grain_fragment(input: GrainOut) -> @location(0) vec4<f32> {
   let radial = length(input.local);
   let aa = max(fwidth(radial) * 1.15, 1.0e-4);
-  let coverage = (1.0 - smoothstep(1.0 - aa, 1.0 + aa, radial))
+  let particle_mode = params.canvas.z > 0.5;
+  let material_coverage = (1.0 - smoothstep(0.80 - aa, 1.03 + aa, radial))
     * input.area_scale;
+  let particle_coverage = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, radial);
+  let coverage = select(material_coverage, particle_coverage, particle_mode);
   if (coverage <= 0.001) { discard; }
 
   var color: vec3<f32>;
-  if (params.canvas.z > 0.5) {
+  if (particle_mode) {
     let radius_squared = min(dot(input.local, input.local), 1.0);
     let dome = sqrt(max(1.0 - radius_squared, 0.0));
     let contact = clamp(f32(input.contact_count) / 8.0, 0.0, 1.0);
     color = mix(params.particle_color.rgb,
       vec3<f32>(1.0, 0.46, 0.16), contact * 0.58) * (0.66 + 0.34 * dome);
   } else {
-    color = sand_shading(input.local, input.id, input.contact_count);
+    color = sand_material_shading(input);
   }
   return vec4<f32>(color * coverage, coverage);
 }
@@ -400,6 +567,34 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     },
     primitive: { topology: 'triangle-strip' },
   });
+  const densityPipeline = await device.createRenderPipelineAsync({
+    label: 'VKF Granular full-resolution density field',
+    layout: 'auto',
+    vertex: { module: shader, entryPoint: 'density_vertex' },
+    fragment: {
+      module: shader,
+      entryPoint: 'density_fragment',
+      targets: [{
+        format: GRANULAR_FIELD_FORMAT_GPU,
+        blend: {
+          color: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+          alpha: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+        },
+      }],
+    },
+    primitive: { topology: 'triangle-strip' },
+  });
+  const compositePipeline = await device.createRenderPipelineAsync({
+    label: 'VKF Granular continuous material composite',
+    layout: 'auto',
+    vertex: { module: shader, entryPoint: 'fullscreen_vertex' },
+    fragment: {
+      module: shader,
+      entryPoint: 'material_composite_fragment',
+      targets: [{ format }],
+    },
+    primitive: { topology: 'triangle-list' },
+  });
 
   const paramsBuffer = createBuffer(device, 'VKF Granular embedding params', 160,
     GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
@@ -421,10 +616,19 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       { binding: 1, resource: { buffer: paramsBuffer } },
     ],
   });
+  const fieldSampler = device.createSampler({
+    label: 'VKF Granular density field sampler',
+    magFilter: 'linear',
+    minFilter: 'linear',
+  });
 
   let width = 0;
   let height = 0;
   let configured = false;
+  let densityTexture = null;
+  let densityView = null;
+  let densityBindGroup = null;
+  let compositeBindGroup = null;
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
@@ -439,11 +643,36 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     canvas.width = width;
     canvas.height = height;
     context.configure({ device, format, alphaMode: 'opaque' });
+    densityTexture?.destroy();
+    densityTexture = device.createTexture({
+      label: 'VKF Granular density and motion field',
+      size: [width, height],
+      format: GRANULAR_FIELD_FORMAT_GPU,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    densityView = densityTexture.createView();
+    densityBindGroup = device.createBindGroup({
+      label: 'VKF Granular density field bindings',
+      layout: densityPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: storageBinding },
+        { binding: 1, resource: { buffer: paramsBuffer } },
+      ],
+    });
+    compositeBindGroup = device.createBindGroup({
+      label: 'VKF Granular material composite bindings',
+      layout: compositePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 1, resource: { buffer: paramsBuffer } },
+        { binding: 2, resource: densityView },
+        { binding: 3, resource: fieldSampler },
+      ],
+    });
     configured = true;
     return true;
   };
 
-  const updateParams = (mode) => {
+  const updateParams = (mode, time) => {
     const { policy } = worldRuntime;
     const centerX = (policy.viewMinimum[0] + policy.viewMaximum[0]) * 0.5;
     const centerY = (policy.viewMinimum[1] + policy.viewMaximum[1]) * 0.5;
@@ -463,7 +692,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       policy.worldMaximum[0], policy.worldMaximum[1]], 12);
     values.set(colors.air, 16);
     values.set(colors.wall, 20);
-    values.set(colors.floor, 24);
+    values.set([colors.floor[0], colors.floor[1], colors.floor[2], time], 24);
     values.set(colors.sand, 28);
     values.set(colors.particles, 32);
     values.set([...lightDirection, lightIntensity], 36);
@@ -476,7 +705,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     }
   };
 
-  const render = (encoder, { mode = 'sand' } = {}) => {
+  const render = (encoder, { mode = 'sand', time = 0 } = {}) => {
     if (!encoder || typeof encoder.beginRenderPass !== 'function') {
       throw new TypeError('WebGPU command encoder required for granular embedding render');
     }
@@ -484,7 +713,22 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       throw new RangeError('Granular embedding mode must be sand or particles');
     }
     resize();
-    updateParams(mode);
+    updateParams(mode, Number.isFinite(time) ? time : 0);
+    if (mode === 'sand') {
+      const densityPass = encoder.beginRenderPass({
+        label: 'VKF Granular density accumulation pass',
+        colorAttachments: [{
+          view: densityView,
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        }],
+      });
+      densityPass.setPipeline(densityPipeline);
+      densityPass.setBindGroup(0, densityBindGroup);
+      densityPass.draw(4, particleCount);
+      densityPass.end();
+    }
     const pass = encoder.beginRenderPass({
       label: 'VKF Granular particle embedding pass',
       colorAttachments: [{
@@ -494,16 +738,25 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(backgroundPipeline);
-    pass.setBindGroup(0, backgroundBindGroup);
-    pass.draw(3);
-    pass.setPipeline(particlePipeline);
-    pass.setBindGroup(0, particleBindGroup);
-    pass.draw(4, particleCount);
+    if (mode === 'sand') {
+      pass.setPipeline(compositePipeline);
+      pass.setBindGroup(0, compositeBindGroup);
+      pass.draw(3);
+    } else {
+      pass.setPipeline(backgroundPipeline);
+      pass.setBindGroup(0, backgroundBindGroup);
+      pass.draw(3);
+      pass.setPipeline(particlePipeline);
+      pass.setBindGroup(0, particleBindGroup);
+      pass.draw(4, particleCount);
+    }
     pass.end();
   };
 
-  const destroy = () => paramsBuffer.destroy();
+  const destroy = () => {
+    densityTexture?.destroy();
+    paramsBuffer.destroy();
+  };
 
   resize();
   return Object.freeze({

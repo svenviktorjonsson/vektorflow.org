@@ -1,8 +1,8 @@
 import { createLiquidParticleWorldGpuRuntime } from './runtime/vf-liquid-particle-world-gpu.mjs?v=wheel-pressure-8';
 import { createLiquidParticleEmbeddingGpu } from './runtime/vf-liquid-particle-embedding-gpu.mjs';
 import { createFixedStepRealtimeClock } from './runtime/fixed-step-realtime-clock.mjs';
-import { createGranularParticleWorldGpuRuntime } from '../sand/runtime/vf-granular-particle-world-gpu.mjs';
-import { createGranularParticleEmbeddingGpu } from '../sand/runtime/vf-granular-particle-embedding-gpu.mjs';
+import { createGranularParticleWorldGpuRuntime } from '../sand/runtime/vf-granular-particle-world-gpu.mjs?v=sand-repose-10';
+import { createGranularParticleEmbeddingGpu } from '../sand/runtime/vf-granular-particle-embedding-gpu.mjs?v=sand-density-10';
 import { createWheelEmbeddingGpu } from './wheel-embedding-gpu.mjs';
 
 const canvas = document.getElementById('stage');
