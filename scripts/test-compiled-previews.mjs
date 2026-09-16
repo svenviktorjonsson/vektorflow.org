@@ -21,7 +21,7 @@ for(const {id,files} of applications){
   for(const name of files)assert.equal(hash(await readFile(new URL(`sources/coming-soon/${id}/${name}`,root))),record.sources[name]);
   const runtime=bridge.instantiateWasmRuntime({bytes,manifest:JSON.parse(manifestBytes)});runtime.init();const program=runtime.worldProgram();assert.ok(program.gpu_worlds.length);assert.ok(program.views.every(view=>view.axis===false));
   const arenas=runtime.worldLayerViews();assert.ok(arenas.every(arena=>arena.state.every(Number.isFinite)));
-  if(id==='wheel')for(const world of program.gpu_worlds){verifyInitialExclusion(world,arenas.find(a=>a.layer.id===world.layer_id));assert.match(runtime.readBinding(`$world$gpu$${world.world_id}$physics`),/fn exclusion_restore_frame/);}
+  if(id==='wheel')for(const world of program.gpu_worlds){verifyInitialExclusion(world,arenas.find(a=>a.layer.id===world.layer_id));const kernel=runtime.readBinding(`$world$gpu$${world.world_id}$physics`);assert.match(kernel,/fn motion_find_toi/);assert.match(kernel,/fn motion_bar_toi/);assert.match(kernel,/fn preventive_predict/);assert.match(kernel,/bitcast<u32>\(fraction\)&0x7fffffffu/);}
   if(id==='tree'){
     const world=program.gpu_worlds[0];for(const url of [world.solid_properties.asset,...Object.values(world.solid_properties.variants)]){
       const asset=decodeMeshes(await readFile(new URL(url.slice(1),root))),{initial,meshes}=prepareMechanicalInitialState(structuredClone(world),arenas,asset);assert.equal(initial.nodes.length,initial.nodeCount*16);assert.ok(initial.geometry.every(Number.isFinite));assert.ok(meshes.every(m=>m.vertices.every(Number.isFinite)&&m.vertices.length%24===0));
