@@ -1,5 +1,8 @@
 # The cached pro-gen variants initialize added geometry; they do not animate it.
 tree: (fixed:true,height:8,asset:"/previews/0.6.0/live/tree/assets/tree-mesh.bin.gz",variants:(uniform:"/previews/0.6.0/live/tree/assets/tree-mesh-uniform.bin.gz",normal:"/previews/0.6.0/live/tree/assets/tree-mesh-normal.bin.gz",triangular:"/previews/0.6.0/live/tree/assets/tree-mesh-triangular.bin.gz"))
-lawn: (fixed:true,count:81920)
-elastic: (fixed:true,mass:0.05,spring_constant:4,damping:0.65,elasticity:1)
-air: (density:1.225,mass:0.002,speed:3.5,v:[3.5,0,0],grid:[12,12,18],domain_min:[-6,-6,0],domain_span:[12,12,9])
+lawn: (fixed:true,count:81920,mass:0.08,spring_constant:40,damping:0.8)
+elastic: (fixed:true,density:850,young_modulus:2000000000,branch_radius:0.025,
+    branch_length:2,damping_ratio:0.2,elasticity:1)
+sun: (fixed:true,shape:"sphere",radius:0.55,emissivity:1,emission:[1,0.76,0.22],
+    color:[0.08,0.06,0.02,1],radiance:180)
+air: (density:1.225,speed:3.5,v:[3.5,0,0],grid:[12,12,18],domain_min:[-6,-6,0],domain_span:[12,12,9])

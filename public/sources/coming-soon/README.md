@@ -17,7 +17,10 @@ the runtime's transitive module dependencies together.
   Dragging prescribes a held position; releasing restores dynamic gravity.
 - `tree`: `main.vkf`, `geometry.vkf`, `materials.vkf`. An eight-metre cached
   generated tree, a dense lawn, elastic nodes and 8,192 wind parcels share a
-  World. Impacts transfer momentum into a damped local spring field. This is a
+  World. Air density determines parcel mass. Wood density, elastic modulus and
+  representative branch dimensions determine a damped cantilever-mode field.
+  The sun is an added emissive sphere; illumination and shadows use its position.
+  One finger orbits and two fingers zoom. This is a
   reduced-order elastic model, not a full aerodynamic or branch finite-element
   solver. Grass and branches read its displacement rather than animated gusts.
 
@@ -31,3 +34,18 @@ without applicable World laws remain tags. Raw particle mode shows simulation
 data only; material effects belong to the embedding. All interaction canvases
 capture touch gestures and disable page scrolling within their bounds. Off-screen
 and background applications suspend work independently of the Play/Pause switch.
+
+Wheel input has no speed clamp. Analytic swept baffles and particle paths replace
+endpoint-only contact testing; static sand friction includes positional arrest.
+Sand now uses 14,120 non-overlapping initial grains, versus the former 3,849.
+The wood-field model uses equivalent local modes, not the generated branches'
+exact beam topology. Its isolated elastic response is numerically verified
+against analytical equilibrium, not laboratory-validated full-tree aerodynamics.
+See [branch cantilever research](https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2019.00059/full)
+and [wind-induced tree response](https://www.mdpi.com/2073-4433/14/6/1010).
+
+This feedback release is a phone-test candidate. The corrected bounded analytic
+wheel solver builds and passes regression checks, but its GPU shader and full-pile
+interaction checks were skipped at the user's request after the development
+browser stopped providing a WebGPU adapter. Earlier isolated contact receipts
+do not verify this replacement. Phone interaction and performance remain unverified.
