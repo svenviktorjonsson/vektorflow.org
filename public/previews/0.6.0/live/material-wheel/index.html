@@ -1,56 +1,6 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1113">
-  <title>Vektor Flow · live material drum</title>
-  <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: #0b1113; color: #edf4ef; overscroll-behavior: none; }
-    body { min-height: 100dvh; display: grid; place-items: center; }
-    main { width: min(100%, 1000px); padding: 10px; }
-    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 2px 3px 10px; }
-    h1 { margin: 0; font-size: clamp(18px, 4.8vw, 25px); }
-    header span { color: #a9bab5; font-size: 13px; }
-    .stage { overflow: hidden; border: 1px solid #354348; border-radius: 14px; background: #10191d; box-shadow: 0 20px 70px rgb(0 0 0 / .38); touch-action: none; overscroll-behavior: contain; }
-    .bar { min-height: 56px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; border-bottom: 1px solid #354348; background: #152126; }
-    button { min-height: 40px; border: 1px solid #58696e; border-radius: 9px; padding: 0 13px; color: inherit; background: #1c2a2f; font: inherit; font-weight: 680; touch-action: manipulation; }
-    button[aria-pressed="true"] { color: #102025; background: #dcebe7; border-color: #dcebe7; }
-    #sand[aria-pressed="true"] { background: #ead6ae; border-color: #ead6ae; color: #2a2115; }
-    .status { margin-left: auto; color: #b9c9c5; font-size: 12px; font-variant-numeric: tabular-nums; }
-    canvas { width: 100%; aspect-ratio: 5 / 3; display: block; background: #071016; touch-action: none; cursor: grab; }
-    canvas[data-dragging="true"] { cursor: grabbing; }
-    .error { margin: 0; padding: 12px; color: #ffb4ab; white-space: pre-wrap; }
-    footer { padding: 9px 3px 0; color: #9fb0ad; font-size: 13px; line-height: 1.45; }
-    footer strong { color: #e6f0ec; }
-    @media (max-width: 650px) {
-      main { padding-left: 0; padding-right: 0; }
-      header, footer { padding-left: 10px; padding-right: 10px; }
-      .stage { border-left: 0; border-right: 0; border-radius: 0; }
-      .status { width: 100%; margin-left: 2px; }
-      canvas { aspect-ratio: 4 / 3; }
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <header><h1>Rotating material drum</h1><span>0.6.0 research</span></header>
-    <section class="stage" aria-label="Interactive water and sand drum simulation">
-      <div class="bar">
-        <button id="water" type="button" aria-pressed="true">Water</button>
-        <button id="sand" type="button" aria-pressed="false">Sand</button>
-        <button id="particles" type="button" aria-pressed="false">Particles</button>
-        <button id="play" type="button" aria-pressed="true">Pause</button>
-        <button id="reset" type="button">Reset</button>
-        <span id="status" class="status" role="status">Starting WebGPU…</span>
-      </div>
-      <canvas id="stage" width="900" height="540" aria-label="Live GPU material simulation inside a draggable rigid drum"></canvas>
-      <pre id="error" class="error" role="alert" hidden></pre>
-    </section>
-    <footer><strong>Drag the circle to rotate the drum.</strong> Water and sand use different local particle rules and embeddings. Short disconnected baffles—never longer than one third of the radius—block and release the material as the drum turns.</footer>
-  </main>
-  <script type="module" src="./scene.mjs?v=drum-live-12"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Vektor Flow · compiled water and sand wheel</title><style>html,body{margin:0;height:100%;overflow:hidden;background:#080e10;color:#d3e7e5;font:16px system-ui}#loading{padding:16px}canvas{touch-action:none;overscroll-behavior:none}</style></head><body>
+<p id="loading" role="status">Loading compiled water and sand World…</p>
+<script src="../../compiled/runtime/vf-compiled-runtime-bridge.js?v=compiled-2"></script>
+<script src="../../compiled/runtime/vf-world-layer-runtime.js?v=compiled-2" data-vf-world-wasm="../../compiled/wheel/main.wasm" data-vf-world-manifest="../../compiled/wheel/manifest.json"></script>
+</body></html>

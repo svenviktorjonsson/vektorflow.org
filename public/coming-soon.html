@@ -11,9 +11,21 @@
   <link rel="prefetch" href="./previews/0.6.0/live/tree/assets/tree-mesh.bin.gz" as="fetch" crossorigin>
   <style>
     .live-intro { max-width: 74ch; }
-    .session-picker { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.4rem 0 .9rem; }
-    .session-picker button { min-height: 44px; border: 1px solid var(--border, #6c7375); border-radius: .55rem; padding: .55rem .9rem; color: inherit; background: transparent; font: inherit; font-weight: 680; cursor: pointer; }
-    .session-picker button[aria-selected="true"] { color: #102027; background: #dcebe7; border-color: #dcebe7; }
+    .application-section { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border, #666); scroll-margin-top: 2rem; }
+    .application-links { display: flex; flex-wrap: wrap; gap: 1rem; margin-block: 1rem; }
+    .application-description { max-width: 74ch; }
+    .source-browser { margin-top: 1.5rem; min-width: 0; border: 1px solid var(--border, #666); border-radius: .6rem; overflow: hidden; }
+    .source-heading { padding: .9rem 1rem; margin: 0; background: var(--surface, #152024); }
+    .source-heading h3 { margin: 0 0 .4rem; font-size: 1rem; }
+    .source-heading p { margin: 0; font-size: .85rem; }
+    .source-tabs { display: flex; overflow-x: auto; gap: .25rem; padding: .5rem; border-block: 1px solid var(--border, #666); }
+    .source-tabs button { flex: 0 0 auto; min-height: 44px; padding: .5rem .8rem; border: 1px solid transparent; border-radius: .35rem; background: transparent; color: inherit; font: 13px ui-monospace, monospace; cursor: pointer; }
+    .source-tabs button[aria-selected="true"] { background: #dcebe7; color: #102027; }
+    .source-tabs button:focus-visible { outline: 2px solid #a8cfc2; outline-offset: 1px; }
+    .source-panel { max-height: 34rem; overflow: auto; background: #0b1113; color: #dcebe7; }
+    .source-panel pre { margin: 0; padding: 1rem; border: 0; background: transparent; color: inherit; white-space: pre; }
+    .source-panel code { font: 13px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; color: inherit; background: transparent; }
+    .source-footer { margin: 0; padding: .65rem 1rem; font-size: .85rem; border-top: 1px solid var(--border, #666); }
     .session-shell { overflow: hidden; overscroll-behavior: none; touch-action: none; border: 1px solid var(--border, #666); border-radius: .85rem; background: #0b1113; box-shadow: 0 24px 70px rgb(0 0 0 / .18); }
     .session-shell iframe { display: block; width: 100%; height: min(76vh, 760px); min-height: 560px; border: 0; background: #0b1113; overscroll-behavior: none; touch-action: none; }
     .session-note { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; margin: .75rem 0 0; color: var(--muted, #687274); font-size: .92rem; }
@@ -39,42 +51,48 @@
   <main id="live-sessions" class="documentation">
     <article class="readme">
       <h1>Coming soon</h1>
-      <p class="live-intro"><strong>Live research sessions only.</strong> Choose a scene and interact with the running simulation directly—there are no stills or prerecorded videos here.</p>
-      <div class="session-picker" role="tablist" aria-label="Live research sessions">
-        <button type="button" role="tab" aria-selected="true" data-session="material" data-src="./previews/0.6.0/live/material-wheel/?v=touch-physics-12">Water · Sand · Drum</button>
-        <button type="button" role="tab" aria-selected="false" data-session="rocks" data-src="./previews/0.6.0/live/rocks/?v=touch-physics-11">Rigid Rocks</button>
-        <button type="button" role="tab" aria-selected="false" data-session="tree" data-src="./previews/0.6.0/live/tree/?v=pro-gen-1">Tree · Grass · Wind</button>
-      </div>
-      <section class="session-shell" aria-label="Selected live session">
-        <iframe id="session-frame" title="Water, sand, and rotating drum live session" src="./previews/0.6.0/live/material-wheel/?v=touch-physics-12" allow="fullscreen" scrolling="no"></iframe>
+      <p class="live-intro">Three independent applications, each with its own World, controls and embedding. The filename tabs show the executable VKF source compiled into each live view. Physics updates the initial data added to its World; the embedding turns that state into the image.</p>
+      <nav class="application-links" aria-label="Applications"><a href="#wheel">Wheel</a><a href="#stones">Stones</a><a href="#tree">Tree and wind</a></nav>
+      <section id="wheel" class="application-section" aria-labelledby="wheel-heading">
+        <h2 id="wheel-heading">Water and sand · rotating wheel</h2>
+        <p class="application-description">A one-metre circular drum with short disconnected baffles. Drag the rim to rotate it, switch between water and sand, and choose raw simulation particles or the material embedding. The two materials share the wheel geometry but keep separate constitutive laws and World state.</p>
+        <div class="session-shell"><iframe title="Water and sand rotating wheel live session" src="./previews/0.6.0/live/material-wheel/?v=sections-1" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Drag inside the wheel to rotate. Water and sand are compatible alternatives within this application.</span><a href="./previews/0.6.0/live/material-wheel/?v=sections-1">Open wheel full page</a></p>
+        <div class="source-browser" data-source-app="wheel">
+          <div class="source-heading"><h3>Executable VKF application</h3><p>These are the files compiled into this live view. Geometry and particles use the same add call; named properties select the material and the World supplies the laws.</p></div>
+          <div class="source-tabs" role="tablist" aria-label="wheel VKF source files"></div>
+          <div class="source-panel" id="wheel-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
+          <p class="source-footer"><a data-source-download href="./sources/coming-soon/wheel/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
+        </div>
       </section>
-      <p class="session-note"><span id="session-description">Choose water or sand, expose the particles, and rotate the circular drum around its short internal baffles.</span><a id="open-session" href="./previews/0.6.0/live/material-wheel/?v=touch-physics-12">Open session full page</a></p>
+      <section id="stones" class="application-section" aria-labelledby="stones-heading">
+        <h2 id="stones-heading">Five stones · lift and drop</h2>
+        <p class="application-description">A pile of five seeded 3D stones with different sizes and irregular, near-spherical shapes. Touch a stone, lift it vertically and release it into the pile. Periodic radial shape functions vary the geometry; roughness supplies surface detail without repeated wavy bands. There is no water in this application.</p>
+        <div class="session-shell"><iframe title="Five 3D stones lift and drop live session" src="./previews/0.6.0/live/rocks/?v=sections-1" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Touch a stone, drag it upwards and release. GPU rigid-body contacts use the irregular shapes’ support geometry, with gravity, friction and angular response.</span><a href="./previews/0.6.0/live/rocks/?v=compiled-2">Open stones full page</a></p>
+        <div class="source-browser" data-source-app="stones">
+          <div class="source-heading"><h3>Executable VKF application</h3><p>Added body positions and named stone properties define the initial condition. The immutable geometry asset contains seeded shape data, normals and collision supports—not an animation.</p></div>
+          <div class="source-tabs" role="tablist" aria-label="stones VKF source files"></div>
+          <div class="source-panel" id="stones-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
+          <p class="source-footer"><a data-source-download href="./sources/coming-soon/stones/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
+        </div>
+      </section>
+      <section id="tree" class="application-section" aria-labelledby="tree-heading">
+        <h2 id="tree-heading">Tree, lawn and wind · procedural generation</h2>
+        <p class="application-description">An eight-metre generated tree above a dense lawn. Swipe inside the view to orbit, choose a seeded branch-and-leaf distribution, and adjust wind between 1 and 8 m/s. The particle switch reveals only parcels that have hit the scene: they are half-transparent and fade after 0.25 seconds. Wind interaction and elastic response are separate from shape generation.</p>
+        <div class="session-shell"><iframe title="Procedural tree grass and wind live session" src="./previews/0.6.0/live/tree/?v=sections-1" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Swipe to orbit. Choose Original, Uniform, Normal or Triangular branching and leaf variation.</span><a href="./previews/0.6.0/live/tree/?v=sections-1">Open tree full page</a></p>
+        <div class="source-browser" data-source-app="tree">
+          <div class="source-heading"><h3>Executable VKF application</h3><p>Tree, lawn, elastic nodes and inlet parcels are added layers of one World. GPU parcel impacts drive the local spring response; the embedding reads that state directly, without an animated wind wave.</p></div>
+          <div class="source-tabs" role="tablist" aria-label="tree VKF source files"></div>
+          <div class="source-panel" id="tree-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
+          <p class="source-footer"><a data-source-download href="./sources/coming-soon/tree/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
+        </div>
+      </section>
     </article>
   </main>
   <footer class="site-footer">Experimental software · <a href="./origins.html">Origins</a></footer>
   <script type="module" src="./release-selector.mjs"></script>
-  <script>
-    const descriptions = {
-      material: ['Water, sand, and rotating drum live session', 'Choose water or sand, expose the particles, and rotate the large circular drum. Its short disconnected baffles catch and release the material.'],
-      rocks: ['Five 3D rock pile live session', 'Touch one of the five generated stones, lift it straight up, and release it to drop back into the pile.'],
-      tree: ['Tree, grass, and local wind live session', 'Choose a seeded branch and leaf distribution, then swipe to orbit the cached 3D tree. Invisible wind parcels transfer momentum locally to the tree and camera-demanded grass.'],
-    };
-    const frame = document.getElementById('session-frame');
-    const description = document.getElementById('session-description');
-    const openSession = document.getElementById('open-session');
-    for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
-      frame.addEventListener(type, (event) => event.preventDefault(), { passive: false });
-    }
-    for (const button of document.querySelectorAll('[data-session]')) {
-      button.addEventListener('click', () => {
-        for (const peer of document.querySelectorAll('[data-session]')) peer.setAttribute('aria-selected', String(peer === button));
-        const source = button.dataset.src;
-        frame.src = source;
-        frame.title = descriptions[button.dataset.session][0];
-        description.textContent = descriptions[button.dataset.session][1];
-        openSession.href = source;
-      });
-    }
-  </script>
+  <script type="module" src="./coming-soon.mjs?v=sections-1"></script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+: .ui.display
+: .physics
+geometry: .geometry
+materials: .materials
+
+world: World(dim:3,time_step:1 / 240)
+display: Display(dim:3)
+view: display.append(world,axis:false)
+stones: view.add(p_ij:geometry.centers,properties:materials.stone)
+world.push((kind:"gravity",acceleration:[0,0,-9.82]))
+world.push((kind:"rigid",layer:stones))
+view.set(embedding:(kind:"scene",),controls:(title:"Five 3D stones · lift and drop",pause:true,reset:true))
+display.show()

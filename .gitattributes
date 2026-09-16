@@ -1,0 +1,4 @@
+# Published compiler artifacts and source fingerprints must retain their exact
+# bytes across Windows and Linux checkouts; bundle.json verifies those bytes.
+public/previews/0.6.0/compiled/** -text
+public/sources/coming-soon/**/*.vkf -text
