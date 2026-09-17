@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>GPU contact tests · Vektor Flow</title>
+  <link rel="stylesheet" href="../../../site.css">
+  <style>
+    main { max-width: 900px; margin: 2rem auto; padding: 1rem; }
+    form { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-block: 1.5rem; }
+    select, button { padding: .75rem; font: inherit; }
+    pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; }
+    #status { padding: 1rem; border: 1px solid currentColor; border-radius: .5rem; }
+  </style>
+</head>
+<body>
+<main>
+  <a href="../../../coming-soon.html">← Coming soon</a>
+  <h1>GPU contact algorithm tests</h1>
+  <p>Test build from <code>a712cf70</code>. These tests run the new compact contact solver on your actual GPU, apply the resulting velocities and check particle/floor separation. Small 3D cases also test rotational response and rejection of invalid or unresolved states.</p>
+  <p><strong>This is not the wheel simulation.</strong> General swept collision detection, sand friction and integration into the live demos are unfinished. Passing these tests does not certify arbitrary moving geometry or full application performance.</p>
+  <form>
+    <label for="particles">Largest particle case</label>
+    <select id="particles" name="particles">
+      <option value="10000">10,000 · recommended first run</option>
+      <option value="1000000">1,000,000 · heavy GPU and memory test</option>
+    </select>
+    <button id="start" name="run" value="1">Run GPU tests</button>
+  </form>
+  <p>The million-particle case allocates several large GPU buffers and readbacks. Start with 10,000 on a phone. Keep this page open while testing. Chrome or Safari with WebGPU is required; unsupported devices report an error rather than use a software fallback.</p>
+  <p id="status" role="status" aria-live="polite">Ready. No tests run until you press the button.</p>
+  <h2>Progress</h2>
+  <pre id="progress">No results yet.</pre>
+  <details><summary>Full result · copy this when reporting a problem</summary><pre id="result">No results yet.</pre></details>
+  <p>Reported milliseconds measure GPU components only when timestamp queries are available. They exclude readback, host validation, collision detection and rendering; they are not application FPS.</p>
+</main>
+<script type="module" src="./report.mjs"></script>
+</body>
+</html>

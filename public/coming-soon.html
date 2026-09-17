@@ -52,7 +52,13 @@
     <article class="readme">
       <h1>Coming soon</h1>
       <p class="live-intro">Three independent applications, each with its own World, controls and embedding. The filename tabs show the executable VKF source compiled into each live view. Physics updates the initial data added to its World; the embedding turns that state into the image.</p>
-      <nav class="application-links" aria-label="Applications"><a href="#wheel">Wheel</a><a href="#stones">Stones</a><a href="#tree">Tree and wind</a></nav>
+      <nav class="application-links" aria-label="Applications"><a href="#contact-tests">New GPU tests</a><a href="#wheel">Wheel</a><a href="#stones">Stones</a><a href="#tree">Tree and wind</a></nav>
+      <section id="contact-tests" class="application-section" aria-labelledby="contact-tests-heading">
+        <h2 id="contact-tests-heading">New contact algorithms · GPU test build</h2>
+        <p class="application-description">Run the new compact rigid-body contact solver on your device, with 10,000 or 1,000,000 particles. The test checks actual rounded velocities and particle/floor separation, plus small rotational and failure cases. It reports results you can copy.</p>
+        <p><a href="./previews/0.6.0/contact-core-1/">Open new GPU test build</a></p>
+        <p class="application-description">This is an algorithm test, not an updated wheel. The demos below still use the older backend; the wheel's frozen-motion regression remains unresolved. Swept collision detection, sand friction and integration of the new core are unfinished.</p>
+      </section>
       <section id="wheel" class="application-section" aria-labelledby="wheel-heading">
         <h2 id="wheel-heading">Water and sand · rotating wheel</h2>
         <p class="application-description">A one-metre circular drum with short disconnected baffles. Drag the rim to rotate it, switch between water and sand, and choose raw simulation particles or the material embedding. The two materials share the wheel geometry but keep separate constitutive laws and World state.</p>
