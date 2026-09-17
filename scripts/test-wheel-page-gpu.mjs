@@ -13,6 +13,14 @@ let complete;
 const result=new Promise(resolve=>complete=resolve);
 const probe=`<script>
 const rejectCaches=${process.argv.includes('--reject-caches')};
+const legacyOverrides=${process.argv.includes('--legacy-overrides')};
+if(legacyOverrides){const create=GPUDevice.prototype.createComputePipelineAsync;
+ GPUDevice.prototype.createComputePipelineAsync=function(descriptor){
+  if(descriptor.label?.startsWith('VKF contact ')&&Object.keys(descriptor.compute.constants??{}).length){
+   const error=new Error('Compute library failed creation');error.name='GPUPipelineError';error.reason='validation';error.stack='_';return Promise.reject(error);
+  }return create.call(this,descriptor);
+ };
+}
 if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
  GPUDevice.prototype.createComputePipelineAsync=function(descriptor){
   if(['primal_cached_component','preventive_cache_pressure_geometry'].includes(descriptor.compute.entryPoint)){
@@ -80,7 +88,7 @@ chrome.on('error',error=>complete({passed:false,error:String(error)}));
 chrome.on('exit',code=>complete({passed:false,error:`Chrome exited ${code}`}));
 const timeout=setTimeout(()=>complete({passed:false,error:'Actual wheel page did not start within 75 seconds',stderr}),75000);
 try{
- const report=await result;report.scope='Actual HTML startup and GPU embedding; '+(process.argv.includes('--reject-caches')?'injected optional-cache failures, portable path':'production defaults')+'; not a phone test';
+ const report=await result;report.scope='Actual HTML startup and GPU embedding; '+(process.argv.includes('--legacy-overrides')?'older WebKit unused-override rejection emulation; ':'')+(process.argv.includes('--reject-caches')?'injected optional-cache failures, portable path':'production defaults')+'; not a phone test';
  report.chromeArguments=args;await writeFile(path.join(work,'result.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify({...report,result:path.join(work,'result.json')}));if(!report.passed)process.exitCode=1;
 }finally{clearTimeout(timeout);chrome.kill();server.closeAllConnections();server.close();}
