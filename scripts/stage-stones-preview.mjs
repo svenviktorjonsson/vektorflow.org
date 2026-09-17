@@ -9,7 +9,7 @@ const site=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const compiler=path.resolve(process.argv[2]??'../vektor-flow/build/branches/pre-gen');
 const root=path.join(site,'public'),compiled=path.join(root,'previews/0.6.0/compiled');
 const id=process.argv[3]??'stones';if(!['stones','tree','wheel'].includes(id))throw Error('Unknown application');
-const runtime_directory=id==='wheel'?'runtime-wheel-10':id==='stones'?'runtime-stones-8':'runtime-tree-9',directory=id==='wheel'?'wheel-motion-10':id==='stones'?'stones-granite-8':'tree-wind-9';
+const runtime_directory=id==='wheel'?'runtime-wheel-11':id==='stones'?'runtime-stones-8':'runtime-tree-9',directory=id==='wheel'?'wheel-startup-11':id==='stones'?'stones-granite-8':'tree-wind-9';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');
