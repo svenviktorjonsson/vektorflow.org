@@ -13,7 +13,7 @@ for(const {id,files} of applications){
   const changed=Buffer.concat([bytes,Buffer.from('\n# changed import')]);await assert.rejects(verifyPreviewBytes(changed,record.sources[name]),/Source\/build mismatch/);
   const text=bytes.toString(),highlight=globalThis.Prism.highlight(text,globalThis.Prism.languages.vkf,'vkf');assert.ok(highlight.includes('class="token'));assert.ok(!highlight.includes('<script'));
  }
- if(id!=='wheel'){assert.equal(record.build.wasm,record.wasm);assert.deepEqual(record.build.sources,record.sources);assert.equal(record.build.entry,'main.vkf');assert.match(record.build.compiler,/^[a-f0-9]{64}$/);}
+ assert.equal(record.build.wasm,record.wasm);assert.deepEqual(record.build.sources,record.sources);assert.equal(record.build.entry,'main.vkf');assert.match(record.build.compiler,/^[a-f0-9]{64}$/);
 }
 const attack=globalThis.Prism.highlight('# <script>alert(1)</script>',globalThis.Prism.languages.vkf,'vkf');assert.ok(attack.includes('&lt;script>'));assert.ok(!attack.includes('<script>'));
 assert.equal(hash(await readFile(new URL('vendor/prism/prism-core-1.30.0.min.js',root))).length,64);

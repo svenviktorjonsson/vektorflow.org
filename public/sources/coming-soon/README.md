@@ -12,7 +12,8 @@ those exact sources and the resulting WASM with compiler/emitter/typed-IR hashes
 Source changes during compilation reject publication. The read-only Prism tabs
 validate source hashes. Run validates source, WASM and manifest before restarting
 the corresponding compiled application; it never executes editable browser text.
-The wheel retains its older published artifact and has no new compile receipt.
+The wheel is also staged by that script with the `wheel` argument. Its four
+displayed files are recompiled, with the same source/executable build receipt.
 
 - `wheel`: `main.vkf`, `geometry.vkf`, `materials.vkf`, `particles.vkf`.
   A one-metre wheel and seven baffles are added geometry. Water and sand have
@@ -49,8 +50,13 @@ against analytical equilibrium, not laboratory-validated full-tree aerodynamics.
 See [branch cantilever research](https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2019.00059/full)
 and [wind-induced tree response](https://www.mdpi.com/2073-4433/14/6/1010).
 
-The wheel's frozen-motion regression remains unresolved; its older code and
-artifact are preserved, not rebuilt against an unverified contact candidate.
+The water wheel uses matched rotating-reference contact trajectories and input
+timing. Its rebuilt WASM passed 60 settling and 60 rotation frames on a physical
+Intel Gen9 GPU, with full World-time progress and no detected overlaps. This
+is a functional acceptance run, not a 10-ms performance result: the measured
+complete-update maximum was 118.29248 ms. The later request prioritised working
+motion rather than further optimisation. Sand's separate contact/friction
+solver still has a known frozen-motion regression; it is not declared fixed.
 Tree leaf/branch reduced modes now exchange momentum in a coupled implicit solve.
 Blade-cell impacts route to their attachment owner, and denser stratified air
 sampling preserves density. GPU impulse/reaction checks pass; this does not claim
