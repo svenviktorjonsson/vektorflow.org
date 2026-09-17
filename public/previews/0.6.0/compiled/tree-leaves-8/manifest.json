@@ -1,0 +1,270 @@
+{
+  "artifact_content_sha256": "372b26ad2cd05b7d",
+  "artifact_kind": "wasm",
+  "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-tree\\.vkfbuild\\main\\main.wasm",
+  "compiler_version": "vkf-wasm-artifact-smoke-0.2",
+  "dependencies": [],
+  "manifest_hash": "f663c9e78c91c133",
+  "runtime_hash": "372b26ad2cd05b7d",
+  "runtime_surface": {
+    "bindings": [
+      {
+        "kind": "string",
+        "len_export": "vkf_get__world_gpu_0_physics_len",
+        "name": "$world$gpu$0$physics",
+        "ptr_export": "vkf_get__world_gpu_0_physics_ptr"
+      },
+      {
+        "kind": "string",
+        "len_export": "vkf_get__world_gpu_0_embedding_len",
+        "name": "$world$gpu$0$embedding",
+        "ptr_export": "vkf_get__world_gpu_0_embedding_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_0_state_len",
+        "name": "$world$layer$0$state",
+        "ptr_export": "vkf_get__world_layer_0_state_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_0_time_len",
+        "name": "$world$layer$0$time",
+        "ptr_export": "vkf_get__world_layer_0_time_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_0_force_len",
+        "name": "$world$layer$0$force",
+        "ptr_export": "vkf_get__world_layer_0_force_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_0_mask_len",
+        "name": "$world$layer$0$mask",
+        "ptr_export": "vkf_get__world_layer_0_mask_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_1_state_len",
+        "name": "$world$layer$1$state",
+        "ptr_export": "vkf_get__world_layer_1_state_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_1_time_len",
+        "name": "$world$layer$1$time",
+        "ptr_export": "vkf_get__world_layer_1_time_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_1_force_len",
+        "name": "$world$layer$1$force",
+        "ptr_export": "vkf_get__world_layer_1_force_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_1_mask_len",
+        "name": "$world$layer$1$mask",
+        "ptr_export": "vkf_get__world_layer_1_mask_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_2_state_len",
+        "name": "$world$layer$2$state",
+        "ptr_export": "vkf_get__world_layer_2_state_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_2_time_len",
+        "name": "$world$layer$2$time",
+        "ptr_export": "vkf_get__world_layer_2_time_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_2_force_len",
+        "name": "$world$layer$2$force",
+        "ptr_export": "vkf_get__world_layer_2_force_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_2_mask_len",
+        "name": "$world$layer$2$mask",
+        "ptr_export": "vkf_get__world_layer_2_mask_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_3_state_len",
+        "name": "$world$layer$3$state",
+        "ptr_export": "vkf_get__world_layer_3_state_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_3_time_len",
+        "name": "$world$layer$3$time",
+        "ptr_export": "vkf_get__world_layer_3_time_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_3_force_len",
+        "name": "$world$layer$3$force",
+        "ptr_export": "vkf_get__world_layer_3_force_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_3_mask_len",
+        "name": "$world$layer$3$mask",
+        "ptr_export": "vkf_get__world_layer_3_mask_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_4_state_len",
+        "name": "$world$layer$4$state",
+        "ptr_export": "vkf_get__world_layer_4_state_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_4_time_len",
+        "name": "$world$layer$4$time",
+        "ptr_export": "vkf_get__world_layer_4_time_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_4_force_len",
+        "name": "$world$layer$4$force",
+        "ptr_export": "vkf_get__world_layer_4_force_ptr"
+      },
+      {
+        "axis_key": "",
+        "kind": "axis_f64_array",
+        "len_export": "vkf_get__world_layer_4_mask_len",
+        "name": "$world$layer$4$mask",
+        "ptr_export": "vkf_get__world_layer_4_mask_ptr"
+      },
+      {
+        "kind": "string",
+        "len_export": "vkf_get__world_program_len",
+        "name": "$world$program",
+        "ptr_export": "vkf_get__world_program_ptr"
+      },
+      {
+        "kind": "string",
+        "len_export": "vkf_get__ui_compiled_packets_len",
+        "name": "$ui$compiled$packets",
+        "ptr_export": "vkf_get__ui_compiled_packets_ptr"
+      }
+    ],
+    "exports": [
+      "vkf_init",
+      "vkf_update",
+      "vkf_world_0_update",
+      "vkf_shutdown",
+      "vkf_state_ptr",
+      "vkf_state_size",
+      "vkf_input_ptr",
+      "vkf_input_size",
+      "vkf_symbolic_input_ptr",
+      "vkf_symbolic_input_capacity",
+      "vkf_symbolic_input_len",
+      "vkf_symbolic_set_input_len",
+      "vkf_symbolic_output_ptr",
+      "vkf_symbolic_output_capacity",
+      "vkf_symbolic_output_len",
+      "vkf_symbolic_trace",
+      "vkf_get__world_gpu_0_physics_ptr",
+      "vkf_get__world_gpu_0_physics_len",
+      "vkf_get__world_gpu_0_embedding_ptr",
+      "vkf_get__world_gpu_0_embedding_len",
+      "vkf_get__world_layer_0_state_ptr",
+      "vkf_get__world_layer_0_state_len",
+      "vkf_get__world_layer_0_time_ptr",
+      "vkf_get__world_layer_0_time_len",
+      "vkf_get__world_layer_0_force_ptr",
+      "vkf_get__world_layer_0_force_len",
+      "vkf_get__world_layer_0_mask_ptr",
+      "vkf_get__world_layer_0_mask_len",
+      "vkf_get__world_layer_1_state_ptr",
+      "vkf_get__world_layer_1_state_len",
+      "vkf_get__world_layer_1_time_ptr",
+      "vkf_get__world_layer_1_time_len",
+      "vkf_get__world_layer_1_force_ptr",
+      "vkf_get__world_layer_1_force_len",
+      "vkf_get__world_layer_1_mask_ptr",
+      "vkf_get__world_layer_1_mask_len",
+      "vkf_get__world_layer_2_state_ptr",
+      "vkf_get__world_layer_2_state_len",
+      "vkf_get__world_layer_2_time_ptr",
+      "vkf_get__world_layer_2_time_len",
+      "vkf_get__world_layer_2_force_ptr",
+      "vkf_get__world_layer_2_force_len",
+      "vkf_get__world_layer_2_mask_ptr",
+      "vkf_get__world_layer_2_mask_len",
+      "vkf_get__world_layer_3_state_ptr",
+      "vkf_get__world_layer_3_state_len",
+      "vkf_get__world_layer_3_time_ptr",
+      "vkf_get__world_layer_3_time_len",
+      "vkf_get__world_layer_3_force_ptr",
+      "vkf_get__world_layer_3_force_len",
+      "vkf_get__world_layer_3_mask_ptr",
+      "vkf_get__world_layer_3_mask_len",
+      "vkf_get__world_layer_4_state_ptr",
+      "vkf_get__world_layer_4_state_len",
+      "vkf_get__world_layer_4_time_ptr",
+      "vkf_get__world_layer_4_time_len",
+      "vkf_get__world_layer_4_force_ptr",
+      "vkf_get__world_layer_4_force_len",
+      "vkf_get__world_layer_4_mask_ptr",
+      "vkf_get__world_layer_4_mask_len",
+      "vkf_get__world_program_ptr",
+      "vkf_get__world_program_len",
+      "vkf_get__ui_compiled_packets_ptr",
+      "vkf_get__ui_compiled_packets_len"
+    ],
+    "init_export": "vkf_init",
+    "input_offset": 8,
+    "input_ptr_export": "vkf_input_ptr",
+    "input_size": 4,
+    "input_size_export": "vkf_input_size",
+    "memory_export": "memory",
+    "shutdown_export": "vkf_shutdown",
+    "state_ptr_export": "vkf_state_ptr",
+    "state_size": 8,
+    "state_size_export": "vkf_state_size",
+    "symbolic_text": {
+      "encoding": "utf-8",
+      "input_capacity_export": "vkf_symbolic_input_capacity",
+      "input_len_export": "vkf_symbolic_input_len",
+      "input_ptr_export": "vkf_symbolic_input_ptr",
+      "output_capacity_export": "vkf_symbolic_output_capacity",
+      "output_len_export": "vkf_symbolic_output_len",
+      "output_ptr_export": "vkf_symbolic_output_ptr",
+      "set_input_len_export": "vkf_symbolic_set_input_len",
+      "trace_export": "vkf_symbolic_trace"
+    },
+    "update_export": "vkf_update",
+    "update_mode": "builtin"
+  },
+  "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-tree\\main.vkf",
+  "source_sha256": "623dbb4d139d24ca",
+  "status": "compiled",
+  "typed_ir_sha256": "7aa3bb15d99adc78"
+}

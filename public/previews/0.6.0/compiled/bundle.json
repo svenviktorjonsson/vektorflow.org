@@ -14,23 +14,41 @@
       }
     },
     "stones": {
-      "directory": "stones-feedback-6",
-      "wasm": "95a32413616255193d02c649bde200e5619120be236f834ef8e716dd2cb4ed1a",
-      "manifest": "bbcb10e0f42968e9610f58001f3a2239acdb81532637a59ff0a15ab9b9b2d6c8",
+      "directory": "stones-granite-7",
+      "runtime_directory": "runtime-stones-7",
+      "runtime": {
+        "vf-world-layer-runtime.js": "976c5ed611cd1bdc0127ae08f989c6c8ce0f5ba8f8d1c882e9167f71765da03f",
+        "vf-compiled-runtime-bridge.js": "245d725933bfc59f9cd781e600ace3d20b4608444698b60bb52d6c794dfcc7ae",
+        "vf-world-mechanical-runtime.mjs": "b01a419c674ee0666a9e355c1ef07e4c20896cfffcb032689bf1f48c73405f63",
+        "vf-world-mechanical-gpu.mjs": "8b1c8aed71344205320d3f4aed4c3e988508e64a15331e2292247b7c05390ab1",
+        "vf-world-scene-embedding-gpu.mjs": "9080a1ba54ebd609e05e821f219bdbf24834ca950f56191c3f785ec6070a925f",
+        "vf-world-physical-parameters.mjs": "1d0971d280f09f8b5169fc85dd4eb0a238caca2068b8061360a15bf71c6007c6"
+      },
+      "wasm": "d0bd95d55b823e9296685bc6ad1616ce4661f3148dcfc57c7e3626d2e43c243b",
+      "manifest": "fc4704b8d9f12e335f967a330ba71a0c778c417a0d3071ef0115ddfdffbdf9b1",
       "sources": {
-        "geometry.vkf": "27df9316a2c29bee4273ddb6359160f050a4f0ab1961b94af227d5f17c276e75",
         "main.vkf": "51549abb1d84012e0b8e45a990eeec5572684875915a4845b031c89f948928d6",
-        "materials.vkf": "17cf0972d79d7d32078961b9e2f818eaabd0324498880f51f707004e75fef3ca"
+        "geometry.vkf": "b016fb11299d879ec915f95a2e67925a0eb16d78c1b589a8420448c2d2065a42",
+        "materials.vkf": "f0a8bcaf51184feb5a26fa3bf546e049641bc2de087c4d4ce450db98569ecfeb"
       }
     },
     "tree": {
-      "directory": "tree-feedback-6",
-      "wasm": "518da9391861ffae27eb8007e525eb36d972d95a64aac7ca97be25d44014909b",
-      "manifest": "b6e1560a0adaf2cf6b99dcf6de98800642b873c37ce2ca5d98264215c390afce",
+      "directory": "tree-leaves-8",
+      "runtime_directory": "runtime-tree-8",
+      "runtime": {
+        "vf-world-layer-runtime.js": "976c5ed611cd1bdc0127ae08f989c6c8ce0f5ba8f8d1c882e9167f71765da03f",
+        "vf-compiled-runtime-bridge.js": "245d725933bfc59f9cd781e600ace3d20b4608444698b60bb52d6c794dfcc7ae",
+        "vf-world-mechanical-runtime.mjs": "b01a419c674ee0666a9e355c1ef07e4c20896cfffcb032689bf1f48c73405f63",
+        "vf-world-mechanical-gpu.mjs": "8b1c8aed71344205320d3f4aed4c3e988508e64a15331e2292247b7c05390ab1",
+        "vf-world-scene-embedding-gpu.mjs": "9080a1ba54ebd609e05e821f219bdbf24834ca950f56191c3f785ec6070a925f",
+        "vf-world-physical-parameters.mjs": "1d0971d280f09f8b5169fc85dd4eb0a238caca2068b8061360a15bf71c6007c6"
+      },
+      "wasm": "6607ecab1f6d7cc6394dba3becf760400e6c2a591b786c33e49a88622e6ba831",
+      "manifest": "5f06396bd8889494fca2ace0ea83c9561c61b5c9e185b7921e2c217597dca382",
       "sources": {
-        "geometry.vkf": "f71f064f071aaffddb4666120168b14610f497b951bcfc80c7a70bfe2408c2f3",
         "main.vkf": "f3cf41495ab9b328ab3ad906d7d1577882842a93c0713f39034a80d6e5ff21bc",
-        "materials.vkf": "14b45574b5f817299caff4e4395c881ef074e154321a90af9f13e6ae6408c194"
+        "geometry.vkf": "f71f064f071aaffddb4666120168b14610f497b951bcfc80c7a70bfe2408c2f3",
+        "materials.vkf": "d99ad2841187b5a7e322c87734fbe61af195acb3d49c7f0cdd90270f944d73ec"
       }
     }
   },
@@ -61,6 +79,11 @@
     "previews/0.6.0/live/tree/assets/tree-mesh.bin.gz": "f33ce4c88ef43d1a64606a824edde435d134fb405881fdf56ac5655fbf52e2b9",
     "previews/0.6.0/live/tree/assets/tree-mesh-normal.bin.gz": "5fe0966e049b3381d7d97b0f02a2d6b665ea7568c3e6d5bcd0e186b7a320d8cd",
     "previews/0.6.0/live/tree/assets/tree-mesh-triangular.bin.gz": "b0b19f5dd5b9d50e354ef9a282983c5246978b0791590f3f5169d7869cf87e81",
-    "previews/0.6.0/live/tree/assets/tree-mesh-uniform.bin.gz": "c53bc824fade2e7744939ec727d76fb8a37ce13a11733453c9bf8bf7bedd8dde"
+    "previews/0.6.0/live/tree/assets/tree-mesh-uniform.bin.gz": "c53bc824fade2e7744939ec727d76fb8a37ce13a11733453c9bf8bf7bedd8dde",
+    "previews/0.6.0/live/rocks/assets/rigid-stones-granite-7.bin.gz": "9a5ce51c2ad1a8d9aeaf02cb7cd8f763d8e0a764c10167a758a158ddb8c286c1",
+    "previews/0.6.0/live/tree/assets/tree-mesh-feedback-8.bin.gz": "ff7cc7f38f294d96685e856a5e25dd53a39eb28d0a05548aac49bed819e37dea",
+    "previews/0.6.0/live/tree/assets/tree-mesh-normal-feedback-8.bin.gz": "6faabb27285d6bd0b1e2be2a888947bd5db3af601cb2557ebb619b72a21a0167",
+    "previews/0.6.0/live/tree/assets/tree-mesh-triangular-feedback-8.bin.gz": "19338aabac632c4c94c6a85a759e9ea3729adda001e87f986f7142fc6c4386a3",
+    "previews/0.6.0/live/tree/assets/tree-mesh-uniform-feedback-8.bin.gz": "683aff3c732e10bd81e8d13335813d20d37ab8ee692db1f62a2c35c1e5663b1f"
   }
 }

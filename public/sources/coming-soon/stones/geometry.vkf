@@ -1,3 +1,3 @@
 # Placement belongs to the added body layer. Asset data is seeded Fourier shape,
 # normals, optical texture, mass, inertia and the collision support vertices.
-centers: [[-1.12,0,0.72],[0,0.08,0.91],[1.15,0,0.64],[-0.63,0,2.2001621462377665],[0.64,0,2.1047346205645625]]
+centers: [[-1.12,0,0.7956009082737407],[0,0.08,1.1454333135674655],[1.15,0,0.5980927443568064],[-0.63,0,2.7066834964436586],[0.64,0,2.2419405575536957]]
