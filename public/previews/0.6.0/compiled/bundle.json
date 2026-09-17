@@ -3,11 +3,11 @@
   "runtime_directory": "runtime-feedback-6",
   "applications": {
     "wheel": {
-      "directory": "wheel-startup-11",
-      "runtime_directory": "runtime-wheel-11",
+      "directory": "wheel-granular-12",
+      "runtime_directory": "runtime-wheel-12",
       "runtime": {
         "vf-world-layer-runtime.js": "d0f94a0fcee5004846ef74b97894a82bc1d449b147a8c88ad541f8d1af00889f",
-        "vf-compiled-runtime-bridge.js": "974242f2e0b9357a6d9f005455620e18220bf8c3cfd80a77bd4a1db38db2cfe2",
+        "vf-compiled-runtime-bridge.js": "7282c34cbfe4387a5472a3586168c8aa1ec5aad1e28ecf4083527263f26b8c3a",
         "vf-world-material-runtime.mjs": "f20692f41f26f266491b997a42a942029bafe39e11bff55af25c713bb6c316f3",
         "vf-liquid-contained-world-gpu.mjs": "450c87011c3ae8bf0e68584e25e7c4240de041e4ab43e05381ef53cd34dc1270",
         "vf-physics-liquid-local-particle-reference.mjs": "f8d351846e0cddf5bc5a0af5a2e9fbe9138b0355aae506062edcb36dc79c5587",
@@ -27,7 +27,7 @@
         "vf-physics-granular-core-reference.mjs": "c1885a7e1841d7ddba8aa680c2b0f8b8387ea2d0a2b21542b34b3dcb710067ca",
         "vf-physics-regime-verifier-reference.mjs": "68f0e7abed6d82342c9fddb1c7afe223b2bc6c7267c6c89a7d99094e49d08a3a",
         "vf-liquid-particle-embedding-gpu.mjs": "57bbffd502812e471be46092c2a0a8916859cd84ac56d94adf40731f4882019b",
-        "vf-granular-particle-embedding-gpu.mjs": "7a4972f668f06030df5c6a0daa0a5b322de46b050de196c567dd53d107858c41",
+        "vf-granular-particle-embedding-gpu.mjs": "fff9476f36be32aa2fc76757cf82c033df59b0f7d7fa98fd686a66dd04be7664",
         "vf-contained-boundary-embedding-gpu.mjs": "68961774680d72f1dd98350d52bdf0415a9452a5c4d604c8086274cee4b839c9",
         "vf-retained-world-loader.mjs": "05bae3783fdb12eafa3deda490a7dee01448794d2fcaa4351a67aed35ed459b0"
       },
@@ -44,6 +44,7 @@
         "compiler": "e15d3bf96736fc6bab17a9ae6c80c59550cfe285e114b09fd976b1e2277da655",
         "emitter": "d4d43fa8b000675356b3a1f361531934a906b69ec7a840610be742d6ec5590ae",
         "typed_ir": "6997a0fecb7323786a97001623478672b9422df8edcb05c70c711239a7a36bf0",
+        "runtime_revision": "004e393e1c088fa4c4847bd7189b6302a6ff07b9",
         "sources": {
           "main.vkf": "3d1662fec3491046f85461a790a9f9c4ae359125faf68ffbfc2a696342ab9d6a",
           "geometry.vkf": "ce6bc120be13d198d6b27567f9e2680bead8d4035e9a4b0249e949ddb1fa3f21",

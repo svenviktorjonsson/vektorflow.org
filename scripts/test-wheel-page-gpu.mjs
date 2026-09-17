@@ -12,7 +12,7 @@ const work=await mkdtemp(path.join(site,'.work','wheel-page-gpu-'));
 let complete;
 const result=new Promise(resolve=>complete=resolve);
 const probe=`<script>
-const started=performance.now(), faults=[];let last='',played=false,pausedReceipt;
+const checkSand=${process.argv.includes('--sand-paused')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,waterReceipt,sandFrame;
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
 async function inspect(){
@@ -25,7 +25,7 @@ async function inspect(){
  const signature=JSON.stringify([state.ready,state.worlds,state.status,state.error,faults]);
  if(signature!==last){last=signature;await fetch('/page-progress',{method:'POST',body:JSON.stringify(state)});}
  if(document.querySelector('#vf-material-stage')&&!state.status)state.error='Startup replaced its loading message with a blank frame';
- if(state.worlds?.includes('granular'))state.error='Inactive sand initialized before the selected water View';
+ if(!sandStarted&&state.worlds?.includes('granular'))state.error='Inactive sand initialized before the selected water View';
  if(state.error||faults.length||state.elapsedMs>60000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,...state})});return;}
  if(!played&&state.ready==='true'&&state.frames>=3){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
@@ -33,7 +33,15 @@ async function inspect(){
   pausedReceipt={elapsedMs:state.elapsedMs,time:state.time,frames:state.frames,worlds:state.worlds};
   played=true;play.click();
  }
- if(played&&state.frames>=6&&state.time>.02){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
+ if(played&&!sandStarted&&state.frames>=6&&state.time>.02){
+  if(!checkSand){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
+  waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
+  [...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Sand').click();
+ }
+ if(sandStarted&&current?.world.kind==='granular'&&state.frames>=sandFrame+3){
+  const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
+  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.paused&&state.time===0&&!!play,pausedReceipt,waterReceipt,sandScope:'Paused sand startup/render only; not sand motion acceptance',...state})});return;
+ }
  setTimeout(inspect,250);
 }
 setTimeout(inspect,0);
