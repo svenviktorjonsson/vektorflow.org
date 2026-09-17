@@ -12,6 +12,14 @@ const work=await mkdtemp(path.join(site,'.work','wheel-page-gpu-'));
 let complete;
 const result=new Promise(resolve=>complete=resolve);
 const probe=`<script>
+const rejectCaches=${process.argv.includes('--reject-caches')};
+if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
+ GPUDevice.prototype.createComputePipelineAsync=function(descriptor){
+  if(['primal_cached_component','preventive_cache_pressure_geometry'].includes(descriptor.compute.entryPoint)){
+   const error=new Error('Injected WebKit optional-cache compilation rejection');error.name='GPUPipelineError';error.reason='validation';error.stack='_';return Promise.reject(error);
+  }return create.call(this,descriptor);
+ };
+}
 const checkSand=${process.argv.includes('--sand-paused')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,waterReceipt,sandFrame;
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
@@ -72,7 +80,7 @@ chrome.on('error',error=>complete({passed:false,error:String(error)}));
 chrome.on('exit',code=>complete({passed:false,error:`Chrome exited ${code}`}));
 const timeout=setTimeout(()=>complete({passed:false,error:'Actual wheel page did not start within 75 seconds',stderr}),75000);
 try{
- const report=await result;report.scope='Actual HTML startup, production defaults and GPU embedding; not a phone test';
+ const report=await result;report.scope='Actual HTML startup and GPU embedding; '+(process.argv.includes('--reject-caches')?'injected optional-cache failures, portable path':'production defaults')+'; not a phone test';
  report.chromeArguments=args;await writeFile(path.join(work,'result.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify({...report,result:path.join(work,'result.json')}));if(!report.passed)process.exitCode=1;
 }finally{clearTimeout(timeout);chrome.kill();server.closeAllConnections();server.close();}
