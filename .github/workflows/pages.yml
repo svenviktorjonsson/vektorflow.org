@@ -27,6 +27,8 @@ jobs:
         run: node scripts/test-live-preview-invariants.mjs
       - name: Verify compiled Coming Soon applications
         run: node scripts/test-compiled-previews.mjs
+      - name: Verify read-only source and executable identity
+        run: node scripts/test-preview-source-contract.mjs
       - name: Verify contact test page
         run: node scripts/test-contact-core-preview.mjs
       - name: Verify retained 0.6.0 previews

@@ -4,13 +4,27 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
+import {spawnSync} from 'node:child_process';
 const site=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const compiler=path.resolve(process.argv[2]??'../vektor-flow/build/branches/pre-gen');
 const root=path.join(site,'public'),compiled=path.join(root,'previews/0.6.0/compiled');
 const id=process.argv[3]??'stones';if(!['stones','tree'].includes(id))throw Error('Unknown mechanical application');
-const runtime_directory=id==='stones'?'runtime-stones-7':'runtime-tree-8',directory=id==='stones'?'stones-granite-7':'tree-leaves-8';
+const runtime_directory=id==='stones'?'runtime-stones-8':'runtime-tree-9',directory=id==='stones'?'stones-granite-8':'tree-wind-9';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
+const input=path.join(compiler,'examples',id==='stones'?'world-stones':'world-tree');
+const names=['main.vkf','geometry.vkf','materials.vkf'],snapshots=new Map();
+for(const name of names)snapshots.set(name,await readFile(path.join(input,name)));
+const compilerExe=process.env.VKF_PREVIEW_COMPILER??path.join(compiler,'.work/world-model-ninja/bin/vkf.exe');
+const emitterExe=process.env.VKF_PREVIEW_WASM_EMITTER??path.join(compiler,'.work/world-model-ninja/bin/vkf_wasm_artifact_smoke.exe');
+// Never pair current source with a pre-existing executable. Compile those
+// exact inputs, then fail closed if any imported file changed during build.
+for(const [exe,args] of [[compilerExe,['--source',path.join(input,'main.vkf'),'--aot','--emit-wasm']],[emitterExe,['--source',path.join(input,'main.vkf'),'--typed-ir',path.join(input,'.vkfbuild/main/typed-ir.json')]]]){
+  const result=spawnSync(exe,args,{cwd:compiler,encoding:'utf8',windowsHide:true});
+  if(result.status!==0)throw Error(`Preview compilation failed: ${result.error??result.stderr??result.stdout}`);
+}
+for(const [name,bytes] of snapshots)if(hash(await readFile(path.join(input,name)))!==hash(bytes))throw Error(`Source changed during compilation: ${name}`);
+const build={entry:'main.vkf',compiler:hash(await readFile(compilerExe)),emitter:hash(await readFile(emitterExe)),typed_ir:hash(await readFile(path.join(input,'.vkfbuild/main/typed-ir.json')))};
 await mkdir(path.join(compiled,runtime_directory),{recursive:true});
 async function copyRuntime(name){
   if(runtime[name])return;const source=await readFile(path.join(compiler,'web/vf-ui',name));
@@ -18,14 +32,15 @@ async function copyRuntime(name){
   for(const match of source.toString().matchAll(/(?:from\s*|import\s*)['"]\.\/([^'"]+)['"]/g))await copyRuntime(match[1]);
 }
 for(const name of ['vf-world-layer-runtime.js','vf-compiled-runtime-bridge.js','vf-world-mechanical-runtime.mjs'])await copyRuntime(name);
-const input=path.join(compiler,'examples',id==='stones'?'world-stones':'world-tree'),output=path.join(compiled,directory),sources=path.join(root,'sources/coming-soon',id);
+const output=path.join(compiled,directory),sources=path.join(root,'sources/coming-soon',id);
 await mkdir(output,{recursive:true});await mkdir(sources,{recursive:true});
 const bytes=await readFile(path.join(input,'.vkfbuild/main/main.wasm'));
 if(!WebAssembly.validate(bytes))throw Error('Invalid stone WASM');
 await writeFile(path.join(output,'main.wasm'),bytes);
 await copyFile(path.join(input,'.vkfbuild/main/wasm-manifest.json'),path.join(output,'manifest.json'));
-const hashes={};for(const name of ['main.vkf','geometry.vkf','materials.vkf']){const source=await readFile(path.join(input,name));await writeFile(path.join(sources,name),source);hashes[name]=hash(source);}
-bundle.applications[id]={directory,runtime_directory,runtime,wasm:hash(bytes),manifest:hash(await readFile(path.join(output,'manifest.json'))),sources:hashes};
+const hashes={};for(const [name,source] of snapshots){await writeFile(path.join(sources,name),source);hashes[name]=hash(source);}
+build.sources=hashes;build.wasm=hash(bytes);
+bundle.applications[id]={directory,runtime_directory,runtime,wasm:hash(bytes),manifest:hash(await readFile(path.join(output,'manifest.json'))),sources:hashes,build};
 const bridge=createRequire(import.meta.url)(path.join(compiler,'web/vf-ui/vf-compiled-runtime-bridge.js'));
 const app=bridge.instantiateWasmRuntime({bytes,manifest:JSON.parse(await readFile(path.join(output,'manifest.json')))});app.init();
 const world=app.worldProgram().gpu_worlds[0],p=world.kind==='wind'?world.solid_properties:world.properties;

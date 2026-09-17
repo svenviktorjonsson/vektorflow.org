@@ -6,8 +6,13 @@ laws. The tabbed files are executable inputs, not illustrative API sketches.
 
 Build each application's `main.vkf` with `vkf -b main.vkf` (or the branch's
 `vkf-strict -b main.vkf`). Relative imports resolve the other source files.
-The site's `scripts/stage-compiled-previews.mjs` stages those build artifacts and
-the runtime's transitive module dependencies together.
+For mechanical previews, `scripts/stage-stones-preview.mjs <compiler-root> tree`
+(or `stones`) snapshots all three VKF files, recompiles `main.vkf`, then stages
+those exact sources and the resulting WASM with compiler/emitter/typed-IR hashes.
+Source changes during compilation reject publication. The read-only Prism tabs
+validate source hashes. Run validates source, WASM and manifest before restarting
+the corresponding compiled application; it never executes editable browser text.
+The wheel retains its older published artifact and has no new compile receipt.
 
 - `wheel`: `main.vkf`, `geometry.vkf`, `materials.vkf`, `particles.vkf`.
   A one-metre wheel and seven baffles are added geometry. Water and sand have
@@ -16,7 +21,7 @@ the runtime's transitive module dependencies together.
   use an immutable initial-geometry asset, GPU support contacts and friction.
   Dragging prescribes a held position; releasing restores dynamic gravity.
 - `tree`: `main.vkf`, `geometry.vkf`, `materials.vkf`. An eight-metre cached
-  generated tree, a dense lawn, elastic nodes and 8,192 wind parcels share a
+  generated tree, a dense lawn, elastic nodes and 64,000 wind parcels share a
   World. Air density determines parcel mass. Wood density, elastic modulus and
   representative branch dimensions determine a damped cantilever-mode field.
   The sun is an added emissive sphere; illumination and shadows use its position.
@@ -44,8 +49,10 @@ against analytical equilibrium, not laboratory-validated full-tree aerodynamics.
 See [branch cantilever research](https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2019.00059/full)
 and [wind-induced tree response](https://www.mdpi.com/2073-4433/14/6/1010).
 
-This feedback release is a phone-test candidate. The corrected bounded analytic
-wheel solver builds and passes regression checks, but its GPU shader and full-pile
-interaction checks were skipped at the user's request after the development
-browser stopped providing a WebGPU adapter. Earlier isolated contact receipts
-do not verify this replacement. Phone interaction and performance remain unverified.
+The wheel's frozen-motion regression remains unresolved; its older code and
+artifact are preserved, not rebuilt against an unverified contact candidate.
+Tree leaf/branch reduced modes now exchange momentum in a coupled implicit solve.
+Blade-cell impacts route to their attachment owner, and denser stratified air
+sampling preserves density. GPU impulse/reaction checks pass; this does not claim
+individual branch-beam topology or resolved aerodynamic accuracy. Phone behaviour
+and performance still need device testing.

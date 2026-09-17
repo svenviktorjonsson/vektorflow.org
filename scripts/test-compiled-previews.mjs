@@ -22,6 +22,10 @@ for(const {id,files} of applications){
   for(const name of files)assert.equal(hash(await readFile(new URL(`sources/coming-soon/${id}/${name}`,root))),record.sources[name]);
   const runtime=bridge.instantiateWasmRuntime({bytes,manifest:JSON.parse(manifestBytes)});runtime.init();const program=runtime.worldProgram();assert.ok(program.gpu_worlds.length);assert.ok(program.views.every(view=>view.axis===false));
   const arenas=runtime.worldLayerViews();assert.ok(arenas.every(arena=>arena.state.every(Number.isFinite)));
+  if(id==='tree'){
+    const snapshots=arenas.map(a=>a.state.slice());for(const a of arenas){a.state[0]=123456;a.state[a.state.length-1]=-123456;}runtime.init();
+    for(let i=0;i<arenas.length;i++)assert.deepEqual(arenas[i].state,snapshots[i],'Dense add reset must restore immutable authored seeds');
+  }
   if(id==='wheel')for(const world of program.gpu_worlds){verifyInitialExclusion(world,arenas.find(a=>a.layer.id===world.layer_id));const kernel=runtime.readBinding(`$world$gpu$${world.world_id}$physics`);for(const name of ['motion_find_toi','motion_bar_toi','preventive_predict','motion_update_ledger','motion_guard_end','motion_rotate'])assert.ok(kernel.includes(`fn ${name}`),`Compiled ${world.kind} missing ${name}`);assert.match(kernel,/bitcast<u32>\(fraction\)&0x7fffffffu/);}
   if(id==='tree'){
     const prepare=record.runtime_directory?(await import(`../public/previews/0.6.0/compiled/${record.runtime_directory}/vf-world-mechanical-runtime.mjs`)).prepareMechanicalInitialState:prepareMechanicalInitialState;
@@ -32,7 +36,7 @@ for(const {id,files} of applications){
   }
   for(const world of program.gpu_worlds){assert.ok(runtime.readBinding(`$world$gpu$${world.world_id}$physics`).includes('@compute'));assert.throws(()=>runtime.stepWorld(world.world_id),WebAssembly.RuntimeError);}
   if(id==='wheel'){assert.deepEqual(program.gpu_worlds.map(world=>world.kind),['liquid','granular']);assert.equal(program.gpu_worlds[0].geometry.radius,.5);assert.ok(arenas[2].layer.count>=1808);assert.ok(arenas[5].layer.count>=3680);}
-  else {assert.equal(program.gpu_worlds[0].kind,id==='stones'?'rigid':'wind');assert.equal(arenas.find(a=>a.layer.id===program.gpu_worlds[0].layer_id).layer.count,id==='stones'?5:8192);}
+  else {assert.equal(program.gpu_worlds[0].kind,id==='stones'?'rigid':'wind');assert.equal(arenas.find(a=>a.layer.id===program.gpu_worlds[0].layer_id).layer.count,id==='stones'?5:64000);}
   if(id==='stones'){assert.ok(runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$embedding`).includes('fn granite('),'stone material must be compiled');const asset=gunzipSync(await readFile(new URL(program.gpu_worlds[0].properties.asset.slice(1),root)));assert.equal(asset.readUInt32LE(8),5);let offset=20;for(let i=0;i<5;i++){const sizes=Array.from({length:5},(_,j)=>asset.readUInt32LE(offset+j*4));offset+=20;const metadata=JSON.parse(asset.subarray(offset,offset+sizes[0]));for(let axis=0;axis<3;axis++)assert.ok(Math.abs(metadata.collision.center[axis]-arenas[0].state[i*9+axis*3])<1e-8,'asset and add placement must agree');offset+=sizes[0]+(4-sizes[0]%4)%4+(sizes[1]+sizes[2]+sizes[3]+sizes[4])*4;}assert.equal(offset,asset.length);}
   console.log(`${id}: executable source, finite initial data and artifact hashes verified`);
 }
