@@ -6,7 +6,7 @@ geometry: .geometry
 materials: .materials
 particles: .particles
 
-water_world: World(dim:2,time_step:1 / 240)
+water_world: World(dim:2,time_step:1 / 60)
 sand_world: World(dim:2,time_step:1 / 240)
 display: Display(dim:2)
 water_view: display.append(water_world,axis:false)

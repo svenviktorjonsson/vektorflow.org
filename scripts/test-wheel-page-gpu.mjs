@@ -12,6 +12,21 @@ const work=await mkdtemp(path.join(site,'.work','wheel-page-gpu-'));
 let complete;
 const result=new Promise(resolve=>complete=resolve);
 const probe=`<script>
+let auditDevice;const requestDevice=GPUAdapter.prototype.requestDevice;
+GPUAdapter.prototype.requestDevice=async function(...args){auditDevice=await requestDevice.apply(this,args);return auditDevice;};
+async function checkExclusion(current){
+ const world=current.world,n=current.contact.resources.count,stride=world.kind==='liquid'?12:8;
+ const read=auditDevice.createBuffer({size:n*(stride+2)*4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const e=auditDevice.createCommandEncoder();e.copyBufferToBuffer(current.physics.particleBuffer,0,read,0,n*stride*4);e.copyBufferToBuffer(current.contact.resources.precisionOutput,0,read,n*stride*4,n*8);auditDevice.queue.submit([e.finish()]);
+ await read.mapAsync(GPUMapMode.READ);const raw=new Float32Array(read.getMappedRange().slice(0));read.unmap();read.destroy();
+ const r=world.kind==='liquid'?world.properties.spacing*.46:world.properties.radius,d=2*r,grid=new Map(),c=Math.cos(current.angle),s=Math.sin(current.angle);let pairGap=Infinity,boundaryGap=Infinity;
+ for(let i=0;i<n;i++){const x=raw[i*stride]+raw[n*stride+2*i]-world.geometry.center[0],y=raw[i*stride+1]+raw[n*stride+2*i+1]-world.geometry.center[1],cx=Math.floor(x/d),cy=Math.floor(y/d);
+  for(let yy=cy-1;yy<=cy+1;yy++)for(let xx=cx-1;xx<=cx+1;xx++)for(const p of grid.get(xx+','+yy)||[])pairGap=Math.min(pairGap,Math.hypot(x-p[0],y-p[1])-d);
+  const key=cx+','+cy;if(!grid.has(key))grid.set(key,[]);grid.get(key).push([x,y]);boundaryGap=Math.min(boundaryGap,world.geometry.radius-world.geometry.half_width-r-Math.hypot(x,y));
+  for(const [ax,ay,bx,by] of world.geometry.segments){const a=c*ax-s*ay,b=s*ax+c*ay,ex=c*(bx-ax)-s*(by-ay),ey=s*(bx-ax)+c*(by-ay),t=Math.max(0,Math.min(1,((x-a)*ex+(y-b)*ey)/(ex*ex+ey*ey)));boundaryGap=Math.min(boundaryGap,Math.hypot(x-a-t*ex,y-b-t*ey)-r-world.geometry.half_width);}
+ }
+ if(!(pairGap>=0&&boundaryGap>=0))throw Error('Paused configuration overlap: '+JSON.stringify({pairGap,boundaryGap}));return {pairGap,boundaryGap,vertices:n};
+}
 const rejectCaches=${process.argv.includes('--reject-caches')};
 const legacyOverrides=${process.argv.includes('--legacy-overrides')};
 if(legacyOverrides){const create=GPUDevice.prototype.createComputePipelineAsync;
@@ -28,17 +43,17 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
   }return create.call(this,descriptor);
  };
 }
-const checkSand=${process.argv.includes('--sand-paused')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,waterReceipt,sandFrame;
+const checkSand=${process.argv.includes('--sand-paused')},checkDrag=${process.argv.includes('--paused-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,waterReceipt,sandFrame,dragTarget,dragStarted;
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
 async function inspect(){
  const app=globalThis.__vfWorldLayerApplication;
  const current=app?.applications?.find(a=>a.world.world_id===app.program.views[app.program.active_view].world_id);
  const state={elapsedMs:performance.now()-started,ready:document.body?.dataset.vfWorldLayerReady,
-  worlds:app?.applications?.map(a=>a.world.kind),time:current?.time,
+  worlds:app?.applications?.map(a=>a.world.kind),time:current?.time,angle:current?.angle,target:current?.targetAngle,logicalAngle:current?.logicalAngle,remainingTime:current?.remainingTime,
   frames:Number(app?.canvas?.dataset.presentedFrames||0),status:document.querySelector('#vf-material-status')?.textContent,
   error:globalThis.__vfWorldLayerError||document.querySelector('[role=alert]:not([hidden])')?.textContent,faults};
- const signature=JSON.stringify([state.ready,state.worlds,state.status,state.error,faults]);
+ const signature=JSON.stringify([state.ready,state.worlds,state.status,state.error,checkDrag?state.angle:null,faults]);
  if(signature!==last){last=signature;await fetch('/page-progress',{method:'POST',body:JSON.stringify(state)});}
  if(document.querySelector('#vf-material-stage')&&!state.status)state.error='Startup replaced its loading message with a blank frame';
  if(!sandStarted&&state.worlds?.includes('granular'))state.error='Inactive sand initialized before the selected water View';
@@ -47,6 +62,12 @@ async function inspect(){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
   if(!current.paused||state.time!==0||!play){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Selected World did not start visibly paused with Play',...state})});return;}
   pausedReceipt={elapsedMs:state.elapsedMs,time:state.time,frames:state.frames,worlds:state.worlds};
+  if(checkDrag){
+   if(dragTarget===undefined){dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
+   if(Math.abs(current.logicalAngle-dragTarget)<.005){const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current);await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.time===0,pausedReceipt,dragMs,exclusion,...state})});return;}
+   if(performance.now()-dragStarted>3000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused 1.2-radian wheel drag not accepted within 3 seconds',dragMs:performance.now()-dragStarted,...state})});return;}
+   setTimeout(inspect,100);return;
+  }
   played=true;play.click();
  }
  if(played&&!sandStarted&&state.frames>=6&&state.time>.02){
