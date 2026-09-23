@@ -1,0 +1,9 @@
+concurrent: .concurrent
+
+updates: concurrent.broadcast()
+ui_updates: updates.subscribe()
+log_updates: updates.subscribe()
+
+updates.put((kind:"frame", index:1))
+:: ui_updates.get()
+:: log_updates.get()

@@ -1,0 +1,17 @@
+# Event/I/O concurrency uses `.concurrent`; ordinary numerical expressions are
+# still scheduled by Quantum.  `process` uses the language's normal call and
+# spilling rules, so this stays valid when the core variadic spelling evolves.
+
+concurrent: .concurrent
+
+worker(events, state):
+    (event:events.get())??>
+        Stop => state
+        _ => worker(events, state)
+
+events: concurrent.queue()
+state: concurrent.shared((mode:"run", samples:[1,2,3]))
+worker_process: concurrent.process(worker, events, state)
+
+events.put(Stop)
+:: worker_process.join()
