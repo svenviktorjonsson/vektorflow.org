@@ -9,7 +9,7 @@ const FORBIDDEN_CAPABILITIES = Object.freeze([
   [/(?:^|[^\p{L}\p{N}_])(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon)\s*\(/iu, "network"],
   [/(?:^|[^\p{L}\p{N}_])(?:network|http|server|socket)\s*\./iu, "network"],
   [/(?:^|[^\p{L}\p{N}_])(?:filesystem|file|io)\s*\./iu, "filesystem"],
-  [/(?:^|[^\p{L}\p{N}_])process\s*\./iu, "process"],
+  [/(?:^|[^\p{L}\p{N}_])command\s*\./iu, "command capability"],
 ]);
 
 function assertBrowserCapabilities(source) {

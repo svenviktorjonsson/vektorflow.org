@@ -1,0 +1,5 @@
+command: .command
+result: command.run("git", ["--version"])
+:: result.code
+:: result.out
+:: result.err

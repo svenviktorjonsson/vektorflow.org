@@ -29,6 +29,9 @@ export function createSharedCompiler({instance}) {
       return result;
   }
   function compile(source) {
+    if (/(?:^|[^\p{L}\p{N}_])command\s*\./iu.test(source)) {
+      throw new Error('browser runtime does not expose command capability');
+    }
     return withSource(source, (pointer, length) => checkedResponse(api.vkf_compile_source(pointer, length), 'frontend'));
   }
   function normalizeClockSnapshot(value) {
