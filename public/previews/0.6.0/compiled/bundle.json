@@ -89,19 +89,19 @@
       }
     },
     "tree": {
-      "directory": "tree-air-10",
-      "runtime_directory": "runtime-tree-10",
+      "directory": "tree-air-11",
+      "runtime_directory": "runtime-tree-11",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "974242f2e0b9357a6d9f005455620e18220bf8c3cfd80a77bd4a1db38db2cfe2",
-        "vf-world-mechanical-runtime.mjs": "a9329e4aa80722235044a72f50fb2a30b78d69c4a4514dd4cadf70719087813f",
-        "vf-world-mechanical-gpu.mjs": "84f1a72b426208b077c6556a16376f153cbb5b639ae9e56c261f45130a06d80a",
+        "vf-world-mechanical-runtime.mjs": "ee6183e73137a7d641df3bb5fc95f312e2f13880765ef9b32778fe47d9751a00",
+        "vf-world-mechanical-gpu.mjs": "3ada4dbd392f11282f9882514faaa6310d4c6b573be32669b5965f2a179468ac",
         "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
         "vf-world-scene-embedding-gpu.mjs": "7eee37162d2d0fbdf54acc43989e76bac47023ad349d8c22e105f634e8fd8756",
         "vf-world-physical-parameters.mjs": "262271962ae28f239ceec6ca54f09a9dcb009f73ba7c1bd1e40f5141f27cc915"
       },
-      "wasm": "f066b65dbf77a7dd8520c960b5e9039be7a201ab16826379329fbf6a76c9a92a",
-      "manifest": "3d02d3df91cb126829734dc461593c0419a06be8e67e53662201093cc36c4c8e",
+      "wasm": "2417a0ffe406ec5351ee892c7260050d68c9d63c2136547791021907e7aefe23",
+      "manifest": "ff9604b8ab8d1375448ed348297c82e7fd896e5bb7d75d4844472a2ddc2e5c32",
       "sources": {
         "main.vkf": "0c925430ee550237ad000fa39d4720ac5d8418085c33c410f6d330cefee508b3",
         "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
@@ -110,14 +110,14 @@
       "build": {
         "entry": "main.vkf",
         "compiler": "905b761107f56a51c1dda7e3a7bf4d25263b933753c491fc88c052ba6e07d17b",
-        "emitter": "08a5fa828076c6551faa9469a621b65d1503235dcfba5cc1f17ff56f7c857dba",
+        "emitter": "f70e9796afede7f6309e9da4c8c30e541d48712553d52446745341040107d6d8",
         "typed_ir": "d180a706c679f89e1c72f8a3d4f9a1087dda064ebfe1b9d2f8986749766e0ddb",
         "sources": {
           "main.vkf": "0c925430ee550237ad000fa39d4720ac5d8418085c33c410f6d330cefee508b3",
           "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
           "materials.vkf": "f24670802d2c168e4fd84bb0993c7efb170b460dff1425cffb5a7f9faf84e0ee"
         },
-        "wasm": "f066b65dbf77a7dd8520c960b5e9039be7a201ab16826379329fbf6a76c9a92a"
+        "wasm": "2417a0ffe406ec5351ee892c7260050d68c9d63c2136547791021907e7aefe23"
       }
     }
   },
