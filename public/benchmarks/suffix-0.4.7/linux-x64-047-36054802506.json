@@ -1,0 +1,215 @@
+{
+  "schema": "vektor-flow/suffix-semantics-baseline-v2",
+  "version": "0.4.7",
+  "purpose": "Ten-run compile and executable-process baseline for structural suffix lowering; not a cross-machine performance comparison or isolated kernel timing.",
+  "conditions": {
+    "compiler": "/home/runner/work/vektor-flow/vektor-flow/build/native-compiler/bin/vkf-strict",
+    "compilerSha256": "4cba1428afa3e8bfde7e391190fbd6fd39b254d859eba7695a5a9cf7cf7f86ea",
+    "os": "linux 6.17.0-1022-azure",
+    "architecture": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpus": 2
+  },
+  "sourceHashNormalization": "CRLF-to-LF",
+  "runs": 10,
+  "entries": [
+    {
+      "source": "tests/vkf/stat_sum_step_suffix.vkf",
+      "sourceSha256": "796d0dae1d2d61dba20d641d8bfff5b53508b1959ae5a1416df03989dd7912bf",
+      "rawSourceSha256": "796d0dae1d2d61dba20d641d8bfff5b53508b1959ae5a1416df03989dd7912bf",
+      "sourceBytes": 978,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 1487.5942572000001,
+        "sampleStddevMs": 15.719644956800485,
+        "samplesMs": [
+          1488.249834,
+          1479.340495,
+          1465.144062,
+          1462.40248,
+          1481.987135,
+          1502.487716,
+          1508.443917,
+          1498.704142,
+          1501.921511,
+          1487.26128
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "sum_suffix_selects_every_second_index",
+          "sum_suffix_uses_step_direction_and_empty_direction_mismatches",
+          "sum_suffix_interpolates_coordinate_steps_when_coordinates_are_provided",
+          "sum_suffix_uses_the_same_surface_for_symbolic_expressions"
+        ],
+        "sourceSha256": "36cc4a4b4ddd354cceac64b078caf91813da56290ff7d42d47116eb4b9dd2b49",
+        "count": 10,
+        "meanMs": 1.9360367999997834,
+        "sampleStddevMs": 0.38486605445232447,
+        "samplesMs": [
+          2.982771999999386,
+          1.7672220000022207,
+          1.8314079999981914,
+          1.7905170000012731,
+          1.8237469999985478,
+          1.7515080000011949,
+          2.1231670000015583,
+          1.7240869999986899,
+          1.7419730000001437,
+          1.8239669999966281
+        ]
+      }
+    },
+    {
+      "source": "tests/vkf/stat_suffix_labels.vkf",
+      "sourceSha256": "94cc55f9a6c5b73faade239c0ae38a3a6bcb2bbe7e1a59b0bfabc0128f38bb21",
+      "rawSourceSha256": "94cc55f9a6c5b73faade239c0ae38a3a6bcb2bbe7e1a59b0bfabc0128f38bb21",
+      "sourceBytes": 863,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 24.9853101,
+        "sampleStddevMs": 0.29022456512173483,
+        "samplesMs": [
+          24.578506,
+          24.478364,
+          25.230327,
+          24.881011,
+          25.05977,
+          25.456468,
+          25.071097,
+          25.118459,
+          24.912028,
+          25.067071
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "sum_suffix_uses_named_axes",
+          "reducers_share_named_axis_suffixes"
+        ],
+        "sourceSha256": "ca2ab25725a7c2b58209f80718102402a3bd316d32d0f15eed0c97d6857e674a",
+        "count": 10,
+        "meanMs": 1.7794178000000103,
+        "sampleStddevMs": 0.17482703748202627,
+        "samplesMs": [
+          2.2210550000017975,
+          1.7498860000014247,
+          1.7976670000025479,
+          1.6669309999997495,
+          1.7307259999979578,
+          1.6731289999988803,
+          1.9131309999975201,
+          1.6325190000025032,
+          1.7349529999992228,
+          1.674180999998498
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/numerical_suffix_analysis_native.vkf",
+      "sourceSha256": "28419ee58aa29b26c6e9334de13b1ed11fe142567b579adbac8d8b121ab51b04",
+      "rawSourceSha256": "28419ee58aa29b26c6e9334de13b1ed11fe142567b579adbac8d8b121ab51b04",
+      "sourceBytes": 2347,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 1478.3792737,
+        "sampleStddevMs": 19.175857465418748,
+        "samplesMs": [
+          1465.294421,
+          1485.216176,
+          1452.695196,
+          1472.326462,
+          1463.09856,
+          1466.818933,
+          1519.109902,
+          1476.819001,
+          1495.536769,
+          1486.877317
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "numerical_integ_defaults_to_unit_spacing",
+          "numerical_integ_accepts_constant_spacing",
+          "numerical_integ_derives_measure_from_named_coordinates",
+          "numerical_integ_accepts_decreasing_monotonic_coordinates",
+          "numerical_integ_rejects_nonmonotonic_coordinates",
+          "numerical_integ_accepts_index_bounds_and_named_spacing",
+          "numerical_integ_omits_each_coordinate_bound_independently",
+          "numerical_integ_accepts_singular_and_plural_limit_records",
+          "numerical_integ_vectorizes_plural_bound_fields",
+          "numerical_integ_reversed_endpoints_flip_the_sign",
+          "numerical_deriv_supports_constant_spacing"
+        ],
+        "sourceSha256": "257bef9a7b43fc4901e6ac864ef2f7e82d6d8ee6f038ff9f250dbc67a94a3882",
+        "count": 10,
+        "meanMs": 1.9716995000002497,
+        "sampleStddevMs": 0.3135522662768256,
+        "samplesMs": [
+          2.2231470000042464,
+          1.7421329999997397,
+          1.7618519999959972,
+          2.197098000004189,
+          2.6516820000033476,
+          2.044048000003386,
+          1.6747819999945932,
+          1.9651479999956791,
+          1.7259279999998398,
+          1.7311770000014803
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/symbolic_suffix_integrate_native.vkf",
+      "sourceSha256": "6afd98eb5ac11e0d1789331dcefdb966d47f4d50f7ab855fe8c0311951218de7",
+      "rawSourceSha256": "6afd98eb5ac11e0d1789331dcefdb966d47f4d50f7ab855fe8c0311951218de7",
+      "sourceBytes": 997,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 1499.9443712,
+        "sampleStddevMs": 50.22574362684562,
+        "samplesMs": [
+          1478.128607,
+          1470.09385,
+          1468.597702,
+          1468.040754,
+          1459.843333,
+          1624.851615,
+          1482.459998,
+          1490.913748,
+          1520.01666,
+          1536.497445
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "integrate_suffix_preserves_independent_symbols",
+          "integ_suffix_supports_symbolic_primitive_and_finite_bounds",
+          "integ_suffix_supports_improper_bounds",
+          "integ_suffix_supports_multivariable_limit_records",
+          "integ_suffix_reversed_endpoints_flip_the_sign"
+        ],
+        "sourceSha256": "ad57637752b2109eac9721aebd6245c951053d320fe61ad58bcd8479dd3e5308",
+        "count": 10,
+        "meanMs": 2.402926199998183,
+        "sampleStddevMs": 0.18942723155170452,
+        "samplesMs": [
+          2.789569999993546,
+          2.307064000007813,
+          2.406533000001218,
+          2.268305000005057,
+          2.260383999993792,
+          2.4896589999989374,
+          2.28765499999281,
+          2.242666999998619,
+          2.6684279999899445,
+          2.3089970000000903
+        ]
+      }
+    }
+  ]
+}
