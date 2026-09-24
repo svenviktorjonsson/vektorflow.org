@@ -62,7 +62,7 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
   }return create.call(this,descriptor);
  };
 }
-const checkSand=${process.argv.includes('--sand-paused')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,waterReceipt,sandFrame,dragTarget,dragStarted;
+const checkSand=${process.argv.includes('--sand-paused')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,waterReceipt,sandFrame,dragTarget,dragStarted,pausedProfileStart;
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
 async function inspect(){
@@ -80,9 +80,14 @@ async function inspect(){
  if(!played&&state.ready==='true'&&state.frames>=3){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
   if(!current.paused||state.time!==0||!play){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Selected World did not start visibly paused with Play',...state})});return;}
+  if(profileFps){
+   if(!pausedProfileStart){pausedProfileStart={elapsedMs:state.elapsedMs,frames:state.frames};setTimeout(inspect,250);return;}
+   if(state.elapsedMs-pausedProfileStart.elapsedMs<3000){setTimeout(inspect,250);return;}
+  }
   const pausedTelemetry=await current.physics.readTelemetry();
   pausedReceipt={elapsedMs:state.elapsedMs,time:state.time,frames:state.frames,
-    worlds:state.worlds,telemetry:pausedTelemetry};
+    worlds:state.worlds,telemetry:pausedTelemetry,
+    fps:profileFps?(state.frames-pausedProfileStart.frames)*1000/(state.elapsedMs-pausedProfileStart.elapsedMs):undefined};
   if(pausedTelemetry.nonFinite){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused water initialized with non-finite state',pausedReceipt,...state})});return;}
   if(checkDrag){
    if(dragTarget===undefined){dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
@@ -96,7 +101,11 @@ async function inspect(){
   const conservation=await checkWaterVolume(current),passed=conservation.retainedFraction>=.9999&&conservation.retainedFraction<=1.000001&&conservation.minimumDensity>0&&conservation.p90Density<=current.physics.policy.restDensity*1.04&&conservation.p999Density<=current.physics.policy.restDensity*1.15&&!conservation.telemetry.nonFinite;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,conservation,pausedReceipt,...state,error:passed?undefined:'Water lost occupied volume'})});return;
  }
- if(played&&!checkVolume&&!sandStarted&&state.frames>=6&&state.time>.02){
+ if(played&&profileFps&&state.elapsedMs-pausedReceipt.elapsedMs>=5000){
+  const wallSeconds=(state.elapsedMs-pausedReceipt.elapsedMs)/1000;
+  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,playing:{fps:(state.frames-pausedReceipt.frames)/wallSeconds,realtimeFactor:(state.time-pausedReceipt.time)/wallSeconds},...state})});return;
+ }
+ if(played&&!checkVolume&&!profileFps&&!sandStarted&&state.frames>=6&&state.time>.02){
   if(!checkSand){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
   waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
   [...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Sand').click();
