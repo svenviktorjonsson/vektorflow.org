@@ -39,6 +39,7 @@ struct RenderParams {
   sand_color: vec4<f32>,
   particle_color: vec4<f32>,
   light: vec4<f32>,
+  visual: vec4<f32>,
 };
 
 struct FullscreenOut {
@@ -66,6 +67,7 @@ struct DensitySplatOut {
 @group(0) @binding(1) var<uniform> params: RenderParams;
 @group(0) @binding(2) var field_texture: texture_2d<f32>;
 @group(0) @binding(3) var field_sampler: sampler;
+@group(0) @binding(4) var<storage, read> visual_grains: array<Grain>;
 
 fn world_to_clip(world: vec2<f32>) -> vec2<f32> {
   return (world - params.view.xy) / (params.view.zw - params.view.xy) * 2.0 - 1.0;
@@ -135,14 +137,16 @@ fn background_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
 @vertex
 fn grain_vertex(@builtin(vertex_index) vertex_index: u32,
   @builtin(instance_index) instance_index: u32) -> GrainOut {
-  let grain = grains[instance_index];
+  let particle_mode = params.canvas.z > 0.5;
+  var grain: Grain;
+  if (particle_mode) { grain = grains[instance_index]; }
+  else { grain = visual_grains[instance_index]; }
   let local = quad_corner(vertex_index);
   let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
   let physical_radius = params.canvas.w;
-  let particle_mode = params.canvas.z > 0.5;
   // Raw mode exposes physical contact disks. Loose material grains have a
   // pixel-scale footprint; neither view writes collision radii or mass.
-  let visible_radius = select(pixel_world * 0.65,
+  let visible_radius = select(max(physical_radius * 0.25, pixel_world * 0.45),
     max(physical_radius, pixel_world * 0.72), particle_mode);
   let speed = length(grain.velocity);
   let motion_direction = select(vec2<f32>(0.0, 1.0), grain.velocity / max(speed, 1.0e-6),
@@ -345,6 +349,7 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let contact_ao = mix(1.0, 0.88, clamp((density - 1.0) / 3.0, 0.0, 1.0));
   sand *= diffuse * contact_ao;
   sand *= 0.96 + 0.08 * mix(fine, stream, motion);
+  sand *= mix(1.0, 0.56, params.visual.w);
 
   let sparkle = smoothstep(0.982, 0.9995, fine);
   let motion_shimmer = abs(fine - fine_next) * motion;
@@ -361,7 +366,7 @@ fn sand_material_shading(input: GrainOut) -> vec3<f32> {
     speed > 1.0e-6);
   let cross_direction = vec2<f32>(-direction.y, direction.x);
   let time = params.floor_color.w;
-  let settled_phase = u32(floor(time * 1.5));
+  let settled_phase = 0u;
   let moving_phase = u32(floor(time * (5.0 + speed * 7.0)));
   let phase = select(settled_phase, moving_phase, motion > 0.05);
   let fine = pixel_noise(floor(input.position.xy), phase);
@@ -380,6 +385,7 @@ fn sand_material_shading(input: GrainOut) -> vec3<f32> {
   let diffuse = 0.38 + 0.62 * max(dot(surface_normal, light_direction), 0.0);
   var color = mineral * diffuse * contact_ao;
   color = color * (0.94 + 0.10 * mix(fine, stream_detail, motion));
+  color *= mix(1.0, 0.56, params.visual.w);
   // Sparse sub-grain highlights form a high-frequency mineral glimmer. During
   // pouring the neighboring-pixel difference becomes a directional shimmer,
   // preserving motion below the physical grain footprint.
@@ -423,6 +429,53 @@ fn grain_fragment(input: GrainOut) -> @location(0) vec4<f32> {
       * (0.015 + 0.3 * moving) * params.light.w;
   }
   return vec4<f32>(color * coverage, coverage);
+}
+`;
+
+// The fine grains are an Embedding: persistent GPU state driven by the
+// guide-particle velocity field. They have no mass and never enter Laws.
+export const GRANULAR_VISUAL_ADVECTION_GPU_WGSL = /* wgsl */`
+struct Grain {
+  position: vec2<f32>,
+  velocity: vec2<f32>,
+  previous_position: vec2<f32>,
+  id: u32,
+  contact_count: u32,
+};
+struct RenderParams {
+  view: vec4<f32>, canvas: vec4<f32>, material: vec4<f32>,
+  chamber: vec4<f32>, air_color: vec4<f32>, wall_color: vec4<f32>,
+  floor_color: vec4<f32>, sand_color: vec4<f32>,
+  particle_color: vec4<f32>, light: vec4<f32>, visual: vec4<f32>,
+};
+@group(0) @binding(0) var<storage, read> guides: array<Grain>;
+@group(0) @binding(1) var<uniform> params: RenderParams;
+@group(0) @binding(2) var field_texture: texture_2d<f32>;
+@group(0) @binding(3) var field_sampler: sampler;
+@group(0) @binding(4) var<storage, read_write> fine_grains: array<Grain>;
+@compute @workgroup_size(128)
+fn advect_visual(@builtin(global_invocation_id) invocation: vec3<u32>) {
+  let index = invocation.x;
+  if (index >= u32(params.visual.z)) { return; }
+  let guide = guides[index / 8u];
+  var fine = fine_grains[index];
+  let followed = fine.position + guide.position - fine.previous_position;
+  let uv = clamp((followed - params.view.xy) / (params.view.zw - params.view.xy),
+    vec2<f32>(0.0), vec2<f32>(1.0));
+  let field = textureSampleLevel(field_texture, field_sampler, uv, 0.0);
+  let field_velocity = field.yz / max(field.x, 1.0e-5);
+  let velocity = select(guide.velocity, field_velocity, field.x > 0.05);
+  var next = followed + (velocity - guide.velocity) * params.visual.x;
+  let displacement = next - guide.position;
+  let limit = params.visual.y * 1.35;
+  if (dot(displacement, displacement) > limit * limit) {
+    next = guide.position + normalize(displacement) * limit;
+  }
+  fine.position = next;
+  fine.previous_position = guide.position;
+  fine.velocity = velocity;
+  fine.contact_count = guide.contact_count;
+  fine_grains[index] = fine;
 }
 `;
 
@@ -616,8 +669,54 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     primitive: { topology: 'triangle-list' },
   });
 
-  const paramsBuffer = createBuffer(device, 'VKF Granular embedding params', 160,
+  const visualShader = device.createShaderModule({
+    label: 'VKF Granular fine-grain advection',
+    code: GRANULAR_VISUAL_ADVECTION_GPU_WGSL,
+  });
+  if (typeof visualShader.getCompilationInfo === 'function') {
+    const compilation = await visualShader.getCompilationInfo();
+    const errors = compilation.messages.filter((message) => message.type === 'error');
+    if (errors.length) throw new Error(errors.map((message) =>
+      `line ${message.lineNum}:${message.linePos} ${message.message}`).join('\n'));
+  }
+  const visualPipeline = await createCheckedGpuPipeline(device,'compute',{
+    label: 'VKF Granular massless visual advection',
+    layout: 'auto',
+    compute: { module: visualShader, entryPoint: 'advect_visual' },
+  });
+
+  const paramsBuffer = createBuffer(device, 'VKF Granular embedding params', 176,
     GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+  const visualParticleCount = particleCount * 8;
+  const { seed } = worldRuntime;
+  if (!seed?.floats || !Number.isSafeInteger(seed.stride)
+      || seed.floats.length < particleCount * seed.stride) {
+    throw new TypeError('Granular visual samples require the physical seed state');
+  }
+  const visualSeedBytes = new ArrayBuffer(visualParticleCount * PARTICLE_STRIDE_BYTES);
+  const visualSeedFloats = new Float32Array(visualSeedBytes);
+  const visualSeedIds = new Uint32Array(visualSeedBytes);
+  for (let guide = 0; guide < particleCount; guide += 1) {
+    const guideX = seed.floats[guide * seed.stride];
+    const guideY = seed.floats[guide * seed.stride + 1];
+    const phase = ((Math.imul(guide + 1, 0x9e3779b9) >>> 0) / 0x100000000)
+      * Math.PI * 2;
+    for (let sample = 0; sample < 8; sample += 1) {
+      const index = guide * 8 + sample;
+      const offset = index * 8;
+      const angle = phase + sample * 2.39996323;
+      const radius = worldRuntime.policy.grainRadius * 0.72
+        * Math.sqrt((sample + 0.5) / 8);
+      visualSeedFloats[offset] = guideX + Math.cos(angle) * radius;
+      visualSeedFloats[offset + 1] = guideY + Math.sin(angle) * radius;
+      visualSeedFloats[offset + 4] = guideX;
+      visualSeedFloats[offset + 5] = guideY;
+      visualSeedIds[offset + 6] = index;
+    }
+  }
+  const visualBuffer = createBuffer(device, 'VKF Granular massless visual grains',
+    visualSeedBytes.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
+  device.queue.writeBuffer(visualBuffer, 0, visualSeedBytes);
   const storageBinding = {
     buffer: worldRuntime.particleBuffer,
     offset: 0,
@@ -642,6 +741,8 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
   let densityBindGroup = null;
   let compositeBindGroup = null;
   let particleBindGroup = null;
+  let visualBindGroup = null;
+  let lastVisualTime = null;
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
@@ -672,6 +773,18 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
         { binding: 1, resource: { buffer: paramsBuffer } },
         { binding: 2, resource: densityView },
         { binding: 3, resource: fieldSampler },
+        { binding: 4, resource: { buffer: visualBuffer } },
+      ],
+    });
+    visualBindGroup = device.createBindGroup({
+      label: 'VKF Granular fine-grain advection bindings',
+      layout: visualPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: storageBinding },
+        { binding: 1, resource: { buffer: paramsBuffer } },
+        { binding: 2, resource: densityView },
+        { binding: 3, resource: fieldSampler },
+        { binding: 4, resource: { buffer: visualBuffer } },
       ],
     });
     densityBindGroup = device.createBindGroup({
@@ -695,7 +808,13 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     return true;
   };
 
-  const updateParams = (mode, time) => {
+  let wetness = 0;
+  const setWetness = value => {
+    if (!Number.isFinite(value) || value < 0 || value > 1)
+      throw new RangeError('Sand wetness must be between zero and one');
+    wetness = value;
+  };
+  const updateParams = (mode, time, deltaTime) => {
     const { policy } = worldRuntime;
     const centerX = (policy.viewMinimum[0] + policy.viewMaximum[0]) * 0.5;
     const centerY = (policy.viewMinimum[1] + policy.viewMaximum[1]) * 0.5;
@@ -706,7 +825,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     if (canvasAspect < worldAspect) viewHeight = viewWidth / canvasAspect;
     else viewWidth = viewHeight * canvasAspect;
 
-    const values = new Float32Array(40);
+    const values = new Float32Array(44);
     values.set([centerX - viewWidth * 0.5, centerY - viewHeight * 0.5,
       centerX + viewWidth * 0.5, centerY + viewHeight * 0.5], 0);
     values.set([width, height, mode === 'particles' ? 1 : 0, policy.grainRadius], 4);
@@ -719,6 +838,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     values.set(colors.sand, 28);
     values.set(colors.particles, 32);
     values.set([...lightDirection, lightIntensity], 36);
+    values.set([deltaTime, policy.grainRadius, visualParticleCount, wetness], 40);
     device.queue.writeBuffer(paramsBuffer, 0, values);
   };
 
@@ -736,7 +856,10 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       throw new RangeError('Granular embedding mode must be sand or particles');
     }
     resize();
-    updateParams(mode, Number.isFinite(time) ? time : 0);
+    const renderTime = Number.isFinite(time) ? time : 0;
+    const visualDeltaTime = lastVisualTime === null ? 0
+      : Math.max(0, Math.min(0.05, renderTime - lastVisualTime));
+    updateParams(mode, renderTime, visualDeltaTime);
     if (mode === 'sand') {
       const densityPass = encoder.beginRenderPass({
         label: 'VKF Granular density accumulation pass',
@@ -751,6 +874,14 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       densityPass.setBindGroup(0, densityBindGroup);
       densityPass.draw(4, particleCount);
       densityPass.end();
+      const visualPass = encoder.beginComputePass({
+        label: 'VKF Granular fine-grain velocity-field advection',
+      });
+      visualPass.setPipeline(visualPipeline);
+      visualPass.setBindGroup(0, visualBindGroup);
+      visualPass.dispatchWorkgroups(Math.ceil(visualParticleCount / 128));
+      visualPass.end();
+      lastVisualTime = renderTime;
     }
     const pass = encoder.beginRenderPass({
       label: 'VKF Granular particle embedding pass',
@@ -767,7 +898,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       pass.draw(3);
       pass.setPipeline(particlePipeline);
       pass.setBindGroup(0, particleBindGroup);
-      pass.draw(4, particleCount);
+      pass.draw(4, particleCount * 8);
     } else {
       pass.setPipeline(backgroundPipeline);
       pass.setBindGroup(0, backgroundBindGroup);
@@ -782,6 +913,11 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
   const destroy = () => {
     densityTexture?.destroy();
     paramsBuffer.destroy();
+    visualBuffer.destroy();
+  };
+  const reset = () => {
+    lastVisualTime = null;
+    device.queue.writeBuffer(visualBuffer, 0, visualSeedBytes);
   };
 
   resize();
@@ -789,8 +925,10 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     kind: 'granular-particle-embedding-gpu:v1',
     particleCount,
     render,
+    reset,
     resize,
     setColors,
+    setWetness,
     destroy,
     get width() { return width; },
     get height() { return height; },

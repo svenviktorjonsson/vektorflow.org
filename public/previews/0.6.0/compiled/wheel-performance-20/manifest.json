@@ -1,11 +1,11 @@
 {
-  "artifact_content_sha256": "caba7d17c54dc169",
+  "artifact_content_sha256": "a7ad262651c3f698",
   "artifact_kind": "wasm",
   "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-wheel\\.vkfbuild\\main\\main.wasm",
   "compiler_version": "vkf-wasm-artifact-smoke-0.2",
   "dependencies": [],
-  "manifest_hash": "18077ac2adf1133b",
-  "runtime_hash": "caba7d17c54dc169",
+  "manifest_hash": "bed87a4f05e5ae33",
+  "runtime_hash": "a7ad262651c3f698",
   "runtime_surface": {
     "bindings": [
       {
@@ -246,5 +246,5 @@
   "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-wheel\\main.vkf",
   "source_sha256": "013a9dcf3544a367",
   "status": "current",
-  "typed_ir_sha256": "a0d724195cd6d13e"
+  "typed_ir_sha256": "de6ff7beb5932341"
 }

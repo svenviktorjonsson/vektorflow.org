@@ -32,7 +32,8 @@ await mkdir(path.join(compiled,runtime_directory),{recursive:true});
 async function copyRuntime(name){
   if(runtime[name])return;
   if(!/^[A-Za-z0-9_.-]+\.(js|mjs)$/.test(name))throw Error('Runtime module outside flat adapter closure');
-  const source=committedRuntime?committedBytes(['show',`${build.runtime_revision}:web/vf-ui/${name}`]):await readFile(path.join(compiler,'web/vf-ui',name));
+  const original=committedRuntime?committedBytes(['show',`${build.runtime_revision}:web/vf-ui/${name}`]):await readFile(path.join(compiler,'web/vf-ui',name));
+  const source=Buffer.from(original.toString('utf8').replaceAll('\r\n','\n'));
   await writeFile(path.join(compiled,runtime_directory,name),source);runtime[name]=hash(source);
   for(const match of source.toString().matchAll(/(?:from\s*|import\s*)['"]\.\/([^'"]+)['"]/g))await copyRuntime(match[1]);
 }

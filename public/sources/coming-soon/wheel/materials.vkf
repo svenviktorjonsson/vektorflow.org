@@ -1,5 +1,5 @@
 # Reusable named property groups. No geometry type is privileged as water/sand.
 # These properties have an effect only when the matching World law consumes them.
 water: (density:1000,spacing:0.009,lattice:"hexagonal",viscosity:1.8,color:[0.25,0.65,0.8,1],size:0.004)
-sand: (density:1600,spacing:0.011022,radius:0.0055,friction:1.0,wall_friction:1.0,
+sand: (density:1600,spacing:0.01503,radius:0.0075,time_step:1 / 120,friction:0.72,wall_friction:1.0,
     restitution:0.0,rolling_resistance:0.2,color:[0.8,0.65,0.35,1],size:0.001)

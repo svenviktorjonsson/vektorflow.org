@@ -1,4 +1,5 @@
 import {createCheckedGpuPipeline} from './vf-gpu-pipeline-errors.mjs';
+import {sandConstitutiveState} from './vf-sand-material-state.mjs';
 import {
   createCohesionlessGranularContactLawReference,
   createGranularStateReference,
@@ -23,7 +24,7 @@ const MAXIMUM_SIGNED_CELL_AXIS_SPAN = 0x7ffffffd;
 
 export const GRANULAR_PARTICLE_WORLD_GPU_ABI = Object.freeze({
   particleStrideBytes: 32,
-  parameterBytes: 112,
+  parameterBytes: 128,
   telemetryAtomicCount: 8,
   particleFields: Object.freeze([
     'position',
@@ -336,6 +337,7 @@ struct Params {
   force: vec4<f32>,
   solver: vec4<f32>,
   motion: vec4<f32>,
+  saturation: vec4<f32>,
 };
 
 struct WheelContact {
@@ -732,7 +734,8 @@ fn project_contacts(@builtin(global_invocation_id) invocation: vec3<u32>) {
         let tangent_motion = relative_motion - normal * dot(relative_motion, normal);
         let tangent_length = length(tangent_motion);
         if (tangent_length > 1.0e-12) {
-          let tangent_limit = params.material.y * normal_correction;
+          let tangent_limit = (params.material.y + params.saturation.w)
+            * normal_correction;
           pair_correction = pair_correction - tangent_motion / tangent_length
             * min(tangent_length * 0.5, tangent_limit);
         }
@@ -841,7 +844,8 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
   let diameter = params.material.x * 2.0;
   // The normal solve's safety gap must still count as a resting friction
   // contact; it is not cohesion or attraction between separated grains.
-  let contact_band = diameter * 1.002 + params.solver.x * 2.0;
+  let contact_band = diameter * (1.002 + params.saturation.y)
+    + params.solver.x * 2.0;
   let contact_band_squared = contact_band * contact_band;
   let center_cell = cell_coordinate(grain.position);
   var velocity_delta = vec2<f32>(0.0);
@@ -871,6 +875,12 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
         if (normal_speed < 0.0) {
           normal_impulse = -0.5 * (1.0 + params.material.z) * normal_speed;
           velocity_delta = velocity_delta + normal * normal_impulse;
+        } else if (distance > diameter && params.saturation.z > 0.0) {
+          // A capillary bridge only opposes separation. It never attracts a
+          // resting pair, so wet sand cannot gain energy or crawl uphill.
+          normal_impulse = -min(normal_speed * 0.5,
+            params.saturation.z * params.force.z * 0.5);
+          velocity_delta = velocity_delta + normal * normal_impulse;
         }
         let gravity_support = max(0.0,
           -dot(params.force.xy * params.force.z, normal)) * 0.5;
@@ -881,9 +891,9 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
           // Resting grains still carry normal load. Including the gravity load
           // gives the contact network a true static Coulomb yield threshold,
           // so a heap keeps its angle of repose instead of flowing like water.
-          let support_impulse = max(normal_impulse, gravity_support);
+          let support_impulse = max(abs(normal_impulse), gravity_support);
           let tangent_impulse = min(tangent_speed * 0.5,
-            params.material.y * support_impulse);
+            (params.material.y + params.saturation.w) * support_impulse);
           velocity_delta = velocity_delta - tangent_velocity / tangent_speed * tangent_impulse;
         }
         impulse_contact_count = impulse_contact_count + 1u;
@@ -1139,6 +1149,7 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
   const paramsBytes = new ArrayBuffer(GRANULAR_PARTICLE_WORLD_GPU_ABI.parameterBytes);
   const paramsU32 = new Uint32Array(paramsBytes);
   const paramsF32 = new Float32Array(paramsBytes);
+  let wetness = 0;
   let wheelAngle = 0;
   let wheelAngularVelocity = 0;
   const updateParams = () => {
@@ -1152,17 +1163,28 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     paramsF32.set([...policy.gravity, policy.timeStep, policy.linearDamping], 16);
     paramsF32.set([policy.contactSlop, policy.boundaryFriction,
       wheelAngle, wheelAngularVelocity], 20);
+    const state = sandConstitutiveState(wetness, policy.grainRadius);
+    paramsF32.set([wetness, state.bridgeFraction,
+      state.cohesionAcceleration, state.frictionBoost], 28);
     device.queue.writeBuffer(paramsBuffer, 0, paramsBytes);
+  };
+  const setWetness = value => {
+    sandConstitutiveState(value);
+    wetness = value;
+    updateParams();
   };
   const dispatch = (pass, entryPoint, bindGroup, count) => {
     pass.setPipeline(pipelines[entryPoint]);
     pass.setBindGroup(0, bindGroup);
     pass.dispatchWorkgroups(ceilDiv(count, WORKGROUP_SIZE));
   };
-  const buildGrid = (pass, bindGroup) => {
+  const buildGrid = (pass, bindGroup, audit = false) => {
     dispatch(pass, 'clear_cells', bindGroup, gridCellCount);
     dispatch(pass, 'fill_cells', bindGroup, seed.count);
-    dispatch(pass, 'sort_cells', bindGroup, gridCellCount);
+    // Atomic-min insertion already orders stable IDs within each exact cell.
+    // Full bucket sorting is only needed for the grid audit, not every PBD
+    // iteration; it dominated launch count for this small active world.
+    if (audit) dispatch(pass, 'sort_cells', bindGroup, gridCellCount);
   };
   const coloredRepair = (encoder, sweeps) => {
     for (let iteration = 0; iteration < sweeps; iteration++) {
@@ -1186,10 +1208,6 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     }
     const finalize = current === 'B' ? bindGroups.BA : bindGroups.CA;
     dispatch(pass, 'finalize_state', finalize, seed.count);
-    // Rebuild from finalized A, then measure actual residual overlap. Attempted
-    // penetration and post-projection residual are intentionally separate.
-    buildGrid(pass, bindGroups.AB);
-    dispatch(pass, 'audit_contacts', bindGroups.AB, seed.count);
   };
   const stepMany = (encoder, count, timeStep = policy.timeStep) => {
     if (!encoder || typeof encoder.beginComputePass !== 'function') {
@@ -1209,6 +1227,10 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     for (let index = 0; index < count; index += 1) encodeFixedStep(pass);
     pass.end();
     coloredRepair(encoder, 4);
+    const audit = encoder.beginComputePass({ label: 'Granular post-repair audit' });
+    buildGrid(audit, bindGroups.AB, true);
+    dispatch(audit, 'audit_contacts', bindGroups.AB, seed.count);
+    audit.end();
     frameIndex += count;
   };
   const step = (encoder, timeStep = policy.timeStep) => stepMany(encoder, 1, timeStep);
@@ -1392,6 +1414,7 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     resetTelemetry,
     reset,
     setWheel,
+    setWetness,
     wheel: Object.freeze({ center: Object.freeze(options.geometry?.center ?? [0, 0.32]),
       radius: options.geometry?.radius ?? 0.50, barHalfWidth: options.geometry?.half_width ?? 0.012 }),
     destroy,
