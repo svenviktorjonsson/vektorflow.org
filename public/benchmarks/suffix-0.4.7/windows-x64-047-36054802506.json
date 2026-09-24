@@ -1,0 +1,215 @@
+{
+  "schema": "vektor-flow/suffix-semantics-baseline-v2",
+  "version": "0.4.7",
+  "purpose": "Ten-run compile and executable-process baseline for structural suffix lowering; not a cross-machine performance comparison or isolated kernel timing.",
+  "conditions": {
+    "compiler": "D:\\a\\vektor-flow\\vektor-flow\\build\\native-compiler\\bin\\Release\\vkf-strict.exe",
+    "compilerSha256": "8aef29aaf3c90269fb48edebfc0536d420fa12d3dffc3fb20437580be3f1817f",
+    "os": "win32 10.0.26100",
+    "architecture": "x64",
+    "cpu": "AMD EPYC 7763 64-Core Processor                ",
+    "logicalCpus": 2
+  },
+  "sourceHashNormalization": "CRLF-to-LF",
+  "runs": 10,
+  "entries": [
+    {
+      "source": "tests/vkf/stat_sum_step_suffix.vkf",
+      "sourceSha256": "796d0dae1d2d61dba20d641d8bfff5b53508b1959ae5a1416df03989dd7912bf",
+      "rawSourceSha256": "4233165769ecad16b89e5091c96bf13796605eb88fd0ca5717d07fc9d8110547",
+      "sourceBytes": 1002,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 6354.47719,
+        "sampleStddevMs": 958.3973652596673,
+        "samplesMs": [
+          5606.1607,
+          5545.6084,
+          5703.4665,
+          5693.4721,
+          5623.4681,
+          5730.9678,
+          7511.4538,
+          6652.2904,
+          7676.3764,
+          7801.5077
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "sum_suffix_selects_every_second_index",
+          "sum_suffix_uses_step_direction_and_empty_direction_mismatches",
+          "sum_suffix_interpolates_coordinate_steps_when_coordinates_are_provided",
+          "sum_suffix_uses_the_same_surface_for_symbolic_expressions"
+        ],
+        "sourceSha256": "36cc4a4b4ddd354cceac64b078caf91813da56290ff7d42d47116eb4b9dd2b49",
+        "count": 10,
+        "meanMs": 23.168049999998765,
+        "sampleStddevMs": 4.017165372426458,
+        "samplesMs": [
+          28.56590000000142,
+          20.216300000000047,
+          20.349600000001374,
+          20.343500000002678,
+          20.401599999997416,
+          21.816800000000512,
+          20.72380000000703,
+          26.796699999991688,
+          30.926599999991595,
+          21.5396999999939
+        ]
+      }
+    },
+    {
+      "source": "tests/vkf/stat_suffix_labels.vkf",
+      "sourceSha256": "94cc55f9a6c5b73faade239c0ae38a3a6bcb2bbe7e1a59b0bfabc0128f38bb21",
+      "rawSourceSha256": "b13dc6df7e5dfbbef907a365b3764a5f13833af8c0585ee9131c6516a94a3ecd",
+      "sourceBytes": 887,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 110.45183999999999,
+        "sampleStddevMs": 8.919830038515308,
+        "samplesMs": [
+          103.6856,
+          123.2049,
+          117.7485,
+          104.8408,
+          118.4791,
+          99.9316,
+          104.0651,
+          103.0229,
+          122.3376,
+          107.2023
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "sum_suffix_uses_named_axes",
+          "reducers_share_named_axis_suffixes"
+        ],
+        "sourceSha256": "ca2ab25725a7c2b58209f80718102402a3bd316d32d0f15eed0c97d6857e674a",
+        "count": 10,
+        "meanMs": 22.976070000001346,
+        "sampleStddevMs": 3.3633502408096763,
+        "samplesMs": [
+          28.55930000000808,
+          20.283400000000256,
+          22.61119999999937,
+          20.32279999999446,
+          27.447500000009313,
+          27.192399999999907,
+          21.058199999999488,
+          20.62279999999737,
+          20.94999999999709,
+          20.713100000008126
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/numerical_suffix_analysis_native.vkf",
+      "sourceSha256": "28419ee58aa29b26c6e9334de13b1ed11fe142567b579adbac8d8b121ab51b04",
+      "rawSourceSha256": "7086e81490ed509d155c4ffa75be97ebb32571d26f2c508141cb524cfa4208df",
+      "sourceBytes": 2411,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 6173.006549999999,
+        "sampleStddevMs": 571.9447352755242,
+        "samplesMs": [
+          6185.4895,
+          6226.0258,
+          5777.6772,
+          5767.8988,
+          5796.3211,
+          5773.3839,
+          5816.7428,
+          6077.022,
+          7512.0661,
+          6797.4383
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "numerical_integ_defaults_to_unit_spacing",
+          "numerical_integ_accepts_constant_spacing",
+          "numerical_integ_derives_measure_from_named_coordinates",
+          "numerical_integ_accepts_decreasing_monotonic_coordinates",
+          "numerical_integ_rejects_nonmonotonic_coordinates",
+          "numerical_integ_accepts_index_bounds_and_named_spacing",
+          "numerical_integ_omits_each_coordinate_bound_independently",
+          "numerical_integ_accepts_singular_and_plural_limit_records",
+          "numerical_integ_vectorizes_plural_bound_fields",
+          "numerical_integ_reversed_endpoints_flip_the_sign",
+          "numerical_deriv_supports_constant_spacing"
+        ],
+        "sourceSha256": "257bef9a7b43fc4901e6ac864ef2f7e82d6d8ee6f038ff9f250dbc67a94a3882",
+        "count": 10,
+        "meanMs": 25.76095999999088,
+        "sampleStddevMs": 10.193910127147703,
+        "samplesMs": [
+          54.7550999999803,
+          23.151399999973364,
+          22.875199999980396,
+          22.580500000010943,
+          22.22469999999157,
+          22.07699999999022,
+          22.17710000000079,
+          22.20339999999851,
+          22.857099999993807,
+          22.708099999988917
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/symbolic_suffix_integrate_native.vkf",
+      "sourceSha256": "6afd98eb5ac11e0d1789331dcefdb966d47f4d50f7ab855fe8c0311951218de7",
+      "rawSourceSha256": "362ddf251187764153334d5786296057bc4829be52de0a8a03ef558f6d21b2c4",
+      "sourceBytes": 1027,
+      "semanticTest": "native -t and compiled executable output",
+      "compile": {
+        "count": 10,
+        "meanMs": 6703.674430000001,
+        "sampleStddevMs": 1313.6744463782334,
+        "samplesMs": [
+          6068.7468,
+          6435.6328,
+          6187.6539,
+          6162.716,
+          6187.5648,
+          5951.0956,
+          6131.5959,
+          6091.9,
+          7639.3969,
+          10180.4416
+        ]
+      },
+      "runtime": {
+        "cases": [
+          "integrate_suffix_preserves_independent_symbols",
+          "integ_suffix_supports_symbolic_primitive_and_finite_bounds",
+          "integ_suffix_supports_improper_bounds",
+          "integ_suffix_supports_multivariable_limit_records",
+          "integ_suffix_reversed_endpoints_flip_the_sign"
+        ],
+        "sourceSha256": "ad57637752b2109eac9721aebd6245c951053d320fe61ad58bcd8479dd3e5308",
+        "count": 10,
+        "meanMs": 49.16455999998725,
+        "sampleStddevMs": 16.537077637985746,
+        "samplesMs": [
+          57.17399999999907,
+          34.1306999999797,
+          33.51490000000922,
+          39.400599999993574,
+          45.09320000000298,
+          46.18769999995129,
+          43.87670000002254,
+          41.52099999994971,
+          62.23509999999078,
+          88.51169999997364
+        ]
+      }
+    }
+  ]
+}
