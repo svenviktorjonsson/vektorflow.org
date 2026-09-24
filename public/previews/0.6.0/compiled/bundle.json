@@ -89,34 +89,35 @@
       }
     },
     "tree": {
-      "directory": "tree-wind-9",
-      "runtime_directory": "runtime-tree-9",
+      "directory": "tree-air-10",
+      "runtime_directory": "runtime-tree-10",
       "runtime": {
-        "vf-world-layer-runtime.js": "85607d02b569cf383ae9c51c966392b3107ababca060d9405f8221450a08968f",
+        "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "974242f2e0b9357a6d9f005455620e18220bf8c3cfd80a77bd4a1db38db2cfe2",
-        "vf-world-mechanical-runtime.mjs": "eba3b093e44eac52eb5f5bc3b5d5bb1d8d2842a86f4dd5497372f32e61407c68",
-        "vf-world-mechanical-gpu.mjs": "0a55372c02b863dc827d163e80b7fdac89412a8952f6c5245c38c91cf065f243",
-        "vf-world-scene-embedding-gpu.mjs": "73cb5ee41c0232792632c13a39341178244f6b081ea49f5e7c27bf8ddc19656c",
-        "vf-world-physical-parameters.mjs": "1d0971d280f09f8b5169fc85dd4eb0a238caca2068b8061360a15bf71c6007c6"
+        "vf-world-mechanical-runtime.mjs": "a9329e4aa80722235044a72f50fb2a30b78d69c4a4514dd4cadf70719087813f",
+        "vf-world-mechanical-gpu.mjs": "84f1a72b426208b077c6556a16376f153cbb5b639ae9e56c261f45130a06d80a",
+        "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
+        "vf-world-scene-embedding-gpu.mjs": "7eee37162d2d0fbdf54acc43989e76bac47023ad349d8c22e105f634e8fd8756",
+        "vf-world-physical-parameters.mjs": "262271962ae28f239ceec6ca54f09a9dcb009f73ba7c1bd1e40f5141f27cc915"
       },
-      "wasm": "6b523f72c15400380ef664b45790fdfed09278a2f27f5a829a643660dfec9bfb",
-      "manifest": "2239d1880965472bfa4c74811b2a0ba3fa7d140d0790f3cfdefbe7adea956592",
+      "wasm": "f066b65dbf77a7dd8520c960b5e9039be7a201ab16826379329fbf6a76c9a92a",
+      "manifest": "3d02d3df91cb126829734dc461593c0419a06be8e67e53662201093cc36c4c8e",
       "sources": {
-        "main.vkf": "f3cf41495ab9b328ab3ad906d7d1577882842a93c0713f39034a80d6e5ff21bc",
+        "main.vkf": "0c925430ee550237ad000fa39d4720ac5d8418085c33c410f6d330cefee508b3",
         "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
-        "materials.vkf": "d99ad2841187b5a7e322c87734fbe61af195acb3d49c7f0cdd90270f944d73ec"
+        "materials.vkf": "f24670802d2c168e4fd84bb0993c7efb170b460dff1425cffb5a7f9faf84e0ee"
       },
       "build": {
         "entry": "main.vkf",
-        "compiler": "e15d3bf96736fc6bab17a9ae6c80c59550cfe285e114b09fd976b1e2277da655",
-        "emitter": "9b310a1edd9b3e6cf7e8da86951b5d11acf183abf526745160e9f9141160097c",
-        "typed_ir": "0fb2cfe029f33de5641d300698231e83b31e74ff719c6ed4bd38bdc859e1b74d",
+        "compiler": "905b761107f56a51c1dda7e3a7bf4d25263b933753c491fc88c052ba6e07d17b",
+        "emitter": "08a5fa828076c6551faa9469a621b65d1503235dcfba5cc1f17ff56f7c857dba",
+        "typed_ir": "d180a706c679f89e1c72f8a3d4f9a1087dda064ebfe1b9d2f8986749766e0ddb",
         "sources": {
-          "main.vkf": "f3cf41495ab9b328ab3ad906d7d1577882842a93c0713f39034a80d6e5ff21bc",
+          "main.vkf": "0c925430ee550237ad000fa39d4720ac5d8418085c33c410f6d330cefee508b3",
           "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
-          "materials.vkf": "d99ad2841187b5a7e322c87734fbe61af195acb3d49c7f0cdd90270f944d73ec"
+          "materials.vkf": "f24670802d2c168e4fd84bb0993c7efb170b460dff1425cffb5a7f9faf84e0ee"
         },
-        "wasm": "6b523f72c15400380ef664b45790fdfed09278a2f27f5a829a643660dfec9bfb"
+        "wasm": "f066b65dbf77a7dd8520c960b5e9039be7a201ab16826379329fbf6a76c9a92a"
       }
     }
   },

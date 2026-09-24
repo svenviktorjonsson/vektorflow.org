@@ -1,8 +1,14 @@
 # The cached pro-gen variants initialize added geometry; they do not animate it.
-tree: (fixed:true,height:8,leaf_mass:0.0003,leaf_spring_constant:0.3,leaf_damping:0.002,asset:"/previews/0.6.0/live/tree/assets/tree-mesh-feedback-8.bin.gz",variants:(uniform:"/previews/0.6.0/live/tree/assets/tree-mesh-uniform-feedback-8.bin.gz",normal:"/previews/0.6.0/live/tree/assets/tree-mesh-normal-feedback-8.bin.gz",triangular:"/previews/0.6.0/live/tree/assets/tree-mesh-triangular-feedback-8.bin.gz"))
+# Softer blade modes retain bend across successive parcel impacts. These are
+# physical spring/damper inputs, not a time-driven animation or render filter.
+tree: (fixed:true,height:8,leaf_mass:0.0003,leaf_spring_constant:0.01,leaf_damping:0.0015,asset:"/previews/0.6.0/live/tree/assets/tree-mesh-feedback-8.bin.gz",variants:(uniform:"/previews/0.6.0/live/tree/assets/tree-mesh-uniform-feedback-8.bin.gz",normal:"/previews/0.6.0/live/tree/assets/tree-mesh-normal-feedback-8.bin.gz",triangular:"/previews/0.6.0/live/tree/assets/tree-mesh-triangular-feedback-8.bin.gz"))
 lawn: (fixed:true,count:81920,mass:0.08,spring_constant:40,damping:0.8)
 elastic: (fixed:true,density:850,young_modulus:2000000000,branch_radius:0.025,
     branch_length:2,damping_ratio:0.2,elasticity:1)
 sun: (fixed:true,shape:"sphere",radius:2.4,emissivity:1,emission:[1,0.96,0.85],
     color:[0,0,0,1],radiance:3600)
-air: (density:1.225,speed:3.5,v:[3.5,0,0],grid:[12,12,18],domain_min:[-6,-6,0],domain_span:[12,12,9])
+# Air parcels follow a divergence-free coherent gust field. Drag and the
+# opposite tree impulse come from the same parcel momentum change.
+air: (density:1.225,speed:3.5,v:[3.5,0,0],turbulence_intensity:0.16,
+    integral_scale:2.4,drag_coefficient:1.05,eddy_decay:0.75,
+    grid:[12,12,18],domain_min:[-6,-6,0],domain_span:[12,12,9])
