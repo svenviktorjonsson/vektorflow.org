@@ -2,7 +2,7 @@
 import {readFile,copyFile,mkdir,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {spawnSync} from 'node:child_process';
 const site=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -10,7 +10,7 @@ const compiler=path.resolve(process.argv[2]??'../vektor-flow/build/branches/pre-
 const root=path.join(site,'public'),compiled=path.join(root,'previews/0.6.0/compiled');
 const id=process.argv[3]??'stones';if(!['stones','tree','wheel'].includes(id))throw Error('Unknown application');
 const committedRuntime=process.argv.includes('--committed-runtime');
-const runtime_directory=id==='wheel'?'runtime-wheel-21':id==='stones'?'runtime-stones-12':'runtime-tree-11',directory=id==='wheel'?'wheel-performance-21':id==='stones'?'stones-mixed-12':'tree-air-11';
+const runtime_directory=id==='wheel'?'runtime-wheel-22':id==='stones'?'runtime-stones-12':'runtime-tree-11',directory=id==='wheel'?'wheel-performance-22':id==='stones'?'stones-mixed-12':'tree-air-11';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');
@@ -50,6 +50,21 @@ bundle.applications[id]={directory,runtime_directory,runtime,wasm:hash(bytes),ma
 const bridge=createRequire(import.meta.url)(path.join(compiler,'web/vf-ui/vf-compiled-runtime-bridge.js'));
 const app=bridge.instantiateWasmRuntime({bytes,manifest:JSON.parse(await readFile(path.join(output,'manifest.json')))});app.init();
 const world=app.worldProgram().gpu_worlds[0],p=world.kind==='wind'?world.solid_properties:world.properties;
+if(id==='wheel'){
+  const {GRANULAR_PARTICLE_WORLD_GPU_WGSL}=await import(pathToFileURL(path.join(compiler,'web/vf-ui/vf-granular-particle-world-gpu.mjs')).href);
+  const sand=app.worldProgram().gpu_worlds.find(world=>world.kind==='granular');
+  const compiledLaw=app.readBinding(`${sand.binding_prefix}$physics`);
+  const lawSections=[
+    GRANULAR_PARTICLE_WORLD_GPU_WGSL.slice(
+      GRANULAR_PARTICLE_WORLD_GPU_WGSL.indexOf('fn project_contacts('),
+      GRANULAR_PARTICLE_WORLD_GPU_WGSL.indexOf('struct ContactColor')),
+    GRANULAR_PARTICLE_WORLD_GPU_WGSL.slice(
+      GRANULAR_PARTICLE_WORLD_GPU_WGSL.indexOf('fn project_contacts_colored('),
+      GRANULAR_PARTICLE_WORLD_GPU_WGSL.indexOf('fn finalize_state(')),
+  ];
+  if(lawSections.some(section=>!compiledLaw.includes(section)))
+    throw Error('Wheel WASM contains a stale granular GPU law; rebuild vkf_wasm_artifact_smoke');
+}
 for(const url of [p.asset,...Object.values(p.variants??{})].filter(Boolean)){const asset=new URL(url,'https://vektorflow.org').pathname.slice(1);if(!asset.startsWith('previews/0.6.0/live/'))throw Error('Asset out of scope');bundle.assets[asset]=hash(await readFile(path.join(root,asset)));}
 await writeFile(bundlePath,JSON.stringify(bundle,null,2)+'\n');
 console.log(JSON.stringify({application:id,directory,runtime_directory,modules:Object.keys(runtime).length}));
