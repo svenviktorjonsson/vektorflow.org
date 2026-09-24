@@ -14,7 +14,7 @@ const result=new Promise(resolve=>complete=resolve);
 const probe=`<script>
 let auditDevice;const requestDevice=GPUAdapter.prototype.requestDevice;
 GPUAdapter.prototype.requestDevice=async function(...args){auditDevice=await requestDevice.apply(this,args);return auditDevice;};
-async function checkExclusion(current){
+async function checkExclusion(current,{assert=true}={}){
  const world=current.world,n=current.contact.resources.count,stride=world.kind==='liquid'?12:8;
  const read=auditDevice.createBuffer({size:n*(stride+2)*4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
  const e=auditDevice.createCommandEncoder();e.copyBufferToBuffer(current.physics.particleBuffer,0,read,0,n*stride*4);e.copyBufferToBuffer(current.contact.resources.precisionOutput,0,read,n*stride*4,n*8);auditDevice.queue.submit([e.finish()]);
@@ -25,7 +25,7 @@ async function checkExclusion(current){
   const key=cx+','+cy;if(!grid.has(key))grid.set(key,[]);grid.get(key).push([x,y]);boundaryGap=Math.min(boundaryGap,world.geometry.radius-world.geometry.half_width-r-Math.hypot(x,y));
   for(const [ax,ay,bx,by] of world.geometry.segments){const a=c*ax-s*ay,b=s*ax+c*ay,ex=c*(bx-ax)-s*(by-ay),ey=s*(bx-ax)+c*(by-ay),t=Math.max(0,Math.min(1,((x-a)*ex+(y-b)*ey)/(ex*ex+ey*ey)));boundaryGap=Math.min(boundaryGap,Math.hypot(x-a-t*ex,y-b-t*ey)-r-world.geometry.half_width);}
  }
- if(!(boundaryGap>=0&&(world.kind==='liquid'||pairGap>=0)))throw Error('Paused configuration overlap: '+JSON.stringify({pairGap,boundaryGap}));return {pairGap,boundaryGap,vertices:n};
+ if(assert&&!(boundaryGap>=0&&(world.kind==='liquid'||pairGap>=0)))throw Error('Paused configuration overlap: '+JSON.stringify({pairGap,boundaryGap}));return {pairGap,boundaryGap,vertices:n};
 }
 async function checkWaterVolume(current){
  const world=current.world,n=current.physics.primaryCount,stride=12,bytes=n*stride*4;
@@ -62,7 +62,7 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
   }return create.call(this,descriptor);
  };
 }
-const checkSand=${process.argv.includes('--sand-paused')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,waterReceipt,sandFrame,dragTarget,dragStarted,pausedProfileStart;
+const sandMotion=${process.argv.includes('--sand-motion')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,waterReceipt,sandFrame,dragTarget,dragStarted,pausedProfileStart;
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
 async function inspect(){
@@ -97,21 +97,36 @@ async function inspect(){
   }
   played=true;play.click();
  }
- if(played&&checkVolume&&state.time>=5){
+ if(played&&checkVolume&&state.time>=(sustained?12:5)){
   const conservation=await checkWaterVolume(current),passed=conservation.retainedFraction>=.9999&&conservation.retainedFraction<=1.000001&&conservation.minimumDensity>0&&conservation.p90Density<=current.physics.policy.restDensity*1.04&&conservation.p999Density<=current.physics.policy.restDensity*1.15&&!conservation.telemetry.nonFinite;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,conservation,pausedReceipt,...state,error:passed?undefined:'Water lost occupied volume'})});return;
  }
- if(played&&profileFps&&state.elapsedMs-pausedReceipt.elapsedMs>=5000){
+ if(played&&runningDrag){
+  if(dragTarget===undefined&&state.time>=5){const beforeDrag=await checkExclusion(current,{assert:false});await fetch('/page-progress',{method:'POST',body:JSON.stringify({beforeDrag})});dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
+  if(dragTarget!==undefined&&Math.abs(current.logicalAngle-dragTarget)<.005){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,dragMs:performance.now()-dragStarted,...state})});return;}
+  if(dragTarget!==undefined&&performance.now()-dragStarted>7000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Running wheel drag not accepted within 7 seconds',pausedReceipt,...state})});return;}
+ }
+ if(played&&profileFps&&state.elapsedMs-pausedReceipt.elapsedMs>=(sustained?15000:5000)){
   const wallSeconds=(state.elapsedMs-pausedReceipt.elapsedMs)/1000;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,playing:{fps:(state.frames-pausedReceipt.frames)/wallSeconds,realtimeFactor:(state.time-pausedReceipt.time)/wallSeconds},...state})});return;
  }
- if(played&&!checkVolume&&!profileFps&&!sandStarted&&state.frames>=6&&state.time>.02){
+ if(played&&!checkVolume&&!profileFps&&!runningDrag&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
   if(!checkSand){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
-  waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
+ waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
+  const particles=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Particles');
+  particles.click();if(particles.getAttribute('aria-pressed')!=='true')throw Error('Raw particle embedding did not activate');
+  particles.click();if(particles.getAttribute('aria-pressed')!=='false')throw Error('Material embedding did not reactivate');
   [...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Sand').click();
  }
  if(sandStarted&&current?.world.kind==='granular'&&state.frames>=sandFrame+3){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
+  if(sandMotion){
+   if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Sand did not start paused');sandPlayed=true;play.click();}
+   if(dragTarget===undefined&&state.time>=2){const beforeDrag=await checkExclusion(current,{assert:false});await fetch('/page-progress',{method:'POST',body:JSON.stringify({sandBeforeDrag:beforeDrag})});dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
+   if(dragTarget!==undefined&&Math.abs(current.logicalAngle-dragTarget)<.005){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,waterReceipt,sandMotion:{time:state.time,dragMs:performance.now()-dragStarted},...state})});return;}
+   if(dragTarget!==undefined&&performance.now()-dragStarted>7000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Running sand drag not accepted within 7 seconds',...state})});return;}
+   setTimeout(inspect,250);return;
+  }
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.paused&&state.time===0&&!!play,pausedReceipt,waterReceipt,sandScope:'Paused sand startup/render only; not sand motion acceptance',...state})});return;
  }
  setTimeout(inspect,250);
