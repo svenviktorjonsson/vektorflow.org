@@ -11,7 +11,7 @@ const hash=x=>{x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca
 const unit=x=>hash(x)/4294967296;
 const chunks=[],supports=[];let vertices=0,indices=0;
 for(let i=0;i<5;i++){
-  const center=centers[i],lat=40,lon=64,seed=hash(8187+i*1193),positions=[],triangles=[];
+  const center=centers[i],lat=32,lon=48,seed=hash(8187+i*1193),positions=[],triangles=[];
   const point=stoneShape(seed,sizes[i],i);
   for(let y=0;y<=lat;y++)for(let x=0;x<=lon;x++)positions.push(point(y*Math.PI/lat,x*Math.PI*2/lon));
   for(let y=0;y<lat;y++)for(let x=0;x<lon;x++){const a=y*(lon+1)+x,b=a+lon+1;if(y>0)triangles.push(a,b,a+1);if(y<lat-1)triangles.push(a+1,b,b+1);}
@@ -36,7 +36,8 @@ for(let i=0;i<5;i++){
   }}}
   supports.push({positions,indices:source.indices,center});
   const hull=[];let radius=0;for(let j=0;j<data.length;j+=10)radius=Math.max(radius,Math.hypot(data[j],data[j+1],data[j+2]));
-  for(let k=0;k<96;k++){const z=1-2*k/95,theta=k*2.399963229728653,r=Math.sqrt(1-z*z),n=[r*Math.cos(theta),r*Math.sin(theta),z];let best=-Infinity,at=0;
+  const supportCount=24;
+  for(let k=0;k<supportCount;k++){const z=1-2*k/(supportCount-1),theta=k*2.399963229728653,r=Math.sqrt(1-z*z),n=[r*Math.cos(theta),r*Math.sin(theta),z];let best=-Infinity,at=0;
     for(let j=0;j<data.length;j+=10){const d=data[j]*n[0]+data[j+1]*n[1]+data[j+2]*n[2];if(d>best){best=d;at=j;}}
     hull.push(data[at],data[at+1],data[at+2],0);
   }
@@ -52,5 +53,5 @@ for(let i=0;i<5;i++){
 }
 const header=Buffer.alloc(20);header.write('VFTREE02');header.writeUInt32LE(5,8);header.writeUInt32LE(vertices,12);header.writeUInt32LE(indices,16);
 await mkdir(new URL('../public/previews/0.6.0/live/rocks/assets/',import.meta.url),{recursive:true});
-const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-mixed-8.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
+const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-mixed-9.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
 console.log(JSON.stringify({centers,vertices,indices,compressedBytes:output.length}));

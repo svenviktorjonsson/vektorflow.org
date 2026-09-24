@@ -3,7 +3,7 @@
 geometry: .geometry
 materials: .materials
 
-world: World(dim:3,time_step:1 / 240)
+world: World(dim:3,time_step:1 / 60)
 display: Display(dim:3)
 view: display.append(world,axis:false)
 stones: view.add(p_ij:geometry.centers,properties:materials.stone)

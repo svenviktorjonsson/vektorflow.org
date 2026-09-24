@@ -9,14 +9,14 @@ const isTree=process.argv.includes('--tree'),closeup=process.argv.includes('--cl
 const parent=path.resolve(root,'../.w');await mkdir(parent,{recursive:true});const work=await mkdtemp(path.join(parent,'stones-gpu-'));
 let finish;const completed=new Promise(resolve=>finish=resolve);
 const html=String.raw`<!doctype html><canvas width="800" height="650" style="width:800px;height:650px"></canvas>
-<script src="/previews/0.6.0/compiled/runtime-stones-9/vf-compiled-runtime-bridge.js"></script>
+<script src="/previews/0.6.0/compiled/runtime-stones-10/vf-compiled-runtime-bridge.js"></script>
 <script type="module">
-import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-9/vf-world-mechanical-runtime.mjs';
-import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-9/vf-world-mechanical-gpu.mjs';
-import {createWorldSceneEmbeddingGpu} from '/previews/0.6.0/compiled/runtime-stones-9/vf-world-scene-embedding-gpu.mjs';
+import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-10/vf-world-mechanical-runtime.mjs';
+import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-10/vf-world-mechanical-gpu.mjs';
+import {createWorldSceneEmbeddingGpu} from '/previews/0.6.0/compiled/runtime-stones-10/vf-world-scene-embedding-gpu.mjs';
 const check=(x,m)=>{if(!x)throw Error(m)};let device;
 try{
- const base='/previews/0.6.0/compiled/stones-mixed-9/';
+ const base='/previews/0.6.0/compiled/stones-mixed-10/';
  const inputs={bytes:new Uint8Array(await(await fetch(base+'main.wasm')).arrayBuffer()),manifest:await(await fetch(base+'manifest.json')).json()};
  const runtime=await (VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync?VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync(inputs):VfCompiledRuntimeBridge.instantiateWasmRuntime(inputs));runtime.init();
  const world=runtime.worldProgram().gpu_worlds[0],asset=await readMechanicalAsset((world.kind==='wind'?world.solid_properties:world.properties).asset);
@@ -49,22 +49,36 @@ try{
   }
  }
  if(!isTree){physics.setHeld(3,4);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.setHeld(-1,0);
- encoder=device.createCommandEncoder();for(let i=0;i<48;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
- const state=await physics.readBodies();z=state[3*20+2];expected=4+world.gravity[2]*world.time_step**2*48*49/2;
- check(state.every(Number.isFinite),'Nonfinite rigid state');check(Math.abs(z-expected)<0.002,'Drop differs from gravity: '+z+' / '+expected);check(Math.abs(physics.time-.2)<1e-6,'Physical clock differs');physics.reset();
+ const dropSteps=20;encoder=device.createCommandEncoder();for(let i=0;i<dropSteps;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
+ const state=await physics.readBodies();z=state[3*20+2];expected=4+world.gravity[2]*world.time_step**2*dropSteps*(dropSteps+1)/2;
+ check(state.every(Number.isFinite),'Nonfinite rigid state');check(Math.abs(z-expected)<0.002,'Drop differs from gravity: '+z+' / '+expected);check(Math.abs(physics.time-world.time_step*dropSteps)<1e-6,'Physical clock differs');physics.reset();
  physics.setHeld(3,4);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.setHeld(-1,0);
- let minimumVerticalSpeed=0,maximumUpwardSpeed=0,maximumAngularSpeed=0,maximumTransferredSpeed=0;const timings=[];
- for(let batch=0;batch<120;batch++){encoder=device.createCommandEncoder();for(let i=0;i<8;i++)physics.step(encoder);const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();timings.push(performance.now()-started);const bodies=await physics.readBodies();minimumVerticalSpeed=Math.min(minimumVerticalSpeed,bodies[3*20+6]);maximumUpwardSpeed=Math.max(maximumUpwardSpeed,bodies[3*20+6]);maximumAngularSpeed=Math.max(maximumAngularSpeed,Math.hypot(...bodies.subarray(3*20+12,3*20+15)));for(let body=0;body<3;body++)maximumTransferredSpeed=Math.max(maximumTransferredSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));}
- const settled=await physics.readBodies(),linearSpeed=Math.hypot(...settled.subarray(3*20+4,3*20+7)),angularSpeed=Math.hypot(...settled.subarray(3*20+12,3*20+15));timings.sort((a,b)=>a-b);
- physics.reset();for(let warmup=0;warmup<12;warmup++){encoder=device.createCommandEncoder();physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();}const stepTimings=[];for(let sample=0;sample<120;sample++){encoder=device.createCommandEncoder();physics.step(encoder);const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();stepTimings.push(performance.now()-started);}stepTimings.sort((a,b)=>a-b);
- stoneDynamics={minimumVerticalSpeed,maximumUpwardSpeed,maximumAngularSpeed,maximumTransferredSpeed,finalLinearSpeed:linearSpeed,finalAngularSpeed:angularSpeed,trajectoryBatchP95Ms:timings[Math.floor(timings.length*.95)],medianStepMs:stepTimings[Math.floor(stepTimings.length*.5)],p95StepMs:stepTimings[Math.floor(stepTimings.length*.95)]};
- check(minimumVerticalSpeed<-1,'Stone never reached impact speed: '+JSON.stringify(stoneDynamics));check(maximumAngularSpeed>.03,'Irregular stone contact produced no angular response: '+JSON.stringify(stoneDynamics));check(maximumTransferredSpeed>.002,'Stone collision transferred no momentum into the pile: '+JSON.stringify(stoneDynamics));check(linearSpeed<.12&&angularSpeed<.35,'Dropped stone did not settle: '+JSON.stringify(stoneDynamics));check(stoneDynamics.p95StepMs<10,'Rigid step exceeds 10 ms p95: '+JSON.stringify(stoneDynamics));
+ let minimumVerticalSpeed=0,maximumUpwardSpeed=0,maximumAngularSpeed=0,maximumTransferredSpeed=0;
+ for(let batch=0;batch<120;batch++){encoder=device.createCommandEncoder();for(let i=0;i<8;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();const bodies=await physics.readBodies();minimumVerticalSpeed=Math.min(minimumVerticalSpeed,bodies[3*20+6]);maximumUpwardSpeed=Math.max(maximumUpwardSpeed,bodies[3*20+6]);maximumAngularSpeed=Math.max(maximumAngularSpeed,Math.hypot(...bodies.subarray(3*20+12,3*20+15)));for(let body=0;body<3;body++)maximumTransferredSpeed=Math.max(maximumTransferredSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));}
+ const settled=await physics.readBodies(),linearSpeed=Math.hypot(...settled.subarray(3*20+4,3*20+7)),angularSpeed=Math.hypot(...settled.subarray(3*20+12,3*20+15)),sleepingBodies=Array.from({length:initial.bodyCount},(_,body)=>settled[body*20+19]>.5).filter(Boolean).length;let minimumFloorClearance=Infinity;for(let body=0;body<initial.bodyCount;body++){const q=settled.subarray(body*20+8,body*20+12),pz=settled[body*20+2];for(let point=0;point<initial.hullCount;point++){const h=initial.geometry.subarray((body*initial.hullCount+point)*4,(body*initial.hullCount+point)*4+3),t=[2*(q[1]*h[2]-q[2]*h[1]),2*(q[2]*h[0]-q[0]*h[2]),2*(q[0]*h[1]-q[1]*h[0])],rz=h[2]+q[3]*t[2]+q[0]*t[1]-q[1]*t[0];minimumFloorClearance=Math.min(minimumFloorClearance,pz+rz);}}
+ const finalBodies=Array.from({length:initial.bodyCount},(_,body)=>({linearSpeed:Math.hypot(...settled.subarray(body*20+4,body*20+7)),quietSeconds:settled[body*20+7],angularSpeed:Math.hypot(...settled.subarray(body*20+12,body*20+15)),contact:settled[body*20+15],sleeping:settled[body*20+19]>.5}));
+ stoneDynamics={minimumVerticalSpeed,maximumUpwardSpeed,maximumAngularSpeed,maximumTransferredSpeed,finalLinearSpeed:linearSpeed,finalAngularSpeed:angularSpeed,sleepingBodies,minimumFloorClearance,finalBodies};
+ check(minimumVerticalSpeed<-1,'Stone never reached impact speed: '+JSON.stringify(stoneDynamics));check(maximumAngularSpeed>.03,'Irregular stone contact produced no angular response: '+JSON.stringify(stoneDynamics));check(maximumTransferredSpeed>.002,'Stone collision transferred no momentum into the pile: '+JSON.stringify(stoneDynamics));check(minimumFloorClearance>-.002,'Stone tunneled through ground: '+JSON.stringify(stoneDynamics));check(sleepingBodies===initial.bodyCount&&linearSpeed<.01&&angularSpeed<.01,'Dropped stone did not sleep after settling: '+JSON.stringify(stoneDynamics));
  }else{physics.setSpeed(8);const samples=[];for(let batch=0;batch<30;batch++){encoder=device.createCommandEncoder();for(let step=0;step<8;step++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();if(batch===14||batch===29)samples.push(await physics.inspectLeafModes());}wind=await physics.inspect();wind.leaves=samples;check(wind.finite&&samples.every(s=>s.finite),'Nonfinite wind state');check(samples.every(s=>s.maxAngle>.02&&s.maxAngle<2.73),'Leaf angle outside elastic response: '+JSON.stringify(wind));check(samples[1].maxAngularVelocity>.01,'Leaves stopped moving');}
  const format=navigator.gpu.getPreferredCanvasFormat(),context=canvas.getContext('webgpu');context.configure({device,format,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
  let camera=isTree?{pos:[8,-17,7],target:[0,0,3.7],fov:42}:{pos:[3.4,-5.6,3.2],target:[0,0,.95],fov:42};
  if(isTree&&location.search.includes('closeup')){physics.reset();const leaf=meshes.find(m=>m.vertices[15]===1).vertices;
   const anchor=Array.from(leaf.subarray(16,19)),tip=Array.from(leaf.subarray(35*24,35*24+3)),normal=Array.from(leaf.subarray(3,6));
   const target=anchor.map((v,a)=>(v+tip[a])*.5);camera={target,pos:target.map((v,a)=>v+normal[a]*.72+[.08,-.10,.10][a]),fov:42};
+ }
+ if(!isTree){
+  // Benchmark complete 60 Hz presentation frames while a stone falls into
+  // and collides with the pile. Idle/sleeping steps are not a performance gate.
+  const percentile=(values,p)=>values.slice().sort((a,b)=>a-b)[Math.floor(values.length*p)];
+  const renderOnly=[];for(let frame=0;frame<60;frame++){encoder=device.createCommandEncoder();embedding.render(encoder,camera,{grass:false,particles:false});const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();renderOnly.push(performance.now()-started);}
+  physics.reset();physics.setHeld(3,4);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.setHeld(-1,0);
+  const stepsPerFrame=Math.ceil((1/60)/world.time_step-1e-8),physicsOnly=[];
+  for(let frame=0;frame<120;frame++){encoder=device.createCommandEncoder();for(let step=0;step<stepsPerFrame;step++)physics.step(encoder);const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physicsOnly.push(performance.now()-started);}
+  physics.reset();physics.setHeld(3,4);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.setHeld(-1,0);
+  const frameTimings=[];
+  for(let frame=0;frame<120;frame++){encoder=device.createCommandEncoder();for(let step=0;step<stepsPerFrame;step++)physics.step(encoder);embedding.render(encoder,camera,{grass:false,particles:false});const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();frameTimings.push(performance.now()-started);}
+  frameTimings.sort((a,b)=>a-b);stoneDynamics.stepsPerDisplayFrame=stepsPerFrame;stoneDynamics.p95RenderOnlyMs=percentile(renderOnly,.95);stoneDynamics.p95ActivePhysicsOnlyMs=percentile(physicsOnly,.95);stoneDynamics.medianActiveRenderedFrameMs=frameTimings[Math.floor(frameTimings.length*.5)];stoneDynamics.p95ActiveRenderedFrameMs=frameTimings[Math.floor(frameTimings.length*.95)];stoneDynamics.maxActiveRenderedFrameMs=frameTimings.at(-1);
+  check(stoneDynamics.p95ActiveRenderedFrameMs<16.67,'Active collision rendered frame misses 60 Hz: '+JSON.stringify(stoneDynamics));
  }
  encoder=device.createCommandEncoder();embedding.render(encoder,camera,{grass:isTree,particles:false});
  const row=Math.ceil(canvas.width*4/256)*256,readback=device.createBuffer({size:row*canvas.height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
@@ -86,7 +100,8 @@ const server=createServer(async(req,res)=>{try{
 }catch(e){res.writeHead(500).end(String(e));}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const args=['--headless=new','--enable-gpu','--no-first-run','--no-default-browser-check','--window-size=900,800','--user-data-dir='+path.join(work,'profile'),'http://127.0.0.1:'+server.address().port+'/test'+(closeup?'?closeup':'')];
-const child=spawn('C:/Program Files/Google/Chrome/Application/chrome.exe',args,{windowsHide:true});let stderr='';child.stderr.on('data',d=>stderr=(stderr+d).slice(-16000));child.stdout.resume();child.on('error',e=>finish({passed:false,error:String(e)}));child.on('exit',code=>finish({passed:false,error:'Chrome exited '+code,stderr}));
+const browser=process.env.VF_TEST_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const child=spawn(browser,args,{windowsHide:true});let stderr='';child.stderr.on('data',d=>stderr=(stderr+d).slice(-16000));child.stdout.resume();child.on('error',e=>finish({passed:false,error:String(e)}));child.on('exit',code=>finish({passed:false,error:'Browser exited '+code,stderr}));
 const timeout=setTimeout(()=>finish({passed:false,error:'GPU test timed out',stderr}),60000);
 try{const result=await completed;if(result.png){await writeFile(path.join(work,'stones.png'),Buffer.from(result.png.split(',')[1],'base64'));delete result.png;}result.chromeArguments=args;await writeFile(path.join(work,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,work}));if(!result.passed)process.exitCode=1;}
 finally{clearTimeout(timeout);child.kill();server.closeAllConnections();server.close();}
