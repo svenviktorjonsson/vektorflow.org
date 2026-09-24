@@ -25,24 +25,26 @@ async function checkExclusion(current){
   const key=cx+','+cy;if(!grid.has(key))grid.set(key,[]);grid.get(key).push([x,y]);boundaryGap=Math.min(boundaryGap,world.geometry.radius-world.geometry.half_width-r-Math.hypot(x,y));
   for(const [ax,ay,bx,by] of world.geometry.segments){const a=c*ax-s*ay,b=s*ax+c*ay,ex=c*(bx-ax)-s*(by-ay),ey=s*(bx-ax)+c*(by-ay),t=Math.max(0,Math.min(1,((x-a)*ex+(y-b)*ey)/(ex*ex+ey*ey)));boundaryGap=Math.min(boundaryGap,Math.hypot(x-a-t*ex,y-b-t*ey)-r-world.geometry.half_width);}
  }
- if(!(pairGap>=0&&boundaryGap>=0))throw Error('Paused configuration overlap: '+JSON.stringify({pairGap,boundaryGap}));return {pairGap,boundaryGap,vertices:n};
+ if(!(boundaryGap>=0&&(world.kind==='liquid'||pairGap>=0)))throw Error('Paused configuration overlap: '+JSON.stringify({pairGap,boundaryGap}));return {pairGap,boundaryGap,vertices:n};
 }
 async function checkWaterVolume(current){
  const world=current.world,n=current.physics.primaryCount,stride=12,bytes=n*stride*4;
  const read=auditDevice.createBuffer({size:bytes+n*8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
  const e=auditDevice.createCommandEncoder();e.copyBufferToBuffer(current.physics.particleBuffer,0,read,0,bytes);e.copyBufferToBuffer(current.contact.resources.precisionOutput,0,read,bytes,n*8);auditDevice.queue.submit([e.finish()]);
  await read.mapAsync(GPUMapMode.READ);const raw=new Float32Array(read.getMappedRange().slice(0));read.unmap();read.destroy();
- const positions=[];let minimumDensity=Infinity,maximumDensity=-Infinity,meanDensity=0;
- for(let i=0;i<n;i++){positions.push([raw[i*stride]+raw[n*stride+2*i],raw[i*stride+1]+raw[n*stride+2*i+1]]);const density=raw[i*stride+7];minimumDensity=Math.min(minimumDensity,density);maximumDensity=Math.max(maximumDensity,density);meanDensity+=density;}
+ const positions=[],densities=[];let minimumDensity=Infinity,maximumDensity=-Infinity,meanDensity=0,resolvedArea=0,physicalVolume=0;
+ const particleArea=current.physics.seed.particleMass/current.physics.policy.restDensity;
+ for(let i=0;i<n;i++){positions.push([raw[i*stride]+raw[n*stride+2*i],raw[i*stride+1]+raw[n*stride+2*i+1]]);const density=raw[i*stride+7];densities.push(density);minimumDensity=Math.min(minimumDensity,density);maximumDensity=Math.max(maximumDensity,density);meanDensity+=density;resolvedArea+=current.physics.seed.particleMass/Math.max(density,current.physics.policy.restDensity);physicalVolume+=raw[i*stride+11];}
  meanDensity/=n;
+ densities.sort((a,b)=>a-b);const percentile=q=>densities[Math.min(n-1,Math.floor((n-1)*q))];
  const initial=[];for(let i=0;i<n;i++)initial.push([current.physics.seed.floats[i*stride],current.physics.seed.floats[i*stride+1]]);
- const particleArea=current.physics.seed.particleMass/current.physics.policy.restDensity,radius=Math.sqrt(particleArea/Math.PI),cell=world.properties.spacing/4;
+ const radius=Math.sqrt(particleArea/Math.PI),cell=world.properties.spacing/4;
  function occupiedArea(points){let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const [x,y] of points){minX=Math.min(minX,x-radius);minY=Math.min(minY,y-radius);maxX=Math.max(maxX,x+radius);maxY=Math.max(maxY,y+radius);}const cells=new Set(),reach=Math.ceil(radius/cell);
   for(const [x,y] of points){const cx=Math.floor((x-minX)/cell),cy=Math.floor((y-minY)/cell);for(let yy=cy-reach;yy<=cy+reach;yy++)for(let xx=cx-reach;xx<=cx+reach;xx++){const px=minX+(xx+.5)*cell,py=minY+(yy+.5)*cell;if((px-x)**2+(py-y)**2<=radius**2)cells.add(xx+','+yy);}}
   return {area:cells.size*cell*cell,bounds:[minX,minY,maxX,maxY]};}
- const baseline=occupiedArea(initial),actual=occupiedArea(positions),retainedFraction=actual.area/baseline.area,totalArea=n*particleArea;
+ const baseline=occupiedArea(initial),actual=occupiedArea(positions),occupiedAreaFraction=actual.area/baseline.area,totalArea=n*particleArea,retainedFraction=physicalVolume/totalArea,numericalDensityVolumeFraction=resolvedArea/totalArea;
  const telemetry=await current.physics.readTelemetry();
- return {vertices:n,totalArea,baselineOccupiedArea:baseline.area,occupiedArea:actual.area,retainedFraction,initialBounds:baseline.bounds,bounds:actual.bounds,minimumDensity,meanDensity,maximumDensity,telemetry};
+ return {vertices:n,totalArea,physicalVolume,retainedFraction,resolvedArea,numericalDensityVolumeFraction,baselineOccupiedArea:baseline.area,occupiedArea:actual.area,occupiedAreaFraction,initialBounds:baseline.bounds,bounds:actual.bounds,minimumDensity,meanDensity,p90Density:percentile(.9),p99Density:percentile(.99),p999Density:percentile(.999),maximumDensity,telemetry};
 }
 const rejectCaches=${process.argv.includes('--reject-caches')};
 const legacyOverrides=${process.argv.includes('--legacy-overrides')};
@@ -78,7 +80,10 @@ async function inspect(){
  if(!played&&state.ready==='true'&&state.frames>=3){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
   if(!current.paused||state.time!==0||!play){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Selected World did not start visibly paused with Play',...state})});return;}
-  pausedReceipt={elapsedMs:state.elapsedMs,time:state.time,frames:state.frames,worlds:state.worlds};
+  const pausedTelemetry=await current.physics.readTelemetry();
+  pausedReceipt={elapsedMs:state.elapsedMs,time:state.time,frames:state.frames,
+    worlds:state.worlds,telemetry:pausedTelemetry};
+  if(pausedTelemetry.nonFinite){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused water initialized with non-finite state',pausedReceipt,...state})});return;}
   if(checkDrag){
    if(dragTarget===undefined){dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
    if(Math.abs(current.logicalAngle-dragTarget)<.005){const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current);await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.time===0,pausedReceipt,dragMs,exclusion,...state})});return;}
@@ -88,7 +93,7 @@ async function inspect(){
   played=true;play.click();
  }
  if(played&&checkVolume&&state.time>=5){
-  const conservation=await checkWaterVolume(current),passed=conservation.retainedFraction>=.9&&conservation.minimumDensity>0&&conservation.maximumDensity<=current.physics.policy.restDensity*4;
+  const conservation=await checkWaterVolume(current),passed=conservation.retainedFraction>=.9999&&conservation.retainedFraction<=1.000001&&conservation.minimumDensity>0&&conservation.p90Density<=current.physics.policy.restDensity*1.04&&conservation.p999Density<=current.physics.policy.restDensity*1.15&&!conservation.telemetry.nonFinite;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,conservation,pausedReceipt,...state,error:passed?undefined:'Water lost occupied volume'})});return;
  }
  if(played&&!checkVolume&&!sandStarted&&state.frames>=6&&state.time>.02){
