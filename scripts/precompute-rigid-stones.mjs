@@ -3,13 +3,18 @@ import { mkdir,writeFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { stoneShape } from '../../vektor-flow/build/branches/pre-gen/web/vf-ui/vf-stone-shape.mjs';
 const surfaceContacts=!process.argv.includes('--legacy');
-const centers=[[-1.12,-.10,.69],[0,.18,.91],[1.15,-.08,.65],[-.55,-.18,2.15],[.58,.20,2.04]];
-const sizes=[.68,.82,.62,.50,.42];
+const targetLargestMassKg=30;
+const baseCenters=[[-1.12,-.10,.69],[0,.18,.91],[1.15,-.08,.65],[-.55,-.18,2.15],[.58,.20,2.04]];
+const baseSizes=[.68,.82,.62,.50,.42];
 const colors=[[.50,.49,.47],[.18,.20,.22],[.58,.34,.28],[.70,.68,.61],[.34,.40,.37]];
 const densities=[2650,3000,2630,2650,2750],species=['gray-granite','basalt','red-granite','quartzite','gneiss'];
 const hash=x=>{x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return (x^(x>>>16))>>>0;};
 const unit=x=>hash(x)/4294967296;
-const chunks=[],supports=[];let vertices=0,indices=0;
+const signedVolume=positions=>{let volume=0;for(let y=0;y<32;y++)for(let x=0;x<48;x++){const a=y*49+x,b=a+49,triangles=y===0?[[a+1,b,b+1]]:y===31?[[a,b,a+1]]:[[a,b,a+1],[a+1,b,b+1]];for(const triangle of triangles){const [p,q,r]=triangle.map(index=>positions[index]);volume+=(p[0]*(q[1]*r[2]-q[2]*r[1])+p[1]*(q[2]*r[0]-q[0]*r[2])+p[2]*(q[0]*r[1]-q[1]*r[0]))/6;}}return Math.abs(volume);};
+const baselineMasses=baseSizes.map((size,i)=>{const point=stoneShape(hash(8187+i*1193),size,i),positions=[];for(let y=0;y<=32;y++)for(let x=0;x<=48;x++)positions.push(point(y*Math.PI/32,x*Math.PI*2/48));return signedVolume(positions)*densities[i];});
+const physicalScale=Math.cbrt(targetLargestMassKg/Math.max(...baselineMasses));
+const centers=baseCenters.map(center=>center.map(value=>value*physicalScale)),sizes=baseSizes.map(size=>size*physicalScale);
+const chunks=[],supports=[],runtimeMasses=[];let vertices=0,indices=0;
 for(let i=0;i<5;i++){
   const center=centers[i],lat=32,lon=48,seed=hash(8187+i*1193),positions=[],triangles=[];
   const point=stoneShape(seed,sizes[i],i);
@@ -45,6 +50,7 @@ for(let i=0;i<5;i++){
     volume+=(data[a]*(data[b+1]*data[c+2]-data[b+2]*data[c+1])+data[a+1]*(data[b+2]*data[c]-data[b]*data[c+2])+data[a+2]*(data[b]*data[c+1]-data[b+1]*data[c]))/6;
   }
   const referenceDensity=2700,mass=Math.max(.1,Math.abs(volume)*referenceDensity);
+  runtimeMasses.push(mass*densities[i]/referenceDensity);
   const extents=[0,1,2].map(axis=>Math.max(...positions.map(p=>Math.abs(p[axis]))));
   const inertia=2*mass*(extents[0]**2+extents[1]**2+extents[2]**2)/15;
   const meta=Buffer.from(JSON.stringify({id:`stone-${i}`,species:species[i],collision:{center,mass,inertia,radius,hull,density:densities[i],reference_density:referenceDensity},shape:'direction-space radial Fourier',seed}));
@@ -53,5 +59,6 @@ for(let i=0;i<5;i++){
 }
 const header=Buffer.alloc(20);header.write('VFTREE02');header.writeUInt32LE(5,8);header.writeUInt32LE(vertices,12);header.writeUInt32LE(indices,16);
 await mkdir(new URL('../public/previews/0.6.0/live/rocks/assets/',import.meta.url),{recursive:true});
-const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-mixed-9.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
-console.log(JSON.stringify({centers,vertices,indices,compressedBytes:output.length}));
+const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-30kg-10.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
+if(Math.abs(Math.max(...runtimeMasses)-targetLargestMassKg)>1e-6)throw Error('Largest stone mass drifted from target: '+JSON.stringify(runtimeMasses));
+console.log(JSON.stringify({centers,sizes,runtimeMasses,physicalScale,vertices,indices,compressedBytes:output.length}));
