@@ -58,36 +58,36 @@
       }
     },
     "stones": {
-      "directory": "stones-mixed-10",
-      "runtime_directory": "runtime-stones-10",
+      "directory": "stones-mixed-11",
+      "runtime_directory": "runtime-stones-11",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "7282c34cbfe4387a5472a3586168c8aa1ec5aad1e28ecf4083527263f26b8c3a",
-        "vf-world-mechanical-runtime.mjs": "b591893af3456a4c4fad5dcbf3e23b7f3c4161da6777a3d841e80a94f87e4973",
-        "vf-world-mechanical-gpu.mjs": "6c35acc8a7ea0c9041581ab269d0493537ab15a5f928bd0e989564649ec6e200",
+        "vf-world-mechanical-runtime.mjs": "2489849d965f95707e8e94d0f57b2fbcbf4ea976ce32d81f94e3b04cb48c176c",
+        "vf-world-mechanical-gpu.mjs": "6a40e2332ebdd2eddaf23c3f5268d930ad5742438b6c8fb9ec265c1bd99366ae",
         "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
         "vf-world-scene-embedding-gpu.mjs": "7d116fb3faee42e6b651cd5ca423586cfea52bad69571515c4cd7cce8e71ea7a",
         "vf-world-physical-parameters.mjs": "262271962ae28f239ceec6ca54f09a9dcb009f73ba7c1bd1e40f5141f27cc915"
       },
-      "wasm": "af63561d86f880364f8ac8cbc60c8f4c55594a74ca847fb90af3c857ee9a98f6",
-      "manifest": "10e68d9340d314bf0aa957e0f08db61c13dda544cff9725c368add943d2e3a02",
+      "wasm": "be61ad5673de8ee700a419b2d303d42c93766fd5e986019d888dab60fb5f639a",
+      "manifest": "91c4f36af2b38f3809229cd91ba00e44195eaafc27d543947d329bdd0a2e3cd0",
       "sources": {
-        "main.vkf": "12c7fd3bc6bf5cf5e8933d0c45c1e8a6deb8742cd87d4519df7cf1106b1a2202",
+        "main.vkf": "433dd7da1146b9729c17af7074d3d5fffaa8af0c5b59b4e0131d790ea57f1136",
         "geometry.vkf": "c71ea0ac7b245e35cee608513697436404c1dc2fc916f25abcaa6b6a0cedc276",
         "materials.vkf": "f706b25b25c6e8c330d0537c5452fbe53c4672d11d809f569bfa486cac0a1afa"
       },
       "build": {
         "entry": "main.vkf",
         "compiler": "905b761107f56a51c1dda7e3a7bf4d25263b933753c491fc88c052ba6e07d17b",
-        "emitter": "f476b9a826ca91d480203e803f538d621780892aeb8af7e4fdef425c9352d616",
-        "typed_ir": "eeef5e001e692cf5c5f7f70251fc54a741b5ac713bf9b26ea044ec612003ee2e",
-        "runtime_revision": "fafa05bf671eb67ed07598b7bf2a0b2fcac39875",
+        "emitter": "201e0f866666b75abde57fae0a0d03ed0590c82de9b3add01219321f70a28575",
+        "typed_ir": "db18aa4c918929025657c7e9614fe5ba75f604975baa2b3ab50ecb81d6ff3eff",
+        "runtime_revision": "8512afb96056bb0007d1f2828a1dde2d27fb06ec",
         "sources": {
-          "main.vkf": "12c7fd3bc6bf5cf5e8933d0c45c1e8a6deb8742cd87d4519df7cf1106b1a2202",
+          "main.vkf": "433dd7da1146b9729c17af7074d3d5fffaa8af0c5b59b4e0131d790ea57f1136",
           "geometry.vkf": "c71ea0ac7b245e35cee608513697436404c1dc2fc916f25abcaa6b6a0cedc276",
           "materials.vkf": "f706b25b25c6e8c330d0537c5452fbe53c4672d11d809f569bfa486cac0a1afa"
         },
-        "wasm": "af63561d86f880364f8ac8cbc60c8f4c55594a74ca847fb90af3c857ee9a98f6"
+        "wasm": "be61ad5673de8ee700a419b2d303d42c93766fd5e986019d888dab60fb5f639a"
       }
     },
     "tree": {

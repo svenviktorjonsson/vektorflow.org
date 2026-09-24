@@ -10,7 +10,7 @@ const compiler=path.resolve(process.argv[2]??'../vektor-flow/build/branches/pre-
 const root=path.join(site,'public'),compiled=path.join(root,'previews/0.6.0/compiled');
 const id=process.argv[3]??'stones';if(!['stones','tree','wheel'].includes(id))throw Error('Unknown application');
 const committedRuntime=process.argv.includes('--committed-runtime');
-const runtime_directory=id==='wheel'?'runtime-wheel-16':id==='stones'?'runtime-stones-10':'runtime-tree-11',directory=id==='wheel'?'wheel-performance-16':id==='stones'?'stones-mixed-10':'tree-air-11';
+const runtime_directory=id==='wheel'?'runtime-wheel-16':id==='stones'?'runtime-stones-11':'runtime-tree-11',directory=id==='wheel'?'wheel-performance-16':id==='stones'?'stones-mixed-11':'tree-air-11';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');

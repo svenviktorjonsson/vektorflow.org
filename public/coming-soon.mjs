@@ -7,7 +7,7 @@ export async function verifyPreviewBytes(bytes,expected){
   if(digest!==expected)throw Error('Source/build mismatch: reload before running');
 }
 let bundlePromise;
-const previewBundle=()=>bundlePromise??=fetch('./previews/0.6.0/compiled/bundle.json?v=preview-release-20').then(r=>{if(!r.ok)throw Error('Build receipt unavailable');return r.json();});
+const previewBundle=()=>bundlePromise??=fetch('./previews/0.6.0/compiled/bundle.json?v=preview-release-21').then(r=>{if(!r.ok)throw Error('Build receipt unavailable');return r.json();});
 
 export const applications = [
   { id: 'wheel', files: ['main.vkf', 'geometry.vkf', 'materials.vkf', 'particles.vkf'] },
