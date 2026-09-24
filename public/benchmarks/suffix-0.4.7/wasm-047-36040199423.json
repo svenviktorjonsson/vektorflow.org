@@ -1,0 +1,117 @@
+{
+  "schema": "vektor-flow/suffix-semantics-wasm-baseline-v1",
+  "version": "0.4.7",
+  "purpose": "Ten-run browser compiler baseline: typed IR suffix preservation and valid, import-free WASM output; not directly comparable to native diagnostic totals.",
+  "conditions": {
+    "compiler": "/home/runner/work/vektor-flow/vektor-flow/build/shared-compiler/vkf-compiler.wasm",
+    "compilerSha256": "8884ff697056cd207f9841673486e050827eb0ddc90d2c941cf4979e42628a7d",
+    "os": "linux 6.17.0-1022-azure",
+    "architecture": "x64",
+    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "logicalCpus": 2
+  },
+  "sourceHashNormalization": "CRLF-to-LF",
+  "runs": 10,
+  "entries": [
+    {
+      "source": "tests/vkf/stat_sum_step_suffix.vkf",
+      "sourceSha256": "796d0dae1d2d61dba20d641d8bfff5b53508b1959ae5a1416df03989dd7912bf",
+      "rawSourceSha256": "796d0dae1d2d61dba20d641d8bfff5b53508b1959ae5a1416df03989dd7912bf",
+      "sourceBytes": 978,
+      "artifactSha256": "2e336c142eaf2e719f7d26e314ecb1da47e66ccb4e1c6166daad4e0daa4179d3",
+      "artifactBytes": 1022048,
+      "compileAndEmit": {
+        "count": 10,
+        "meanMs": 2275.4471314,
+        "sampleStddevMs": 795.4143609871853,
+        "samplesMs": [
+          3953.954045,
+          3096.2608689999997,
+          3056.6342870000008,
+          2022.6799919999994,
+          1755.779967999999,
+          1776.0791260000005,
+          1782.173788,
+          1786.548060000001,
+          1751.1702220000006,
+          1773.190956999999
+        ]
+      }
+    },
+    {
+      "source": "tests/vkf/stat_suffix_labels.vkf",
+      "sourceSha256": "94cc55f9a6c5b73faade239c0ae38a3a6bcb2bbe7e1a59b0bfabc0128f38bb21",
+      "rawSourceSha256": "94cc55f9a6c5b73faade239c0ae38a3a6bcb2bbe7e1a59b0bfabc0128f38bb21",
+      "sourceBytes": 863,
+      "artifactSha256": "6fe63d78d4fd478d87c6b6bf3f8fe58b99dfaf5ed16d233ad802c5e4e8a8ca0a",
+      "artifactBytes": 620938,
+      "compileAndEmit": {
+        "count": 10,
+        "meanMs": 48.395050499999705,
+        "sampleStddevMs": 16.242923759808654,
+        "samplesMs": [
+          94.59576799999923,
+          44.70041900000069,
+          43.073051999999734,
+          43.09417899999971,
+          43.46060800000123,
+          42.66229999999996,
+          43.43781899999885,
+          43.0360789999977,
+          42.99380000000019,
+          42.89648099999977
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/numerical_suffix_analysis_native.vkf",
+      "sourceSha256": "28419ee58aa29b26c6e9334de13b1ed11fe142567b579adbac8d8b121ab51b04",
+      "rawSourceSha256": "28419ee58aa29b26c6e9334de13b1ed11fe142567b579adbac8d8b121ab51b04",
+      "sourceBytes": 2347,
+      "artifactSha256": "958c345dac9af397c7e3447e08bdcc57e3b9fd1b67500f25689822294f7d5e20",
+      "artifactBytes": 668029,
+      "compileAndEmit": {
+        "count": 10,
+        "meanMs": 1677.6807600999994,
+        "sampleStddevMs": 45.22693968271045,
+        "samplesMs": [
+          1582.6683890000022,
+          1636.6302559999967,
+          1670.6801369999994,
+          1678.1757639999996,
+          1685.831055999999,
+          1675.2820759999995,
+          1757.6498589999974,
+          1696.441660000004,
+          1703.9013129999948,
+          1689.5470910000004
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/symbolic_suffix_integrate_native.vkf",
+      "sourceSha256": "6afd98eb5ac11e0d1789331dcefdb966d47f4d50f7ab855fe8c0311951218de7",
+      "rawSourceSha256": "6afd98eb5ac11e0d1789331dcefdb966d47f4d50f7ab855fe8c0311951218de7",
+      "sourceBytes": 997,
+      "artifactSha256": "adf996047559ec07ce7337e6629f769ddcfca6f4fa1d8ba52d819039ed05587a",
+      "artifactBytes": 1260182,
+      "compileAndEmit": {
+        "count": 10,
+        "meanMs": 1767.2801537000007,
+        "sampleStddevMs": 29.306944411109665,
+        "samplesMs": [
+          1745.704067999999,
+          1739.2817890000006,
+          1727.5357890000014,
+          1735.7448179999992,
+          1800.4461569999985,
+          1775.763469000005,
+          1767.0148980000013,
+          1774.8014710000061,
+          1796.5597159999961,
+          1809.9493619999994
+        ]
+      }
+    }
+  ]
+}
