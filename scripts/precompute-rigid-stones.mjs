@@ -4,7 +4,7 @@ import { gzipSync } from 'node:zlib';
 import { stoneShape } from '../../vektor-flow/build/branches/pre-gen/web/vf-ui/vf-stone-shape.mjs';
 const surfaceContacts=!process.argv.includes('--legacy');
 const targetLargestMassKg=30;
-const baseCenters=[[-1.12,-.10,.69],[0,.18,.91],[1.15,-.08,.65],[-.55,-.18,2.15],[.58,.20,2.04]];
+const baseCenters=[[-1.9,-.10,.69],[0,.18,.91],[1.9,-.08,.65],[-.85,-.18,2.15],[.45,.20,2.04]];
 const baseSizes=[.68,.82,.62,.50,.42];
 const colors=[[.50,.49,.47],[.18,.20,.22],[.58,.34,.28],[.70,.68,.61],[.34,.40,.37]];
 const densities=[2650,3000,2630,2650,2750],species=['gray-granite','basalt','red-granite','quartzite','gneiss'];
@@ -39,9 +39,12 @@ for(let i=0;i<5;i++){
     const u=((b[1]-c[1])*(px-c[0])+(c[0]-b[0])*(py-c[1]))/denominator,v=((c[1]-a[1])*(px-c[0])+(a[0]-c[0])*(py-c[1]))/denominator;
     if(u>=0&&v>=0&&u+v<=1)center[2]=Math.max(center[2],base.center[2]+u*a[2]+v*b[2]+(1-u-v)*c[2]-p[2]);
   }}}
+  if(surfaceContacts&&i>=3)center[2]+=.016;
   supports.push({positions,indices:source.indices,center});
   const hull=[];let radius=0;for(let j=0;j<data.length;j+=10)radius=Math.max(radius,Math.hypot(data[j],data[j+1],data[j+2]));
-  const supportCount=24;
+  // A 24-direction inscribed hull omits visible protrusions between samples.
+  // More supports keep rigid contact close to the rendered mineral surface.
+  const supportCount=48;
   for(let k=0;k<supportCount;k++){const z=1-2*k/(supportCount-1),theta=k*2.399963229728653,r=Math.sqrt(1-z*z),n=[r*Math.cos(theta),r*Math.sin(theta),z];let best=-Infinity,at=0;
     for(let j=0;j<data.length;j+=10){const d=data[j]*n[0]+data[j+1]*n[1]+data[j+2]*n[2];if(d>best){best=d;at=j;}}
     hull.push(data[at],data[at+1],data[at+2],0);

@@ -1,36 +1,36 @@
 {
-  "artifact_content_sha256": "f53380a525da26fb",
+  "artifact_content_sha256": "caba7d17c54dc169",
   "artifact_kind": "wasm",
   "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-wheel\\.vkfbuild\\main\\main.wasm",
   "compiler_version": "vkf-wasm-artifact-smoke-0.2",
   "dependencies": [],
-  "manifest_hash": "6ca17823907b0f6d",
-  "runtime_hash": "f53380a525da26fb",
+  "manifest_hash": "18077ac2adf1133b",
+  "runtime_hash": "caba7d17c54dc169",
   "runtime_surface": {
     "bindings": [
       {
         "kind": "string",
-        "len_export": "vkf_get__world_gpu_0_physics_len",
-        "name": "$world$gpu$0$physics",
-        "ptr_export": "vkf_get__world_gpu_0_physics_ptr"
+        "len_export": "vkf_get__world_gpu_0_layer_2_physics_len",
+        "name": "$world$gpu$0$layer$2$physics",
+        "ptr_export": "vkf_get__world_gpu_0_layer_2_physics_ptr"
       },
       {
         "kind": "string",
-        "len_export": "vkf_get__world_gpu_0_boundary_len",
-        "name": "$world$gpu$0$boundary",
-        "ptr_export": "vkf_get__world_gpu_0_boundary_ptr"
+        "len_export": "vkf_get__world_gpu_0_layer_2_boundary_len",
+        "name": "$world$gpu$0$layer$2$boundary",
+        "ptr_export": "vkf_get__world_gpu_0_layer_2_boundary_ptr"
       },
       {
         "kind": "string",
-        "len_export": "vkf_get__world_gpu_1_physics_len",
-        "name": "$world$gpu$1$physics",
-        "ptr_export": "vkf_get__world_gpu_1_physics_ptr"
+        "len_export": "vkf_get__world_gpu_0_layer_6_physics_len",
+        "name": "$world$gpu$0$layer$6$physics",
+        "ptr_export": "vkf_get__world_gpu_0_layer_6_physics_ptr"
       },
       {
         "kind": "string",
-        "len_export": "vkf_get__world_gpu_1_boundary_len",
-        "name": "$world$gpu$1$boundary",
-        "ptr_export": "vkf_get__world_gpu_1_boundary_ptr"
+        "len_export": "vkf_get__world_gpu_0_layer_6_boundary_len",
+        "name": "$world$gpu$0$layer$6$boundary",
+        "ptr_export": "vkf_get__world_gpu_0_layer_6_boundary_ptr"
       },
       {
         "axis_key": "",
@@ -145,62 +145,6 @@
         "ptr_export": "vkf_get__world_layer_6_mask_ptr"
       },
       {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_7_state_len",
-        "name": "$world$layer$7$state",
-        "ptr_export": "vkf_get__world_layer_7_state_ptr"
-      },
-      {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_7_time_len",
-        "name": "$world$layer$7$time",
-        "ptr_export": "vkf_get__world_layer_7_time_ptr"
-      },
-      {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_7_force_len",
-        "name": "$world$layer$7$force",
-        "ptr_export": "vkf_get__world_layer_7_force_ptr"
-      },
-      {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_7_mask_len",
-        "name": "$world$layer$7$mask",
-        "ptr_export": "vkf_get__world_layer_7_mask_ptr"
-      },
-      {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_8_state_len",
-        "name": "$world$layer$8$state",
-        "ptr_export": "vkf_get__world_layer_8_state_ptr"
-      },
-      {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_8_time_len",
-        "name": "$world$layer$8$time",
-        "ptr_export": "vkf_get__world_layer_8_time_ptr"
-      },
-      {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_8_force_len",
-        "name": "$world$layer$8$force",
-        "ptr_export": "vkf_get__world_layer_8_force_ptr"
-      },
-      {
-        "axis_key": "",
-        "kind": "axis_f64_array",
-        "len_export": "vkf_get__world_layer_8_mask_len",
-        "name": "$world$layer$8$mask",
-        "ptr_export": "vkf_get__world_layer_8_mask_ptr"
-      },
-      {
         "kind": "string",
         "len_export": "vkf_get__world_program_len",
         "name": "$world$program",
@@ -217,7 +161,6 @@
       "vkf_init",
       "vkf_update",
       "vkf_world_0_update",
-      "vkf_world_1_update",
       "vkf_shutdown",
       "vkf_state_ptr",
       "vkf_state_size",
@@ -231,14 +174,14 @@
       "vkf_symbolic_output_capacity",
       "vkf_symbolic_output_len",
       "vkf_symbolic_trace",
-      "vkf_get__world_gpu_0_physics_ptr",
-      "vkf_get__world_gpu_0_physics_len",
-      "vkf_get__world_gpu_0_boundary_ptr",
-      "vkf_get__world_gpu_0_boundary_len",
-      "vkf_get__world_gpu_1_physics_ptr",
-      "vkf_get__world_gpu_1_physics_len",
-      "vkf_get__world_gpu_1_boundary_ptr",
-      "vkf_get__world_gpu_1_boundary_len",
+      "vkf_get__world_gpu_0_layer_2_physics_ptr",
+      "vkf_get__world_gpu_0_layer_2_physics_len",
+      "vkf_get__world_gpu_0_layer_2_boundary_ptr",
+      "vkf_get__world_gpu_0_layer_2_boundary_len",
+      "vkf_get__world_gpu_0_layer_6_physics_ptr",
+      "vkf_get__world_gpu_0_layer_6_physics_len",
+      "vkf_get__world_gpu_0_layer_6_boundary_ptr",
+      "vkf_get__world_gpu_0_layer_6_boundary_len",
       "vkf_get__world_layer_0_state_ptr",
       "vkf_get__world_layer_0_state_len",
       "vkf_get__world_layer_0_time_ptr",
@@ -271,22 +214,6 @@
       "vkf_get__world_layer_6_force_len",
       "vkf_get__world_layer_6_mask_ptr",
       "vkf_get__world_layer_6_mask_len",
-      "vkf_get__world_layer_7_state_ptr",
-      "vkf_get__world_layer_7_state_len",
-      "vkf_get__world_layer_7_time_ptr",
-      "vkf_get__world_layer_7_time_len",
-      "vkf_get__world_layer_7_force_ptr",
-      "vkf_get__world_layer_7_force_len",
-      "vkf_get__world_layer_7_mask_ptr",
-      "vkf_get__world_layer_7_mask_len",
-      "vkf_get__world_layer_8_state_ptr",
-      "vkf_get__world_layer_8_state_len",
-      "vkf_get__world_layer_8_time_ptr",
-      "vkf_get__world_layer_8_time_len",
-      "vkf_get__world_layer_8_force_ptr",
-      "vkf_get__world_layer_8_force_len",
-      "vkf_get__world_layer_8_mask_ptr",
-      "vkf_get__world_layer_8_mask_len",
       "vkf_get__world_program_ptr",
       "vkf_get__world_program_len",
       "vkf_get__ui_compiled_packets_ptr",
@@ -317,7 +244,7 @@
     "update_mode": "builtin"
   },
   "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-wheel\\main.vkf",
-  "source_sha256": "5686c3a623d7f7b1",
+  "source_sha256": "013a9dcf3544a367",
   "status": "current",
-  "typed_ir_sha256": "4cf6d89672a38c90"
+  "typed_ir_sha256": "a0d724195cd6d13e"
 }

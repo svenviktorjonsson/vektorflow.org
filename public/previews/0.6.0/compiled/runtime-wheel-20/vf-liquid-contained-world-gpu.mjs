@@ -27,7 +27,7 @@ export const LIQUID_PARTICLE_WORLD_GPU_ABI = Object.freeze({
   diffuseRenderStrideBytes: 16,
   parameterBytes: 144,
   surfaceVertexStrideBytes: 8,
-  telemetryAtomicCount: 6,
+  telemetryAtomicCount: 9,
   primaryFields: Object.freeze(['position', 'velocity', 'scratch_velocity', 'lambda',
     'density', 'foam', 'neighbor_count', 'surface_class', 'volume']),
   diffuseRenderFields: Object.freeze(['position', 'radius', 'kind']),
@@ -42,6 +42,9 @@ export const LIQUID_PARTICLE_WORLD_GPU_TELEMETRY = Object.freeze({
     contactBudgetExhaustedReceipt: 3,
     occupiedBucketEvents: 4,
     activeCellEvents: 5,
+    peakPredictedOrPostContactSpeedSquaredBits: 6,
+    peakFastInverseDenominatorBits: 7,
+    peakFastDensityErrorBits: 8,
   }),
 });
 
@@ -252,6 +255,29 @@ fn sample_kernel(displacement: vec2<f32>) -> KernelSample {
   }
   return KernelSample(weight, gradient, 1u);
 }
+
+// A coincident parcel pair has finite density but a zero Wendland gradient.
+// Its pressure constraint is singular: no pressure impulse can separate it.
+// Evaluate very close pairs at a small, deterministic separation instead.
+// Reversing the particle IDs reverses the direction, preserving pair impulse.
+fn sample_particle_kernel(displacement: vec2<f32>, index: u32,
+  other: u32) -> KernelSample {
+  let minimum = params.fluid.y * 0.25;
+  let distance = length(displacement);
+  if (distance >= minimum) { return sample_kernel(displacement); }
+  if (distance > 1.0e-7) {
+    return sample_kernel(displacement * (minimum / distance));
+  }
+  let low = min(index, other);
+  let high = max(index, other);
+  let first = hash_u32((low * 0x9e3779b9u) ^ (high * 0x85ebca6bu));
+  let second = hash_u32(first ^ 0xc2b2ae35u);
+  let candidate = vec2<f32>(f32(first) / 2147483648.0 - 1.0,
+    f32(second) / 2147483648.0 - 1.0);
+  let direction = candidate / max(length(candidate), 1.0e-6);
+  return sample_kernel(select(-direction, direction, index < other) * minimum);
+}
+
 
 fn wheel_boundary_support(position: vec2<f32>) -> WheelBoundarySample {
   var density_factor = 0.0;
@@ -844,6 +870,23 @@ fn resolve_wheel_motion(origin: vec2<f32>, destination: vec2<f32>, velocity: vec
   return resolve_wheel_motion_at(result.position,result.velocity,radius,params.terrain.x,0.0);
 }
 
+// Newtonian wall shear transfers tangential momentum into the kinematic drum.
+// The particle-grid viscosity law carries that loss from the wall into bulk
+// water; no frame-dependent global damping is applied.
+fn apply_wheel_wall_shear(position: vec2<f32>, velocity: vec2<f32>, radius: f32) -> vec2<f32> {
+  let offset = position - params.terrain.zw;
+  let distance = length(offset);
+  let gap = WHEEL_RADIUS - radius - WHEEL_BAR_HALF_WIDTH - distance;
+  if (gap >= params.fluid.z || distance < 1.0e-8) { return velocity; }
+  let tangent = vec2<f32>(-offset.y, offset.x) / distance;
+  let weight = clamp(1.0 - max(0.0, gap) / params.fluid.z, 0.0, 1.0);
+  let kinematic_viscosity = params.material.w / params.material.x;
+  let rate = kinematic_viscosity * weight
+    / max(params.fluid.y * params.fluid.y, 1.0e-12);
+  let fraction = 1.0 - exp(-rate * params.fluid.x);
+  return velocity - tangent * dot(velocity, tangent) * fraction;
+}
+
 @compute @workgroup_size(128)
 fn sweep_wheel(@builtin(global_invocation_id) gid:vec3<u32>){
   let i=gid.x;if(i>=params.counts.x){return;}
@@ -898,7 +941,7 @@ fn measure_constraint(index: u32) -> ConstraintSample {
         if (other >= params.counts.x || other == index) { continue; }
         if (!particle_occupies_cell(other, cell)) { continue; }
         let displacement = position - particles[other].position;
-        let kernel = sample_kernel(displacement);
+        let kernel = sample_particle_kernel(displacement, index, other);
         if (kernel.supported == 0u) { continue; }
         let gradient = params.fluid.w * inverse_density * kernel.gradient;
         density = density + params.fluid.w * kernel.weight;
@@ -1046,7 +1089,7 @@ fn apply_pressure_body(index:u32) {
         if (other >= params.counts.x || other == index) { continue; }
         if (!particle_occupies_cell(other, cell)) { continue; }
         let displacement = position - particles[other].position;
-        let kernel = sample_kernel(displacement);
+        let kernel = sample_particle_kernel(displacement, index, other);
         if (kernel.supported == 0u) { continue; }
         let gradient = params.fluid.w * inverse_density * kernel.gradient;
         correction = correction + inverse_mass
@@ -1075,8 +1118,12 @@ fn apply_pressure_body(index:u32) {
   correction = correction + inverse_mass * own_lambda * wheel_boundary.gradient;
   // Retain the GPU Jacobi relaxation already used by this specialization; it
   // applies uniformly after both canonical fluid and Akinci solid terms.
+  let change = correction * params.force.z;
+  // The density-rate linearization is only local. One Jacobi update may not
+  // extrapolate farther than a quarter of a parcel spacing in one law step.
+  let trust_radius = params.fluid.y * 0.25 / params.fluid.x;
   particles[index].velocity = particles[index].velocity
-    + correction * params.force.z;
+    + change * min(1.0, trust_radius / max(length(change), 1.0e-8));
 }
 
 fn advect_body(index:u32) {
@@ -1087,8 +1134,11 @@ fn advect_body(index:u32) {
     particles[index].velocity, params.fluid.x, radius, index + 1u);
   let wheel_contact = resolve_wheel_motion(particles[index].position, contact.position, contact.velocity, radius);
   particles[index].position = wheel_contact.position;
-  particles[index].velocity = wheel_contact.velocity;
-  record_motion_telemetry(wheel_contact.position, wheel_contact.velocity);
+  particles[index].velocity = apply_wheel_wall_shear(
+    wheel_contact.position, wheel_contact.velocity, radius);
+  record_motion_telemetry(wheel_contact.position, particles[index].velocity);
+  atomicMax(&cell_counts[telemetry_base() + 6u],
+    bitcast<u32>(dot(particles[index].velocity, particles[index].velocity)));
 }
 
 fn classify_and_filter_body(index:u32) {
@@ -1191,6 +1241,7 @@ fn update_compressibility_body(index:u32) {
 @compute @workgroup_size(128) fn preventive_classify_and_filter(@builtin(global_invocation_id) g:vec3<u32>){if(motion_force_ready()){classify_and_filter_body(g.x);}}
 @compute @workgroup_size(128) fn preventive_apply_filter(@builtin(global_invocation_id) g:vec3<u32>){if(motion_force_ready()){apply_filter_body(g.x);}}
 @compute @workgroup_size(128) fn preventive_update_compressibility(@builtin(global_invocation_id) g:vec3<u32>){if(motion_force_ready()){update_compressibility_body(g.x);}}
+@compute @workgroup_size(128) fn preventive_audit_predicted(@builtin(global_invocation_id) g:vec3<u32>){if(g.x<params.counts.x&&motion_force_ready()){let v=particles[g.x].velocity;let speed2=dot(v,v);atomicMax(&cell_counts[telemetry_base()+6u],bitcast<u32>(speed2));if(speed2>625.0){let sample=measure_constraint(g.x);atomicMax(&cell_counts[telemetry_base()+7u],bitcast<u32>(1.0/sample.denominator));atomicMax(&cell_counts[telemetry_base()+8u],bitcast<u32>(max(0.0,sample.density/params.material.x-1.0)));}}}
 
 fn try_emit_owned_diffuse(index: u32) {
   if (index >= params.counts.x || particles[index].foam < 0.12) { return; }
@@ -1880,7 +1931,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
   if(options.preventiveContact){
     const r=options.preventiveContact;
     const guardedLayout=device.createPipelineLayout({bindGroupLayouts:[layout,r.emptyLayout,r.forceLayout]});
-    await Promise.all(['predict','divergence_lambda','density_lambda','apply_pressure','classify_and_filter','apply_filter','update_compressibility'].map(async name=>{
+    await Promise.all(['predict','divergence_lambda','density_lambda','apply_pressure','classify_and_filter','apply_filter','update_compressibility','audit_predicted'].map(async name=>{
       preventivePipelines[name]=await createCheckedGpuPipeline(device,'compute',{label:'VKF liquid guarded forces',layout:guardedLayout,compute:{module:shader,entryPoint:`preventive_${name}`}});
     }));
     if(options.forceGeometryCaching){
@@ -2025,6 +2076,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     for(let i=0;i<policy.densityIterations;i++){pressure('density_lambda');pressure('apply_pressure');}
     pass.setBindGroup(0,bindGroup);pass.setBindGroup(2,r.forceGroup);
     run('update_compressibility');
+    run('audit_predicted');
     pass.end();
   };
   const publishParticles=(encoder)=>{
@@ -2072,6 +2124,16 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
       const speedBits = words[
         LIQUID_PARTICLE_WORLD_GPU_TELEMETRY.fields.peakSpeedSquaredBits];
       const peakSpeedSquared = new Float32Array(new Uint32Array([speedBits]).buffer)[0];
+      const postContactSpeedBits = words[
+        LIQUID_PARTICLE_WORLD_GPU_TELEMETRY.fields.peakPredictedOrPostContactSpeedSquaredBits];
+      const peakPredictedOrPostContactSpeedSquared = new Float32Array(
+        new Uint32Array([postContactSpeedBits]).buffer)[0];
+      const decodePositiveFloat = (index) => new Float32Array(
+        new Uint32Array([words[index]]).buffer)[0];
+      const peakFastInverseDenominator = decodePositiveFloat(
+        LIQUID_PARTICLE_WORLD_GPU_TELEMETRY.fields.peakFastInverseDenominatorBits);
+      const peakFastDensityError = decodePositiveFloat(
+        LIQUID_PARTICLE_WORLD_GPU_TELEMETRY.fields.peakFastDensityErrorBits);
       const nonFiniteFlag = words[
         LIQUID_PARTICLE_WORLD_GPU_TELEMETRY.fields.nonFiniteFlag];
       const peakCellOccupancy = words[
@@ -2093,6 +2155,11 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
         : ((contactBudgetExhaustedReceipt & 0x0fffffff) - 1);
       return Object.freeze({ kind: 'liquid-particle-world-gpu-telemetry:v1',
         frameIndex, peakSpeedSquared, peakSpeed: Math.sqrt(peakSpeedSquared),
+        peakPredictedOrPostContactSpeedSquared,
+        peakPredictedOrPostContactSpeed: Math.sqrt(peakPredictedOrPostContactSpeedSquared),
+        minimumFastDenominator: peakFastInverseDenominator > 0
+          ? 1 / peakFastInverseDenominator : null,
+        peakFastDensityError,
         nonFinite: nonFiniteFlag !== 0, nonFiniteFlag, peakCellOccupancy,
         gridOverflow, occupiedBucketEvents, activeCellEvents,
         gridHashCollisionEvents, gridAuditComplete: !gridOverflow,

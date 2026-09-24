@@ -15,7 +15,7 @@ export function rigidSceneFrame(asset){
   for(const {collision} of asset){for(let axis=0;axis<3;axis++){lo[axis]=Math.min(lo[axis],collision.center[axis]-collision.radius);hi[axis]=Math.max(hi[axis],collision.center[axis]+collision.radius);}radial=Math.max(radial,Math.hypot(collision.center[0],collision.center[1])+collision.radius);}
   const floor=0,span=Math.max(hi[0]-lo[0],hi[1]-lo[1],hi[2]-floor),target=[(lo[0]+hi[0])*.5,(lo[1]+hi[1])*.5,(floor+hi[2])*.5];
   const direction=[3.4,-5.6,2.25],norm=Math.hypot(...direction),distance=span*1.7;
-  return {target,span,floorRadius:radial*1.6,liftCeiling:hi[2]+span*.8,camera:{pos:target.map((value,axis)=>value+direction[axis]/norm*distance),target,fov:42}};
+  return {target,span,floorRadius:radial*1.6,liftCeiling:hi[2]+span*.8,camera:{pos:target.map((value,axis)=>value+direction[axis]/norm*distance),target,fov:42,minDistance:Math.max(0.25,span*0.25),maxDistance:Math.max(60,span*80)}};
 }
 
 export async function readMechanicalAsset(url){
@@ -125,7 +125,12 @@ export function prepareMechanicalInitialState(world,arenas,asset){
     for(let i=0;i<initial.nodeCount;i++){
       const z=Math.floor(i/(grid[0]*grid[1])),collisionClass=initial.geometry[i*4+3],attachedMass=initial.geometry[(initial.nodeCount*3+i)*4];
       const woodMode=collisionClass===1||collisionClass===3||attachedMass>0,grassMode=!woodMode&&z<=1;
-      const coefficients=woodMode?wood:grassMode?grass:null,mode=woodMode?1:grassMode?2:0;
+      // Wood at trunk height carries a larger cross section than outer twigs.
+      // Cantilever stiffness follows I ∝ r^4, while mass follows r^2.
+      const height=(z+.5)*span[2]/grid[2];
+      const taper=collisionClass===1?Math.max(0,1-height/(world.solid_properties.height??8)):0;
+      const radius=(world.nodes_properties.branch_radius??0.025)*(1+3.5*taper*taper);
+      const coefficients=woodMode&&beam?cantileverParameters({...world.nodes_properties,branch_radius:radius}):woodMode?wood:grassMode?grass:null,mode=woodMode?1:grassMode?2:0;
       initial.geometry.set(coefficients?[coefficients.mass,coefficients.stiffness,coefficients.damping,mode]:[1,0,0,0],(initial.nodeCount+i)*4);
       const normalOffset=(initial.nodeCount*4+i)*4,totalArea=initial.geometry[normalOffset+3],normalLength=Math.hypot(...initial.geometry.subarray(normalOffset,normalOffset+3));
       if(totalArea>0&&normalLength>1e-8)for(let axis=0;axis<3;axis++)initial.geometry[normalOffset+axis]/=normalLength;

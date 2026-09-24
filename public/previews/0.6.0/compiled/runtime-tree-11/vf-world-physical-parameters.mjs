@@ -14,7 +14,7 @@ export function coherentAirVelocityReference(position,time,{speed=3.5,turbulence
   if(!(position?.length===3&&position.every(Number.isFinite)&&Number.isFinite(time)&&speed>=0&&intensity>=0&&scale>0))throw new Error('Invalid coherent air parameters');
   const q=position.map((value,axis)=>(value-min[axis])/scale),phase=time*speed/scale;
   const mode=(amplitude,wave,offset,rate)=>amplitude.map(value=>value*Math.sin(wave.reduce((sum,k,axis)=>sum+k*q[axis],0)+phase*rate+offset));
-  const modes=[mode([.78,.40,-.5754386],[0,.82,.57],0,.71),mode([-.30,.88,.4676471],[.53,0,.34],1.7,-.47),mode([.58,-.3708197,.72],[.39,.61,0],3.1,.93)];
+  const modes=[mode([.78,.40,-.5754386],[0,.82,.57],0,.71),mode([-.30,.88,.4676471],[.53,0,.34],1.7,-.47),mode([.58,-.3708197,.72],[.39,.61,0],3.1,.93),mode([.44*.35,.72*.35,0],[.72,-.44,.37],2.29,-1.31),mode([.63*.25,0,.31*.25],[.31,.27,-.63],4.37,1.73)];
   const boundary=.62+.38*(1-Math.exp(-Math.max(0,position[2]-min[2])/1.5));
   return [speed*boundary,0,0].map((base,axis)=>base+modes.reduce((sum,value)=>sum+value[axis],0)*speed*intensity*.34);
 }
@@ -28,7 +28,7 @@ export function airObstacleExchangeReference({incoming,structure_velocity:struct
 }
 export function zoomCamera(camera,ratio){
   if(!(Number.isFinite(ratio)&&ratio>0))return;
-  const v=camera.pos.map((p,i)=>p-camera.target[i]),old=Math.hypot(...v),distance=Math.max(2,Math.min(60,old*ratio));
+  const v=camera.pos.map((p,i)=>p-camera.target[i]),old=Math.hypot(...v),distance=Math.max(camera.minDistance??2,Math.min(camera.maxDistance??60,old*ratio));
   camera.pos=camera.target.map((p,i)=>p+v[i]*distance/old);
 }
 export function emissiveSphere(center,properties){

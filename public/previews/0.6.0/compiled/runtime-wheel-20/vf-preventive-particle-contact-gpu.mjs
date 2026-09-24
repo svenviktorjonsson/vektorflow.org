@@ -267,6 +267,7 @@ fn motion_begin(){
     if(MOTION_ROTATING_TRAJECTORY){if(abs(motion.wheel.z-motion_value(12))<=1.0e-7&&motion_value(3)!=0.0){motion_store(31,motion_value(1));motion_store(3,0.0);atomicStore(&motion_control[18],0u);}return;}
     let omega=(motion.wheel.z-motion_value(12))/max(motion.schedule.x,motion.wheel.w-(motion_value(2)-motion_value(61)));
     if((bitcast<u32>(omega)&0x7f800000u)==0x7f800000u){atomicOr(&motion_control[6],1u);return;}
+    atomicMax(&motion_control[32],bitcast<u32>(abs(omega)*WHEEL_RADIUS));
     if(omega!=motion_value(3)){motion_store(31,motion_value(1)-omega*motion_value(13));motion_store(3,omega);atomicStore(&motion_control[18],0u);}
     return;
   }
@@ -276,10 +277,11 @@ fn motion_begin(){
   let credit=max(motion.schedule.x,motion.wheel.w-(motion_value(2)-motion_value(61)));
   let angular_velocity=select((motion.wheel.z-motion_value(12))/credit,select(motion_value(3),0.0,abs(motion.wheel.z-motion_value(12))<=1.0e-7),MOTION_ROTATING_TRAJECTORY);
   if((bitcast<u32>(angular_velocity)&0x7f800000u)==0x7f800000u){atomicOr(&motion_control[6],1u);return;}
+  atomicMax(&motion_control[32],bitcast<u32>(abs(angular_velocity)*WHEEL_RADIUS));
   motion_store(3,angular_velocity);
   motion_store(13,0.0);motion_store(59,motion_value(2));motion_store(60,0.0);motion_store(62,motion_value(0));motion_store(31,motion_value(1));atomicStore(&motion_control[18],0u);
 }
-@compute @workgroup_size(1) fn motion_input_omega(){motion_store(61,motion_value(2));let omega=(motion.wheel.z-motion_value(12))/max(motion.schedule.x,motion.wheel.w);if((bitcast<u32>(omega)&0x7f800000u)==0x7f800000u){atomicOr(&motion_control[6],1u);return;}if(omega!=motion_value(3)){motion_store(31,motion_value(1)-omega*motion_value(13));motion_store(3,omega);atomicStore(&motion_control[18],0u);}}
+@compute @workgroup_size(1) fn motion_input_omega(){motion_store(61,motion_value(2));let omega=(motion.wheel.z-motion_value(12))/max(motion.schedule.x,motion.wheel.w);if((bitcast<u32>(omega)&0x7f800000u)==0x7f800000u){atomicOr(&motion_control[6],1u);return;}atomicMax(&motion_control[32],bitcast<u32>(abs(omega)*WHEEL_RADIUS));if(omega!=motion_value(3)){motion_store(31,motion_value(1)-omega*motion_value(13));motion_store(3,omega);atomicStore(&motion_control[18],0u);}}
 
 @compute @workgroup_size(1) fn motion_frame_begin(){let omega=motion_value(3);motion_store(58,omega);atomicStore(&motion_control[57],select(0u,1u,omega!=0.0&&motion_value(0)>0.0));if(atomicLoad(&motion_control[57])!=0u){motion_store(3,0.0);atomicStore(&motion_control[18],0u);}}
 @compute @workgroup_size(128) fn motion_enter_frame(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i>=motion.counts.x||atomicLoad(&motion_control[57])==0u){return;}let s=motion_state(i);let h=max(motion_value(8),1.0e-12);let offset=s.xy-motion.wheel.xy;let angle=-motion_value(58)*h;let basis=motion_rotate(vec2<f32>(1.0,0.0),angle);let half=motion_rotate(vec2<f32>(1.0,0.0),angle*.5).y;let change=(-2.0*half*half)*offset+basis.y*vec2<f32>(-offset.y,offset.x);let mapped=motion_rotate(s.zw,angle)+change/h;motion_actors[i*128u+120u]=bitcast<vec4<u32>>(s);motion_actors[i*128u+121u]=bitcast<vec4<u32>>(vec4<f32>(mapped,0.0,0.0));motion_write(i,vec4<f32>(s.xy,mapped));}
@@ -466,12 +468,13 @@ fn motion_wall_impulse(i:u32,normal:vec2<f32>,surface:vec2<f32>,friction:f32){
 @compute @workgroup_size(128) fn motion_solve_boundaries(@builtin(global_invocation_id) gid:vec3<u32>){
   let i=gid.x;if(i>=motion.counts.x||motion_value(0)==0.0||atomicLoad(&motion_control[6])!=0u){return;}
   var own=motion_state(i);let horizon=max(motion_value(8),1.0e-12);let clearance=motion.minimum.z+WHEEL_BAR_HALF_WIDTH;
-  // The rim is convex. Projecting the complete endpoint inside it certifies
-  // the whole straight coframe path and lets every independent wall impact be
-  // handled in parallel instead of serializing the global clock by earliest TOI.
+  // A short accepted interval must never turn a micrometre of rim clearance
+  // into metres per second by dividing the gap by that interval. The rim is
+  // stationary in this frame: remove only outward normal velocity. The
+  // continuous guard below certifies the resulting path before acceptance.
   let offset=own.xy-motion.wheel.xy;let endpoint=offset+own.zw*horizon;let limit=WHEEL_RADIUS-clearance-motion_reserve()-motion_rim_error()-motion.material.w;
   let endpoint_radius=motion_length(endpoint);
-  if(endpoint_radius>=limit){let capped=endpoint*(limit/max(endpoint_radius,1.0e-20));let velocity=(capped-offset)/horizon;motion_write(i,vec4<f32>(own.xy,velocity));own=motion_state(i);}
+  if(endpoint_radius>=limit){let normal=endpoint/max(endpoint_radius,1.0e-20);let outward=max(0.0,dot(own.zw,normal));let velocity=own.zw-normal*outward;motion_write(i,vec4<f32>(own.xy,velocity));own=motion_state(i);}
   // A baffle capsule is convex. Its first swept contact supplies a supporting
   // plane; removing inward velocity at that plane certifies the remaining path.
   for(var segment=0u;segment<motion.counts.w;segment++){
@@ -594,8 +597,8 @@ export async function createPreventiveParticleContactGpu(device,world,physics,so
     ...(source.includes('override CONTACT_PERSISTENT_SKIN')?{CONTACT_PERSISTENT_SKIN:r.persistentSkin===true}:{}),
     ...(source.includes('override DUAL_CACHE_EPOCH')?{DUAL_CACHE_EPOCH:r.cacheEpoch===true}:{}),
   };
-  // Compile in order instead of queuing every large Metal specialization at
-  // once. Liquid does not dispatch the granular colored-contact kernels.
+  // Metal needs ordered compilation. Windows drivers can compile a bounded
+  // batch concurrently without flooding the driver with every specialization.
   const boundaryOnly=r.particlePairContact===false;
   const componentBarrier=world.kind==='liquid'&&requestedSolve==='barrier'&&r.count<=4096&&r.experimentalDispatch!=='global';
   const globalPrimalEntries=new Set(['primal_begin','primal_cool','primal_initialize','primal_gradient','primal_operator','primal_alpha','primal_update','primal_beta','primal_conjugate','primal_line_begin','primal_line_bound','primal_trial_begin','primal_trial','primal_trial_validate','primal_trial_reduce','primal_line_apply','primal_cg_begin','primal_weights','primal_energy','primal_energy_validate','primal_adaptive_limit']);
@@ -615,7 +618,7 @@ export async function createPreventiveParticleContactGpu(device,world,physics,so
   const pausedGroup=device.createBindGroup({layout:pausedLayout,entries:[[0,r.uniform],[1,physics.particleBuffer],[2,r.cells],[3,r.items],[4,r.control],[5,r.actors],[9,r.precisionOutput],[13,r.pausedPose]].map(([binding,buffer])=>({binding,resource:{buffer}}))});
   if(source.includes('fn paused_capture'))compileEntries.push('paused_capture','paused_prepare','paused_propose','paused_validate','paused_commit','paused_finish');
   const pipelines={};
-  for(const entryPoint of compileEntries){
+  const compileEntry=async entryPoint=>{
     const star=entryPoint.startsWith('contact_star_project_'),tile=entryPoint.startsWith('contact_tiled_project_');
     const selectedLayout=entryPoint.startsWith('paused_')?pausedPipelineLayout:star?starProjectPipelineLayout:['contact_star_reset','contact_star_compact'].includes(entryPoint)?starCompactPipelineLayout:entryPoint==='motion_export_precision'?exportPipelineLayout:parallelDualControllers.has(entryPoint)?parallelDualPipelineLayout:controllerEntries.has(entryPoint)?controllerPipelineLayout:pipelineLayout;
     const constants={...candidateConstants,
@@ -626,7 +629,14 @@ export async function createPreventiveParticleContactGpu(device,world,physics,so
     const descriptor={label:`VKF contact ${entryPoint}`,layout:selectedLayout,compute:{module:staticModule(constants),entryPoint:star?'contact_star_project':tile?'contact_tiled_project':entryPoint==='al_affine_component'?'al_component':entryPoint}};
     const optional=entryPoint==='primal_cached_component';
     pipelines[entryPoint]=await (optional?createOptionalGpuPipeline:createCheckedGpuPipeline)(device,'compute',descriptor);
-  }
+  };
+  const windows=typeof navigator!=='undefined'&&/Win/i.test(navigator.userAgentData?.platform??navigator.platform??'');
+  if(windows){
+    let next=0;
+    await Promise.all(Array.from({length:Math.min(8,compileEntries.length)},async()=>{
+      while(next<compileEntries.length)await compileEntry(compileEntries[next++]);
+    }));
+  }else for(const entryPoint of compileEntries)await compileEntry(entryPoint);
   const group=device.createBindGroup({layout,entries:[...[r.uniform,physics.particleBuffer,r.cells,r.items,r.control,r.actors,r.incoming,r.heap].map((buffer,binding)=>({binding,resource:{buffer}})),{binding:10,resource:{buffer:r.primalScratch}}]}),controllerGroup=device.createBindGroup({layout:controllerLayout,entries:[r.uniform,physics.particleBuffer,r.cells,r.items,r.control,r.actors,r.incoming,r.heap,r.dispatchArgs].map((buffer,binding)=>({binding,resource:{buffer}}))}),empty=r.emptyGroup;
   const params=new ArrayBuffer(96),u=new Uint32Array(params),f=new Float32Array(params);u.set([r.count,world.kind==='granular'?2:3,0,world.geometry.segments.length,r.side,r.side,64,0]);f.set([...r.minimum,r.radius,r.cellWidth],8);f.set([...world.geometry.center,0,0],12);const sand=world.kind==='granular',projectedSand=sand&&!r.sandBarrier;f.set([world.properties.restitution??0,sand?(world.properties.friction??.9):0,sand?(world.properties.wall_friction??.78):0,r.margin],16);
   const cellAdmission=source.includes('&motion_dispatch_args[16]');
@@ -752,7 +762,7 @@ export async function createPreventiveParticleContactGpu(device,world,physics,so
     },
     finishFrame(encoder){const pass=encoder.beginComputePass({label:'VKF authoritative position low components'});pass.setBindGroup(0,empty);pass.setBindGroup(1,empty);dispatch(pass,'motion_export_precision',r.count);pass.end();encoder.copyBufferToBuffer(r.control,0,r.readback,0,256);if(timestamp&&queryIndex){encoder.resolveQuerySet(query,0,queryIndex,queryBuffer,0);encoder.copyBufferToBuffer(queryBuffer,0,queryReadback,0,queryIndex*8);}if(stageQuery&&stageLabels.length){encoder.resolveQuerySet(stageQuery,0,stageLabels.length*2,stageBuffer,0);encoder.copyBufferToBuffer(stageBuffer,0,stageReadback,0,stageLabels.length*16);}},
     async inspectStages(){if(!stageQuery||!stageLabels.length)return null;await stageReadback.mapAsync(GPUMapMode.READ);const q=new BigUint64Array(stageReadback.getMappedRange().slice(0));stageReadback.unmap();const stages={};for(let i=0;i<stageLabels.length;i++)stages[stageLabels[i]]=(stages[stageLabels[i]]??0)+Number(q[i*2+1]-q[i*2])/1e6;return stages;},
-    async inspect(){await r.readback.mapAsync(GPUMapMode.READ);const bytes=r.readback.getMappedRange().slice(0);r.readback.unmap();const f=new Float32Array(bytes),u=new Uint32Array(bytes);if(u[6]||![f[0],f[1],f[2],f[12]].every(Number.isFinite))throw new Error(`Preventive contact state/broadphase failure ${u[6]}; no unchecked motion tail was advanced.`);let gpuMs=null;if(timestamp&&queryIndex){await queryReadback.mapAsync(GPUMapMode.READ);const q=new BigUint64Array(queryReadback.getMappedRange().slice(0));queryReadback.unmap();gpuMs=0;for(let i=0;i<queryIndex;i+=2)gpuMs+=Number(q[i+1]-q[i])/1e6;}const receipt={remainingTime:f[0],angle:f[1],time:f[2],angularDelta:f[12],scheduler:selected,gpuMs,completedMs:performance.now()-started,predictions:u[21],heapEvents:u[14],staleEvents:u[23],heapRebuilds:u[24],events:u[25],guardDeferrals:u[26],dirtyParticles:u[27]/Math.max(1,u[25]*r.count),fallbacks:u[30]};if(receipt.events>0){const cost=(gpuMs??receipt.completedMs)/receipt.events;if(cost>0)eventBudget=Math.max(4,Math.min(8,Math.floor(10/cost)));}policy.observe({...receipt,mode:selected,moving});return receipt;},
+    async inspect(){await r.readback.mapAsync(GPUMapMode.READ);const bytes=r.readback.getMappedRange().slice(0);r.readback.unmap();const f=new Float32Array(bytes),u=new Uint32Array(bytes);if(u[6]||![f[0],f[1],f[2],f[12]].every(Number.isFinite))throw new Error(`Preventive contact state/broadphase failure ${u[6]}; no unchecked motion tail was advanced.`);let gpuMs=null;if(timestamp&&queryIndex){await queryReadback.mapAsync(GPUMapMode.READ);const q=new BigUint64Array(queryReadback.getMappedRange().slice(0));queryReadback.unmap();gpuMs=0;for(let i=0;i<queryIndex;i+=2)gpuMs+=Number(q[i+1]-q[i])/1e6;}const receipt={remainingTime:f[0],angle:f[1],time:f[2],angularDelta:f[12],peakWheelSurfaceSpeed:f[32],scheduler:selected,gpuMs,completedMs:performance.now()-started,predictions:u[21],heapEvents:u[14],staleEvents:u[23],heapRebuilds:u[24],events:u[25],guardDeferrals:u[26],dirtyParticles:u[27]/Math.max(1,u[25]*r.count),fallbacks:u[30]};if(receipt.events>0){const cost=(gpuMs??receipt.completedMs)/receipt.events;if(cost>0)eventBudget=Math.max(4,Math.min(8,Math.floor(10/cost)));}policy.observe({...receipt,mode:selected,moving});return receipt;},
     reset(){r.reset();policy.reset();eventBudget=4;},destroy(){r.destroy();starCells?.destroy();starArgs?.destroy();query?.destroy();queryBuffer?.destroy();queryReadback?.destroy();stageQuery?.destroy();stageBuffer?.destroy();stageReadback?.destroy();},
   };
 }

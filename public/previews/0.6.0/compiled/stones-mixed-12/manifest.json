@@ -1,11 +1,11 @@
 {
-  "artifact_content_sha256": "0a895f657702e51b",
+  "artifact_content_sha256": "01f707c40e4af1a4",
   "artifact_kind": "wasm",
   "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-stones\\.vkfbuild\\main\\main.wasm",
   "compiler_version": "vkf-wasm-artifact-smoke-0.2",
   "dependencies": [],
-  "manifest_hash": "ee54b13e08778e58",
-  "runtime_hash": "0a895f657702e51b",
+  "manifest_hash": "6622648ab11bdd2e",
+  "runtime_hash": "01f707c40e4af1a4",
   "runtime_surface": {
     "bindings": [
       {
@@ -122,5 +122,5 @@
   "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-stones\\main.vkf",
   "source_sha256": "bf1c9bdf1b17e51b",
   "status": "current",
-  "typed_ir_sha256": "4ebb31db18bca7fa"
+  "typed_ir_sha256": "0346baae82701f0c"
 }

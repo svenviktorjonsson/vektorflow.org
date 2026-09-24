@@ -59,7 +59,7 @@ struct DensitySplatOut {
   @builtin(position) position: vec4<f32>,
   @location(0) local: vec2<f32>,
   @location(1) velocity: vec2<f32>,
-  @location(2) contact_count: f32,
+  @interpolate(flat) @location(2) material_id: u32,
 };
 
 @group(0) @binding(0) var<storage, read> grains: array<Grain>;
@@ -182,7 +182,7 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   output.position = vec4<f32>(world_to_clip(grain.position + offset), 0.0, 1.0);
   output.local = local;
   output.velocity = grain.velocity;
-  output.contact_count = f32(grain.contact_count);
+  output.material_id = grain.id;
   return output;
 }
 
@@ -191,8 +191,12 @@ fn density_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
   let radius_squared = dot(input.local, input.local);
   if (radius_squared >= 1.0) { discard; }
   let weight = pow(1.0 - radius_squared, 3.0);
-  return vec4<f32>(weight, input.velocity * weight,
-    input.contact_count * weight);
+  // Local mineral facets travel with the grain. An unmoving pile therefore
+  // has no clock- or screen-space sparkle, even in its reconstructed surface.
+  let facet = vec2<u32>(floor((input.local + vec2<f32>(1.0)) * 18.0));
+  let mineral = stable_unit(input.material_id ^ (facet.x * 0x9e3779b9u)
+    ^ (facet.y * 0x85ebca6bu) ^ 0x51a7d39bu);
+  return vec4<f32>(weight, input.velocity * weight, mineral * weight);
 }
 
 fn fresnel_schlick(cosine: f32, f0: f32) -> f32 {
@@ -325,25 +329,26 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let motion = smoothstep(0.035, 0.82, speed);
   let direction = select(vec2<f32>(0.0, 1.0), velocity / max(speed, 1.0e-6),
     speed > 1.0e-6);
-  let across = vec2<f32>(-direction.y, direction.x);
-  let pixel = floor(input.position.xy);
-  let fine = pixel_noise(pixel, 0u);
-  let fine_next = pixel_noise(pixel + direction, 0u);
-  let mineral_noise = pixel_noise(floor(pixel * 0.37), 0u);
-  let stream = pixel_noise(floor(vec2<f32>(dot(pixel, across),
-    dot(pixel, direction))), 0u);
+  let material_seed = field.w / max(density, 1.0e-5);
+  let material_phase = u32(clamp(material_seed, 0.0, 1.0) * 16777215.0);
+  let fine = stable_unit(material_phase ^ 0x9e3779b9u);
+  let next_field = field_at(uv + direction / params.canvas.xy);
+  let next_seed = next_field.w / max(next_field.x, 1.0e-5);
+  let fine_next = stable_unit(u32(clamp(next_seed, 0.0, 1.0)
+    * 16777215.0) ^ 0x9e3779b9u);
+  let mineral_noise = stable_unit(material_phase ^ 0x85ebca6bu);
+  let stream = stable_unit(material_phase ^ 0xc2b2ae35u);
 
   var sand = params.sand_color.rgb * (0.91 + fine * 0.12);
   sand = mix(sand, vec3<f32>(0.80, 0.71, 0.55),
     smoothstep(0.965, 0.998, mineral_noise) * 0.38);
-  let contacts = field.w / max(density, 1.0e-5);
-  let contact_ao = mix(1.0, 0.88, clamp(contacts / 12.0, 0.0, 1.0));
+  let contact_ao = mix(1.0, 0.88, clamp((density - 1.0) / 3.0, 0.0, 1.0));
   sand *= diffuse * contact_ao;
   sand *= 0.96 + 0.08 * mix(fine, stream, motion);
 
   let sparkle = smoothstep(0.982, 0.9995, fine);
   let motion_shimmer = abs(fine - fine_next) * motion;
-  let glimmer = sparkle * (0.16 + params.material.w * 0.72)
+  let glimmer = sparkle * (0.015 + motion * params.material.w * 0.72)
     + motion_shimmer * 0.15;
   sand += vec3<f32>(1.0, 0.84, 0.56) * glimmer * params.light.w;
   return vec4<f32>(mix(background, sand, coverage), 1.0);
@@ -410,7 +415,12 @@ fn grain_fragment(input: GrainOut) -> @location(0) vec4<f32> {
       vec3<f32>(1.0, 0.46, 0.16), contact * 0.58) * (0.66 + 0.34 * dome);
   } else {
     // Stable mineral identity moves with the simulated grain, not a clock.
-    color = mineral_color(input.id) * (0.76 + 0.24 * stable_unit(input.id));
+    let micro = pixel_noise(floor((input.local + vec2<f32>(1.0)) * 8.0),input.id);
+    let moving = smoothstep(0.02,0.25,length(input.velocity));
+    color = mineral_color(input.id) * (0.72 + 0.24 * stable_unit(input.id))
+      * (0.86 + 0.22 * micro);
+    color += vec3<f32>(1.0,0.84,0.55) * smoothstep(0.985,0.999,micro)
+      * (0.015 + 0.3 * moving) * params.light.w;
   }
   return vec4<f32>(color * coverage, coverage);
 }

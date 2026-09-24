@@ -97,6 +97,16 @@ fn rigid_step(){
           direction=select(direction,-direction,dot(delta,direction)<0.0);
           let depth=support(i,direction)+support(j,-direction)-dot(delta,direction);if(depth<penetration){penetration=depth;n=direction;}
         }
+        // The nine face axes miss rotated edge-edge separation. Cross axes
+        // close that SAT gap without changing the shared rigid impulse law.
+        for(var ai=0u;ai<3u;ai++){var axis_i=vec3<f32>(0.0);axis_i[ai]=1.0;
+          for(var aj=0u;aj<3u;aj++){var axis_j=vec3<f32>(0.0);axis_j[aj]=1.0;
+            let cross_axis=cross(rotate(bodies[i].q,axis_i),rotate(bodies[j].q,axis_j));let axis_length=length(cross_axis);
+            if(axis_length<1.0e-5){continue;}var direction=cross_axis/axis_length;
+            direction=select(direction,-direction,dot(delta,direction)<0.0);
+            let depth=support(i,direction)+support(j,-direction)-dot(delta,direction);if(depth<penetration){penetration=depth;n=direction;}
+          }
+        }
         if(penetration>-0.005){bodies[i].w.w=1.0;bodies[j].w.w=1.0;}
         if(penetration<=0.0){continue;}
         let ri=support_point(i,n);let rj=support_point(j,-n);
@@ -171,9 +181,11 @@ fn air_velocity(position:vec3<f32>,time:f32)->vec3<f32>{
   let mode1=vec3<f32>(0.78,0.40,-0.5754386)*sin(dot(vec3<f32>(0.0,0.82,0.57),q)+phase*0.71);
   let mode2=vec3<f32>(-0.30,0.88,0.4676471)*sin(dot(vec3<f32>(0.53,0.0,0.34),q)-phase*0.47+1.7);
   let mode3=vec3<f32>(0.58,-0.3708197,0.72)*sin(dot(vec3<f32>(0.39,0.61,0.0),q)+phase*0.93+3.1);
+  let mode4=vec3<f32>(0.44,0.72,0.0)*sin(dot(vec3<f32>(0.72,-0.44,0.37),q)-phase*1.31+2.29)*0.35;
+  let mode5=vec3<f32>(0.63,0.0,0.31)*sin(dot(vec3<f32>(0.31,0.27,-0.63),q)+phase*1.73+4.37)*0.25;
   let height=max(0.0,position.z-params.domain_min.z);
   let boundary_layer=0.62+0.38*(1.0-exp(-height/1.5));
-  return vec3<f32>(speed*boundary_layer,0.0,0.0)+(mode1+mode2+mode3)*(speed*params.material.x*0.34);
+  return vec3<f32>(speed*boundary_layer,0.0,0.0)+(mode1+mode2+mode3+mode4+mode5)*(speed*params.material.x*0.34);
 }
 fn obstacle_normal(coordinate:vec3<u32>,kind:f32,owner:u32,fallback:vec3<f32>)->vec3<f32>{
   if(kind==3.0){let leaf=geometry[params.counts.z*4u+owner].xyz;if(dot(leaf,leaf)>1.0e-8){return normalize(leaf);}}

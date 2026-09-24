@@ -1,7 +1,7 @@
 # The cached pro-gen variants initialize added geometry; they do not animate it.
 # Softer blade modes retain bend across successive parcel impacts. These are
 # physical spring/damper inputs, not a time-driven animation or render filter.
-tree: (fixed:true,height:8,leaf_mass:0.0003,leaf_spring_constant:0.01,leaf_damping:0.0015,asset:"/previews/0.6.0/live/tree/assets/tree-mesh-feedback-8.bin.gz",variants:(uniform:"/previews/0.6.0/live/tree/assets/tree-mesh-uniform-feedback-8.bin.gz",normal:"/previews/0.6.0/live/tree/assets/tree-mesh-normal-feedback-8.bin.gz",triangular:"/previews/0.6.0/live/tree/assets/tree-mesh-triangular-feedback-8.bin.gz"))
+tree: (fixed:true,height:8,leaf_mass:0.0003,leaf_spring_constant:0.3,leaf_damping:0.015,asset:"/previews/0.6.0/live/tree/assets/tree-mesh-feedback-8.bin.gz",variants:(uniform:"/previews/0.6.0/live/tree/assets/tree-mesh-uniform-feedback-8.bin.gz",normal:"/previews/0.6.0/live/tree/assets/tree-mesh-normal-feedback-8.bin.gz",triangular:"/previews/0.6.0/live/tree/assets/tree-mesh-triangular-feedback-8.bin.gz"))
 lawn: (fixed:true,count:81920,mass:0.08,spring_constant:40,damping:0.8)
 elastic: (fixed:true,density:850,young_modulus:2000000000,branch_radius:0.025,
     branch_length:2,damping_ratio:0.2,elasticity:1)

@@ -29,11 +29,22 @@ fn support_point(i:u32,n:vec3<f32>)->vec3<f32>{
 fn place_held(){if(params.held.x>=0.0&&u32(params.held.x)<params.counts.x){let i=u32(params.held.x);bodies[i].info.w=0.0;bodies[i].p.z=params.held.y;bodies[i].v=vec4<f32>(0.0);bodies[i].w=vec4<f32>(0.0);}}
 fn inverse_mass(i:u32)->f32 {if(f32(i)==params.held.x){return 0.0;} return 1.0/bodies[i].info.x;}
 fn contact_velocity(b:Body,r:vec3<f32>)->vec3<f32>{return b.v.xyz+cross(b.w.xyz,r);}
+fn grounded_sleeping(i:u32)->bool{
+  let up=vec3<f32>(0.0,0.0,1.0);
+  return bodies[i].info.w>0.5&&bodies[i].p.z-support(i,-up)<0.01;
+}
+fn supported_breakaway_impulse(i:u32)->f32{
+  // A settled body transfers a short collision pulse into its infinite-mass
+  // floor contact. Wake it only after that contact's Coulomb capacity is
+  // exceeded; otherwise a small stone unrealistically launches a large one.
+  let support_horizon=0.20;
+  return bodies[i].info.x*(0.22+params.material.y*length(params.gravity_dt.xyz)*support_horizon);
+}
 fn impulse_body(i:u32,r:vec3<f32>,j:vec3<f32>){
   if(inverse_mass(i)==0.0){return;}
   if(dot(j,j)>1.0e-8){bodies[i].info.w=0.0;}
-  bodies[i].v=vec4<f32>(bodies[i].v.xyz+j*inverse_mass(i),0.0);
-  bodies[i].w=vec4<f32>(bodies[i].w.xyz+cross(r,j)/bodies[i].info.y,0.0);
+  bodies[i].v=vec4<f32>(bodies[i].v.xyz+j*inverse_mass(i),bodies[i].v.w);
+  bodies[i].w=vec4<f32>(bodies[i].w.xyz+cross(r,j)/bodies[i].info.y,bodies[i].w.w);
 }
 @compute @workgroup_size(1)
 fn advance_bodies(){
@@ -41,7 +52,7 @@ fn advance_bodies(){
   for(var i=0u;i<params.counts.x;i++){
     if(f32(i)==params.held.x){bodies[i].p.z=params.held.y;bodies[i].v=vec4<f32>(0.0);bodies[i].w=vec4<f32>(0.0);continue;}
     if(bodies[i].info.w>0.5){continue;}
-    bodies[i].v=vec4<f32>(bodies[i].v.xyz+params.gravity_dt.xyz*dt,0.0);
+    bodies[i].v=vec4<f32>(bodies[i].v.xyz+params.gravity_dt.xyz*dt,bodies[i].v.w);
     bodies[i].p=vec4<f32>(bodies[i].p.xyz+bodies[i].v.xyz*dt,0.0);
     let q=bodies[i].q;let w=bodies[i].w.xyz;
     bodies[i].q=normalize(q+vec4<f32>(q.w*w+cross(w,q.xyz),-dot(w,q.xyz))*(0.5*dt));
@@ -52,23 +63,28 @@ fn advance_bodies(){
 fn rotate_support(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i<params.counts.x*params.counts.w){rotated_geometry[i]=vec4<f32>(rotate(bodies[i/params.counts.w].q,geometry[i].xyz),0.0);}}
 @compute @workgroup_size(1)
 fn rigid_step(){
-  for(var iteration=0u;iteration<6u;iteration++){
+  for(var iteration=0u;iteration<3u;iteration++){
     for(var i=0u;i<params.counts.x;i++){
-      let im=inverse_mass(i);let up=vec3<f32>(0.0,0.0,1.0);
-      let depth=support(i,-up)-bodies[i].p.z;
+      let im=inverse_mass(i);let up=vec3<f32>(0.0,0.0,1.0);let ground_point=support_point(i,-up);
+      let depth=dot(ground_point,-up)-bodies[i].p.z;
+      if(depth>-0.005){bodies[i].w.w=1.0;}
       if(depth>0.0&&im>0.0&&bodies[i].info.w<0.5){
         bodies[i].p.z+=depth;
-        let r=support_point(i,-up);let cv=contact_velocity(bodies[i],r);
+        let r=ground_point;let cv=contact_velocity(bodies[i],r);
         if(cv.z<0.0){
           let lever=cross(r,up);let jn=-(1.0+select(0.0,params.material.x,cv.z < -0.3))*cv.z/(im+dot(lever,lever)/bodies[i].info.y);
-          let tangent=vec3<f32>(cv.x,cv.y,0.0);let speed=length(tangent);
-          let jt=min(params.material.y*jn,speed/(im+dot(r,r)/bodies[i].info.y));
-          impulse_body(i,r,up*jn-tangent/max(speed,1.0e-8)*jt);
-          // Rolling resistance removes spin at a resting rough contact; it
-          // does not attract or pin the body to a pre-recorded pile position.
-          let spin=length(bodies[i].w.xyz);let reduction=params.material.y*0.25*jn*bodies[i].info.z/bodies[i].info.y;
-          bodies[i].w=vec4<f32>(bodies[i].w.xyz*max(0.0,1.0-reduction/max(spin,1.0e-8)),0.0);
+          let tangent=vec3<f32>(cv.x,cv.y,0.0);let speed=length(tangent);let tangent_direction=tangent/max(speed,1.0e-8);
+          let tangent_lever=cross(r,tangent_direction);let jt=min(params.material.y*jn,speed/(im+dot(tangent_lever,tangent_lever)/bodies[i].info.y));
+          impulse_body(i,r,up*jn-tangent_direction*jt);
+          // Stone rolling and spin resistance are bounded contact moments,
+          // not arbitrary frame damping or a positional pin.
+          var angular=bodies[i].w.xyz;let spin_velocity=dot(angular,up);let rolling=angular-up*spin_velocity;let rolling_speed=length(rolling);
+          let rolling_delta=min(rolling_speed,params.material.z*jn*bodies[i].info.z/bodies[i].info.y);
+          angular-=rolling/max(rolling_speed,1.0e-8)*rolling_delta;
+          let spin_delta=min(abs(spin_velocity),params.material.w*jn*bodies[i].info.z/bodies[i].info.y);
+          angular-=up*sign(spin_velocity)*spin_delta;bodies[i].w=vec4<f32>(angular,bodies[i].w.w);
         }
+        bodies[i].w.w=1.0;
       }
       for(var j=i+1u;j<params.counts.x;j++){
         if(bodies[i].info.w>0.5&&bodies[j].info.w>0.5){continue;}
@@ -81,25 +97,66 @@ fn rigid_step(){
           direction=select(direction,-direction,dot(delta,direction)<0.0);
           let depth=support(i,direction)+support(j,-direction)-dot(delta,direction);if(depth<penetration){penetration=depth;n=direction;}
         }
+        // The nine face axes miss rotated edge-edge separation. Cross axes
+        // close that SAT gap without changing the shared rigid impulse law.
+        for(var ai=0u;ai<3u;ai++){var axis_i=vec3<f32>(0.0);axis_i[ai]=1.0;
+          for(var aj=0u;aj<3u;aj++){var axis_j=vec3<f32>(0.0);axis_j[aj]=1.0;
+            let cross_axis=cross(rotate(bodies[i].q,axis_i),rotate(bodies[j].q,axis_j));let axis_length=length(cross_axis);
+            if(axis_length<1.0e-5){continue;}var direction=cross_axis/axis_length;
+            direction=select(direction,-direction,dot(delta,direction)<0.0);
+            let depth=support(i,direction)+support(j,-direction)-dot(delta,direction);if(depth<penetration){penetration=depth;n=direction;}
+          }
+        }
+        if(penetration>-0.005){bodies[i].w.w=1.0;bodies[j].w.w=1.0;}
         if(penetration<=0.0){continue;}
         let ri=support_point(i,n);let rj=support_point(j,-n);
-        let overlap=penetration;let jm=inverse_mass(j);let total=im+jm;
-        if(overlap<=0.0||total==0.0){continue;}
-        if(im>0.0){bodies[i].info.w=0.0;}if(jm>0.0){bodies[j].info.w=0.0;}
-        bodies[i].p=vec4<f32>(bodies[i].p.xyz-n*overlap*im/total,0.0);
-        bodies[j].p=vec4<f32>(bodies[j].p.xyz+n*overlap*jm/total,0.0);
-        let relative=contact_velocity(bodies[j],rj)-contact_velocity(bodies[i],ri);
-        let vn=dot(relative,n);
+        let overlap=penetration;let physical_jm=inverse_mass(j);var solve_im=select(im,0.0,grounded_sleeping(i));var solve_jm=select(physical_jm,0.0,grounded_sleeping(j));
+        let relative=contact_velocity(bodies[j],rj)-contact_velocity(bodies[i],ri);let vn=dot(relative,n);
+        // The same rigid-contact impulse decides whether a static floor
+        // contact can support the impact or must transition to sliding.
         if(vn<0.0){
-          let li=cross(ri,n);let lj=cross(rj,n);let denominator=total+select(dot(li,li)/bodies[i].info.y,0.0,im==0.0)+select(dot(lj,lj)/bodies[j].info.y,0.0,jm==0.0);
-          let jn=-(1.0+select(0.0,params.material.x,vn < -0.3))*vn/denominator;
-          let tangent=relative-vn*n;let speed=length(tangent);
-          let jt=min(params.material.y*jn,speed/(total+dot(ri,ri)/bodies[i].info.y+dot(rj,rj)/bodies[j].info.y));
-          let impulse=n*jn-tangent/max(speed,1.0e-8)*jt;
-          impulse_body(i,ri,-impulse);impulse_body(j,rj,impulse);
+          let anchored_total=solve_im+solve_jm;
+          if(anchored_total>0.0){
+            let li=cross(ri,n);let lj=cross(rj,n);let anchored_denominator=anchored_total+select(dot(li,li)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj,lj)/bodies[j].info.y,0.0,solve_jm==0.0);
+            let candidate=-(1.0+select(0.0,params.material.x,vn < -0.3))*vn/anchored_denominator;
+            if(solve_im==0.0&&im>0.0&&candidate>supported_breakaway_impulse(i)){solve_im=im;bodies[i].info.w=0.0;}
+            if(solve_jm==0.0&&physical_jm>0.0&&candidate>supported_breakaway_impulse(j)){solve_jm=physical_jm;bodies[j].info.w=0.0;}
+          }
         }
+        let total=solve_im+solve_jm;
+        if(overlap<=0.0||total==0.0){continue;}
+        if(solve_im>0.0){bodies[i].info.w=0.0;}if(solve_jm>0.0){bodies[j].info.w=0.0;}
+        bodies[i].p=vec4<f32>(bodies[i].p.xyz-n*overlap*solve_im/total,0.0);
+        bodies[j].p=vec4<f32>(bodies[j].p.xyz+n*overlap*solve_jm/total,0.0);
+        if(vn<0.0){
+          let li=cross(ri,n);let lj=cross(rj,n);let denominator=total+select(dot(li,li)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj,lj)/bodies[j].info.y,0.0,solve_jm==0.0);
+          let jn=-(1.0+select(0.0,params.material.x,vn < -0.3))*vn/denominator;
+          let tangent=relative-vn*n;let speed=length(tangent);let tangent_direction=tangent/max(speed,1.0e-8);
+          let li_tangent=cross(ri,tangent_direction);let lj_tangent=cross(rj,tangent_direction);
+          let tangent_mass=total+select(dot(li_tangent,li_tangent)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj_tangent,lj_tangent)/bodies[j].info.y,0.0,solve_jm==0.0);
+          let jt=min(params.material.y*jn,speed/tangent_mass);
+          let impulse=n*jn-tangent_direction*jt;
+          if(solve_im>0.0){impulse_body(i,ri,-impulse);}if(solve_jm>0.0){impulse_body(j,rj,impulse);}
+          let angular_inverse=select(1.0/bodies[i].info.y,0.0,solve_im==0.0)+select(1.0/bodies[j].info.y,0.0,solve_jm==0.0);
+          let relative_angular=bodies[j].w.xyz-bodies[i].w.xyz;let rolling=relative_angular-n*dot(relative_angular,n);let rolling_speed=length(rolling);let contact_radius=min(bodies[i].info.z,bodies[j].info.z);
+          let rolling_moment=min(params.material.z*jn*contact_radius,rolling_speed/max(angular_inverse,1.0e-8));let rolling_axis=rolling/max(rolling_speed,1.0e-8);
+          let spin_speed=dot(relative_angular,n);let spin_moment=min(params.material.w*jn*contact_radius,abs(spin_speed)/max(angular_inverse,1.0e-8));let angular_impulse=rolling_axis*rolling_moment+n*sign(spin_speed)*spin_moment;
+          if(solve_im>0.0){bodies[i].w=vec4<f32>(bodies[i].w.xyz+angular_impulse/bodies[i].info.y,bodies[i].w.w);}if(solve_jm>0.0){bodies[j].w=vec4<f32>(bodies[j].w.xyz-angular_impulse/bodies[j].info.y,bodies[j].w.w);}
+        }
+        bodies[i].w.w=1.0;bodies[j].w.w=1.0;
       }
     }
+  }
+  // Contact-qualified sleep removes settled bodies from later pair work.
+  // The timer lives in v.w; w.w is a per-step contact bit reset by advance.
+  for(var i=0u;i<params.counts.x;i++){
+    if(f32(i)==params.held.x||bodies[i].info.w>0.5){continue;}
+    // Linear threshold exceeds one gravity impulse at 60 Hz; otherwise a
+    // perfectly resting contact can never qualify before its support impulse.
+    let slow=length(bodies[i].v.xyz)<0.22&&length(bodies[i].w.xyz)<0.60;
+    let contact_delta=select(-params.gravity_dt.w*0.25,params.gravity_dt.w,bodies[i].w.w>0.5);
+    bodies[i].v.w=select(0.0,max(0.0,bodies[i].v.w+contact_delta),slow);
+    if(bodies[i].v.w>=0.5){bodies[i].v=vec4<f32>(0.0);bodies[i].w=vec4<f32>(0.0);bodies[i].info.w=1.0;}
   }
 }
 fn hash(x:u32)->u32 {var v=x;v=(v^(v>>16u))*0x7feb352du;v=(v^(v>>15u))*0x846ca68bu;return v^(v>>16u);}
@@ -124,9 +181,11 @@ fn air_velocity(position:vec3<f32>,time:f32)->vec3<f32>{
   let mode1=vec3<f32>(0.78,0.40,-0.5754386)*sin(dot(vec3<f32>(0.0,0.82,0.57),q)+phase*0.71);
   let mode2=vec3<f32>(-0.30,0.88,0.4676471)*sin(dot(vec3<f32>(0.53,0.0,0.34),q)-phase*0.47+1.7);
   let mode3=vec3<f32>(0.58,-0.3708197,0.72)*sin(dot(vec3<f32>(0.39,0.61,0.0),q)+phase*0.93+3.1);
+  let mode4=vec3<f32>(0.44,0.72,0.0)*sin(dot(vec3<f32>(0.72,-0.44,0.37),q)-phase*1.31+2.29)*0.35;
+  let mode5=vec3<f32>(0.63,0.0,0.31)*sin(dot(vec3<f32>(0.31,0.27,-0.63),q)+phase*1.73+4.37)*0.25;
   let height=max(0.0,position.z-params.domain_min.z);
   let boundary_layer=0.62+0.38*(1.0-exp(-height/1.5));
-  return vec3<f32>(speed*boundary_layer,0.0,0.0)+(mode1+mode2+mode3)*(speed*params.material.x*0.34);
+  return vec3<f32>(speed*boundary_layer,0.0,0.0)+(mode1+mode2+mode3+mode4+mode5)*(speed*params.material.x*0.34);
 }
 fn obstacle_normal(coordinate:vec3<u32>,kind:f32,owner:u32,fallback:vec3<f32>)->vec3<f32>{
   if(kind==3.0){let leaf=geometry[params.counts.z*4u+owner].xyz;if(dot(leaf,leaf)>1.0e-8){return normalize(leaf);}}
@@ -259,7 +318,7 @@ export async function createMechanicalWorldGpu(device,world,initial,shaderSource
   f.set([p.speed??3.5,p.parcel_mass??0.002,p.density??1.225,0],8);
   f.set([...(p.domain_min??[-6,-6,0]),0],12);f.set([...(p.domain_span??[12,12,9]),0],16);
   u.set([...(p.grid??[12,12,18]),0],20);f.set([-1,0,0,0],24);
-  f.set(world.kind==='wind'?[p.turbulence_intensity??0.12,p.integral_scale??2.4,p.drag_coefficient??1.05,p.eddy_decay??0.75]:[p.restitution??0.08,p.friction??0.65,p.spring_constant??60,p.damping??12],28);
+  f.set(world.kind==='wind'?[p.turbulence_intensity??0.12,p.integral_scale??2.4,p.drag_coefficient??1.05,p.eddy_decay??0.75]:[p.restitution??0.10,p.friction??0.72,p.rolling_friction??0.08,p.spin_friction??0.035],28);
   let time=0;
   return {device,buffers,initial,
     get time(){return time;},setHeld(id,z){f[24]=id;f[25]=z;},setSpeed(speed){f[8]=Math.max(0,Math.min(20,Number.isFinite(speed)?speed:0));},

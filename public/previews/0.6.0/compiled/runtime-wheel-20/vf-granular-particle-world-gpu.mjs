@@ -517,8 +517,9 @@ fn project_wheel_at(position_input: vec2<f32>, angle:f32) -> vec2<f32> {
 fn project_wheel(position:vec2<f32>)->vec2<f32>{return project_wheel_at(position,params.solver.z);}
 fn sweep_particle(origin:vec2<f32>,destination:vec2<f32>)->vec2<f32>{
   let radius=params.material.x+WHEEL_BAR_HALF_WIDTH+WHEEL_TRANSPORT_SKIN;
-  return swept_wheel_motion(project_wheel(origin),destination,vec2<f32>(0.0),WHEEL_CENTER,
-    WHEEL_RADIUS-radius,radius,params.solver.z).position;
+  let swept = swept_wheel_motion(project_wheel(origin),destination,
+    vec2<f32>(0.0),WHEEL_CENTER,WHEEL_RADIUS-radius,radius,params.solver.z);
+  return project_wheel(swept.position);
 }
 @compute @workgroup_size(128)
 fn sweep_wheel(@builtin(global_invocation_id) gid:vec3<u32>){
@@ -715,7 +716,13 @@ fn project_contacts(@builtin(global_invocation_id) invocation: vec3<u32>) {
         record_penetration(penetration);
         let projected_depth = max(0.0, penetration - params.solver.x);
         if (projected_depth <= 0.0) { continue; }
-        let normal_correction = projected_depth * 0.5;
+        // Bottom-up shock propagation: below a gravity-loaded contact, the
+        // supporting grain is effectively anchored by the weight beneath it.
+        // For opposite pair normals the two corrections still sum to depth.
+        let gravity_direction = params.force.xy
+          / max(length(params.force.xy), 1.0e-8);
+        let normal_correction = projected_depth * 0.5
+          * (1.0 - dot(normal, gravity_direction));
         var pair_correction = normal * normal_correction;
         // Position-based Coulomb friction: tangential correction is bounded
         // by mu times this contact's unilateral normal correction.
@@ -742,6 +749,68 @@ fn project_contacts(@builtin(global_invocation_id) invocation: vec3<u32>) {
   target_grains[index] = grain;
 }
 
+struct ContactColor { value: vec4<u32>, }
+@group(0) @binding(5) var<uniform> contact_color: ContactColor;
+
+// Each invocation owns one occupied cell. Cells of one 3x3 colour have
+// disjoint one-cell halos; pair endpoints can therefore move in place.
+@compute @workgroup_size(128)
+fn project_contacts_colored(@builtin(global_invocation_id) invocation: vec3<u32>) {
+  let index = invocation.x;
+  if (index >= params.counts.x) { return; }
+  let home = cell_coordinate(source_grains[index].position);
+  if (u32((home.x % 3 + 3) % 3) != contact_color.value.x ||
+      u32((home.y % 3 + 3) % 3) != contact_color.value.y) { return; }
+  let bucket = cell_index(home);
+  let home_count = min(atomicLoad(&cell_counts[bucket]), params.counts.w);
+  var leader = 0xffffffffu;
+  for (var slot = 0u; slot < home_count; slot = slot + 1u) {
+    let candidate = atomicLoad(&cell_items[bucket * params.counts.w + slot]);
+    if (candidate < params.counts.x &&
+        all(cell_coordinate(source_grains[candidate].position) == home))
+      { leader = min(leader, candidate); }
+  }
+  if (index != leader) { return; }
+  let diameter = params.material.x * 2.0 * 1.001;
+  for (var a_slot = 0u; a_slot < home_count; a_slot = a_slot + 1u) {
+    let a_index = atomicLoad(&cell_items[bucket * params.counts.w + a_slot]);
+    if (a_index >= params.counts.x ||
+        !all(cell_coordinate(source_grains[a_index].position) == home)) { continue; }
+    for (var oy = -1; oy <= 1; oy = oy + 1) {
+      for (var ox = -1; ox <= 1; ox = ox + 1) {
+        let neighbor = home + vec2<i32>(ox, oy);
+        if (neighbor.y < home.y ||
+            (neighbor.y == home.y && neighbor.x < home.x)) { continue; }
+        let other_bucket = cell_index(neighbor);
+        let other_count = min(atomicLoad(&cell_counts[other_bucket]), params.counts.w);
+        for (var b_slot = 0u; b_slot < other_count; b_slot = b_slot + 1u) {
+          let b_index = atomicLoad(&cell_items[other_bucket * params.counts.w + b_slot]);
+          if (b_index >= params.counts.x || b_index == a_index ||
+              !all(cell_coordinate(source_grains[b_index].position) == neighbor) ||
+              (all(neighbor == home) && b_index < a_index)) { continue; }
+          var a = target_grains[a_index];
+          var b = target_grains[b_index];
+          let separation = a.position - b.position;
+          let distance = length(separation);
+          if (distance >= diameter) { continue; }
+          let normal = select(coincident_normal(a.id, b.id),
+            separation / max(distance, 1.0e-12), distance > 1.0e-12);
+          let depth = diameter - distance;
+          let gravity_direction = params.force.xy /
+            max(length(params.force.xy), 1.0e-8);
+          let a_weight = 0.5 * (1.0 - dot(normal, gravity_direction));
+          a.position = project_wheel(project_world(a.position + normal * depth * a_weight));
+          b.position = project_wheel(project_world(b.position - normal * depth * (1.0 - a_weight)));
+          a.contact_count = a.contact_count + 1u;
+          b.contact_count = b.contact_count + 1u;
+          target_grains[a_index] = a;
+          target_grains[b_index] = b;
+        }
+      }
+    }
+  }
+}
+
 @compute @workgroup_size(128)
 fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
   let index = invocation.x;
@@ -756,9 +825,19 @@ fn finalize_state(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let load=max(0.0,-dot(params.force.xy,resting.normal))*params.force.z*params.force.z;
     if(distance>1.0e-12){grain.position=project_wheel(grain.position-tangent/distance*min(distance,params.solver.y*load));}
   }
-  // Geometric overlap repair is not an impulse. Reconstructing it as velocity
-  // launches a compressed pile after a kinematic baffle sweeps through it.
+  // A supported grain cannot keep its pre-projection free-fall velocity:
+  // doing so reinjects gravity into the same contact every step. Recover the
+  // actual constrained displacement, but never let geometric repair add
+  // kinetic energy (notably after a kinematic baffle moves through a pile).
   var velocity = grain.velocity;
+  if (grain.contact_count > 0u || resting.is_active != 0u) {
+    let constrained_velocity = (grain.position - grain.previous_position)
+      / params.force.z;
+    let constrained_speed = length(constrained_velocity);
+    let incoming_speed = length(velocity);
+    velocity = constrained_velocity
+      * min(1.0, incoming_speed / max(constrained_speed, 1.0e-12));
+  }
   let diameter = params.material.x * 2.0;
   // The normal solve's safety gap must still count as a resting friction
   // contact; it is not cohesion or attraction between separated grains.
@@ -980,7 +1059,7 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
   const particleBuffer = createBuffer(device, 'VKF Granular particles (stable)',
     seed.bytes.byteLength, storage | copyDst | copySrc | vertex, new Uint8Array(seed.bytes));
   const workBufferB = createBuffer(device, 'VKF Granular particles (work B)',
-    seed.bytes.byteLength, storage | copySrc);
+    seed.bytes.byteLength, storage | copySrc | copyDst);
   const workBufferC = createBuffer(device, 'VKF Granular particles (work C)',
     seed.bytes.byteLength, storage | copySrc);
   const cellCountsBuffer = createBuffer(device, 'VKF Granular cell counts + telemetry',
@@ -990,6 +1069,9 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
   device.queue.writeBuffer(cellItemsBuffer,0,new Uint32Array(cellItemCount).fill(0xffffffff));
   const paramsBuffer = createBuffer(device, 'VKF Granular world parameters',
     GRANULAR_PARTICLE_WORLD_GPU_ABI.parameterBytes, GPUBufferUsage.UNIFORM | copyDst);
+  const colorBuffers = Array.from({ length: 9 }, (_, color) => createBuffer(device,
+    `VKF contact colour ${color}`, 16, GPUBufferUsage.UNIFORM | copyDst,
+    new Uint32Array([color % 3, Math.floor(color / 3), 0, 0])));
   const shader = device.createShaderModule({
     label: 'VKF 2D Granular particle world GPU specialization',
     code: options.shaderSource ?? (GRANULAR_PARTICLE_WORLD_GPU_WGSL + SWEPT_WHEEL_CONTACT_WGSL + PREVENTIVE_PARTICLE_CONTACT_WGSL),
@@ -1011,11 +1093,12 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
       { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
     ],
   });
   const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [layout] });
   const entryPoints = ['clear_cells', 'fill_cells', 'sort_cells', 'integrate',
-    'project_contacts', 'finalize_state', 'audit_contacts', 'sweep_wheel'];
+    'project_contacts', 'project_contacts_colored', 'finalize_state', 'audit_contacts', 'sweep_wheel'];
   if (typeof device.pushErrorScope === 'function') device.pushErrorScope('validation');
   let pipelineEntries;
   try {
@@ -1035,12 +1118,13 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     const guardedLayout=device.createPipelineLayout({bindGroupLayouts:[layout,r.emptyLayout,r.forceLayout]});
     preventivePipeline=await createCheckedGpuPipeline(device,'compute',{label:'VKF guarded granular forces',layout:guardedLayout,compute:{module:shader,entryPoint:'preventive_predict'}});
   }
-  const makeBindGroup = (source, target) => device.createBindGroup({ layout, entries: [
+  const makeBindGroup = (source, target, colorBuffer = colorBuffers[0]) => device.createBindGroup({ layout, entries: [
     { binding: 0, resource: { buffer: source } },
     { binding: 1, resource: { buffer: target } },
     { binding: 2, resource: { buffer: cellCountsBuffer } },
     { binding: 3, resource: { buffer: cellItemsBuffer } },
     { binding: 4, resource: { buffer: paramsBuffer } },
+    { binding: 5, resource: { buffer: colorBuffer } },
   ] });
   const bindGroups = Object.freeze({
     AB: makeBindGroup(particleBuffer, workBufferB),
@@ -1048,6 +1132,8 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     CB: makeBindGroup(workBufferC, workBufferB),
     BA: makeBindGroup(workBufferB, particleBuffer),
     CA: makeBindGroup(workBufferC, particleBuffer),
+    colored: colorBuffers.map((colorBuffer) =>
+      makeBindGroup(workBufferB, particleBuffer, colorBuffer)),
   });
 
   const paramsBytes = new ArrayBuffer(GRANULAR_PARTICLE_WORLD_GPU_ABI.parameterBytes);
@@ -1077,6 +1163,16 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     dispatch(pass, 'clear_cells', bindGroup, gridCellCount);
     dispatch(pass, 'fill_cells', bindGroup, seed.count);
     dispatch(pass, 'sort_cells', bindGroup, gridCellCount);
+  };
+  const coloredRepair = (encoder, sweeps) => {
+    for (let iteration = 0; iteration < sweeps; iteration++) {
+      encoder.copyBufferToBuffer(particleBuffer, 0, workBufferB, 0, seed.bytes.byteLength);
+      const pass = encoder.beginComputePass({ label: 'Conflict-free grain repair' });
+      buildGrid(pass, bindGroups.BC);
+      for (let color = 0; color < 9; color++)
+        dispatch(pass, 'project_contacts_colored', bindGroups.colored[color], seed.count);
+      pass.end();
+    }
   };
   let frameIndex = 0;
   const encodeFixedStep = (pass) => {
@@ -1112,9 +1208,30 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     });
     for (let index = 0; index < count; index += 1) encodeFixedStep(pass);
     pass.end();
+    coloredRepair(encoder, 4);
     frameIndex += count;
   };
   const step = (encoder, timeStep = policy.timeStep) => stepMany(encoder, 1, timeStep);
+  const relaxContacts = (encoder, iterations = 16) => {
+    const r = options.preventiveContact;
+    if (!r) throw new Error('Granular contact relaxation requires wheel resources');
+    if (!Number.isSafeInteger(iterations) || iterations < 1 || iterations > 64) {
+      throw new RangeError('Granular event relaxation needs 1–64 iterations');
+    }
+    encoder.copyBufferToBuffer(r.control, 4, paramsBuffer, 88, 4);
+    encoder.copyBufferToBuffer(particleBuffer, 0, workBufferB, 0, seed.bytes.byteLength);
+    const pass = encoder.beginComputePass({ label: 'Granular pair repair after rigid batch' });
+    let current = 'B';
+    for (let iteration = 0; iteration < iterations; iteration += 1) {
+      const projection = current === 'B' ? bindGroups.BC : bindGroups.CB;
+      buildGrid(pass, projection);
+      dispatch(pass, 'project_contacts', projection, seed.count);
+      current = current === 'B' ? 'C' : 'B';
+    }
+    pass.end();
+    encoder.copyBufferToBuffer(current === 'B' ? workBufferB : workBufferC,
+      0, particleBuffer, 0, seed.bytes.byteLength);
+  };
   const predictForces=(encoder)=>{
     const r=options.preventiveContact;if(!r)throw new Error('Preventive contact resources are required');
     encoder.copyBufferToBuffer(r.control,4,paramsBuffer,88,4);
@@ -1125,26 +1242,39 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     encoder.copyBufferToBuffer(workBufferB,0,particleBuffer,0,seed.bytes.byteLength);
   };
   let encodedWheelAngle=null;
+  const setSweepReference = (angle = wheelAngle) => {
+    if (!Number.isFinite(angle)) throw new TypeError('Granular wheel reference must be finite');
+    encodedWheelAngle = angle;
+  };
   const sweepWheel=(encoder,elapsed)=>{
     if(encodedWheelAngle===null){encodedWheelAngle=wheelAngle;return;}
     const delta=wheelAngle-encodedWheelAngle;if(Math.abs(delta)<1e-10)return;
-    updateParams();const base=paramsBytes.slice(0),motion=paramsBytes.slice(0);
-    new Float32Array(motion).set([encodedWheelAngle,delta,delta/elapsed,elapsed],24);
-    const staging=createBuffer(device,'VKF immutable grain sweep parameters',base.byteLength*2,GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);
-    device.queue.writeBuffer(staging,0,motion);device.queue.writeBuffer(staging,base.byteLength,base);
-    encoder.copyBufferToBuffer(staging,0,paramsBuffer,0,base.byteLength);
-    const pass=encoder.beginComputePass({label:'Swept rigid baffles, grains'});dispatch(pass,'sweep_wheel',bindGroups.AB,seed.count);pass.end();
-    // A kinematic boundary sweep must solve the grain contact network before
-    // its compressed state is used for advection (also while Play is paused).
-    const contacts=encoder.beginComputePass({label:'Swept grain exclusion network'});
-    let current='B';
-    for(let iteration=0;iteration<policy.contactIterations*2;iteration++){
-      const projection=current==='B'?bindGroups.BC:bindGroups.CB;
-      buildGrid(contacts,projection);dispatch(contacts,'project_contacts',projection,seed.count);current=current==='B'?'C':'B';
+    updateParams();
+    const base=paramsBytes.slice(0);
+    const segments=Math.min(24,Math.max(1,Math.ceil(Math.abs(delta)/0.04)));
+    const staging=createBuffer(device,'VKF immutable grain sweep parameters',
+      base.byteLength*(segments+1),GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);
+    for(let segment=0;segment<segments;segment++){
+      const motion=base.slice(0);
+      const start=encodedWheelAngle+delta*segment/segments;
+      const increment=delta/segments;
+      const values=new Float32Array(motion);
+      values[22]=start+increment;
+      values[23]=delta/elapsed;
+      values.set([start,increment,delta/elapsed,elapsed/segments],24);
+      device.queue.writeBuffer(staging,segment*base.byteLength,motion);
     }
-    contacts.end();
-    encoder.copyBufferToBuffer(current==='B'?workBufferB:workBufferC,0,particleBuffer,0,seed.bytes.byteLength);
-    encoder.copyBufferToBuffer(staging,base.byteLength,paramsBuffer,0,base.byteLength);
+    device.queue.writeBuffer(staging,segments*base.byteLength,base);
+    for(let segment=0;segment<segments;segment++){
+      encoder.copyBufferToBuffer(staging,segment*base.byteLength,
+        paramsBuffer,0,base.byteLength);
+      const pass=encoder.beginComputePass({label:'Substepped swept rigid baffles'});
+      dispatch(pass,'sweep_wheel',bindGroups.AB,seed.count);
+      pass.end();
+      encoder.copyBufferToBuffer(workBufferB,0,particleBuffer,0,seed.bytes.byteLength);
+      coloredRepair(encoder,2);
+    }
+    encoder.copyBufferToBuffer(staging,segments*base.byteLength,paramsBuffer,0,base.byteLength);
     queueMicrotask(()=>device.queue.onSubmittedWorkDone().then(()=>staging.destroy()));encodedWheelAngle=wheelAngle;
   };
   const telemetryByteOffset = spatialGrid.telemetryByteOffset;
@@ -1228,7 +1358,7 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
   };
   const destroy = () => {
     for (const buffer of [particleBuffer, workBufferB, workBufferC,
-      cellCountsBuffer, cellItemsBuffer, paramsBuffer]) buffer.destroy();
+      cellCountsBuffer, cellItemsBuffer, paramsBuffer, ...colorBuffers]) buffer.destroy();
   };
   reset();
   return Object.freeze({
@@ -1248,7 +1378,9 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     pipelines,
     step,
     stepMany,
+    relaxContacts,
     sweepWheel,
+    setSweepReference,
     predictForces,
     telemetry: Object.freeze({
       buffer: cellCountsBuffer,

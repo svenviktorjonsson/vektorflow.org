@@ -9,6 +9,15 @@ export function mechanicalFrameSchedule(world,debt,elapsed){
   return {steps,debt:Math.max(0,total-steps*dt)};
 }
 
+export function rigidSceneFrame(asset){
+  if(!asset?.length||asset.some(item=>!item.collision?.center?.every(Number.isFinite)||!(item.collision.radius>0)))throw new Error('Invalid rigid scene bounds');
+  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];let radial=0;
+  for(const {collision} of asset){for(let axis=0;axis<3;axis++){lo[axis]=Math.min(lo[axis],collision.center[axis]-collision.radius);hi[axis]=Math.max(hi[axis],collision.center[axis]+collision.radius);}radial=Math.max(radial,Math.hypot(collision.center[0],collision.center[1])+collision.radius);}
+  const floor=0,span=Math.max(hi[0]-lo[0],hi[1]-lo[1],hi[2]-floor),target=[(lo[0]+hi[0])*.5,(lo[1]+hi[1])*.5,(floor+hi[2])*.5];
+  const direction=[3.4,-5.6,2.25],norm=Math.hypot(...direction),distance=span*1.7;
+  return {target,span,floorRadius:radial*1.6,liftCeiling:hi[2]+span*.8,camera:{pos:target.map((value,axis)=>value+direction[axis]/norm*distance),target,fov:42,minDistance:Math.max(0.25,span*0.25),maxDistance:Math.max(60,span*80)}};
+}
+
 export async function readMechanicalAsset(url){
   const response=await fetch(url);if(!response.ok)throw new Error(`Added geometry unavailable: ${response.status}`);
   const bytes=url.includes('.gz')?await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer():await response.arrayBuffer();
@@ -35,13 +44,16 @@ export function prepareMechanicalInitialState(world,arenas,asset){
   };
   if(kind==='rigid'){
     if(asset.length!==arena.layer.count)throw new Error('Added bodies and stone asset disagree');
-    initial.bodyCount=asset.length;initial.hullCount=96;initial.bodies=new Float32Array(asset.length*20);initial.geometry=new Float32Array(asset.length*96*4);
+    const hullCount=asset[0]?.collision?.hull?.length/4;
+    if(!Number.isInteger(hullCount)||hullCount<16||asset.some(item=>item.collision?.hull?.length!==hullCount*4))throw new Error('Added rigid support hulls disagree');
+    initial.bodyCount=asset.length;initial.hullCount=hullCount;initial.sceneFrame=rigidSceneFrame(asset);initial.bodies=new Float32Array(asset.length*20);initial.geometry=new Float32Array(asset.length*hullCount*4);
     for(let i=0;i<asset.length;i++){
       const item=asset[i],o=i*20,s=i*9;const position=[arena.state[s],arena.state[s+3],arena.state[s+6]];
       if(!item.collision||item.collision.center.some((v,a)=>Math.abs(v-position[a])>1e-5))throw new Error('Added rigid placement disagrees with geometry asset');
-      const mass=p.mass??item.collision.mass*(p.density??2700)/2700;if(!(mass>0))throw new Error('Rigid mass must be positive');
+      const referenceDensity=item.collision.reference_density??2700,authoredDensity=item.collision.density??referenceDensity;
+      const mass=p.mass??item.collision.mass*(p.density??authoredDensity)/referenceDensity;if(!(mass>0))throw new Error('Rigid mass must be positive');
       initial.bodies.set([...position,0,arena.state[s+1],arena.state[s+4],arena.state[s+7],0,0,0,0,1,0,0,0,0,mass,item.collision.inertia*mass/item.collision.mass,item.collision.radius,p.sleep===true?1:0],o);
-      initial.geometry.set(item.collision.hull,i*96*4);
+      initial.geometry.set(item.collision.hull,i*hullCount*4);
       meshes.push({vertices:convert(item.vertices,i,null),indices:item.indices});
     }
   }else{
@@ -113,7 +125,12 @@ export function prepareMechanicalInitialState(world,arenas,asset){
     for(let i=0;i<initial.nodeCount;i++){
       const z=Math.floor(i/(grid[0]*grid[1])),collisionClass=initial.geometry[i*4+3],attachedMass=initial.geometry[(initial.nodeCount*3+i)*4];
       const woodMode=collisionClass===1||collisionClass===3||attachedMass>0,grassMode=!woodMode&&z<=1;
-      const coefficients=woodMode?wood:grassMode?grass:null,mode=woodMode?1:grassMode?2:0;
+      // Wood at trunk height carries a larger cross section than outer twigs.
+      // Cantilever stiffness follows I ∝ r^4, while mass follows r^2.
+      const height=(z+.5)*span[2]/grid[2];
+      const taper=collisionClass===1?Math.max(0,1-height/(world.solid_properties.height??8)):0;
+      const radius=(world.nodes_properties.branch_radius??0.025)*(1+3.5*taper*taper);
+      const coefficients=woodMode&&beam?cantileverParameters({...world.nodes_properties,branch_radius:radius}):woodMode?wood:grassMode?grass:null,mode=woodMode?1:grassMode?2:0;
       initial.geometry.set(coefficients?[coefficients.mass,coefficients.stiffness,coefficients.damping,mode]:[1,0,0,0],(initial.nodeCount+i)*4);
       const normalOffset=(initial.nodeCount*4+i)*4,totalArea=initial.geometry[normalOffset+3],normalLength=Math.hypot(...initial.geometry.subarray(normalOffset,normalOffset+3));
       if(totalArea>0&&normalLength>1e-8)for(let axis=0;axis<3;axis++)initial.geometry[normalOffset+axis]/=normalLength;
@@ -121,7 +138,7 @@ export function prepareMechanicalInitialState(world,arenas,asset){
     p.grass_count=world.grass_properties.count??81920;p.density??=1.225;p.turbulence_intensity??=.12;p.integral_scale??=2.4;p.drag_coefficient??=1.05;p.eddy_decay??=.75;p.parcel_mass=p.mass??p.density*span.reduce((v,n)=>v*n,1)/initial.parcelCount;p.node_mass=beam?.mass??world.nodes_properties.mass??1;p.spring_constant=beam?.stiffness??(world.nodes_properties.spring_constant??60)/(world.nodes_properties.elasticity??1);p.damping=beam?.damping??world.nodes_properties.damping??12;p.beam=beam;
     if(!(p.parcel_mass>0&&p.node_mass>0&&p.spring_constant>0&&p.damping>=0&&p.density>0&&p.turbulence_intensity>=0&&p.integral_scale>0&&p.drag_coefficient>=0&&p.eddy_decay>=0))throw new Error('Invalid wind/elastic World properties');
   }
-  const radius=kind==='wind'?7:3.5,color=kind==='wind'?[.065,.14,.022,1]:[.12,.125,.12,1];
+  const radius=kind==='wind'?7:initial.sceneFrame.floorRadius,color=kind==='wind'?[.065,.14,.022,1]:[.12,.125,.12,1];
   meshes.push({shadow:false,vertices:new Float32Array([[-radius,-radius],[radius,-radius],[radius,radius],[-radius,radius]].flatMap(([x,y])=>[x,y,-.012,0,0,1,...color,-1,0,...Array(12).fill(0)])),indices:new Uint32Array([0,1,2,0,2,3])});
   p.lights=[];
   for(const layer of arenas.filter(a=>a.layer.world_id===world.world_id&&a.layer.properties?.shape==='sphere'&&a.layer.properties?.emissivity>0)){
@@ -137,7 +154,7 @@ export async function bootMaterialWorlds(compiled){
   document.body.replaceChildren();const controls=document.createElement('div');controls.id='world-controls';controls.setAttribute('aria-label',settings.title??'World controls');
   const title=document.createElement('strong');title.textContent=settings.title??(world.kind==='rigid'?'Five 3D stones':'8 m tree, lawn and wind');controls.append(title);
   const status=document.createElement('div');status.id='world-status';status.setAttribute('role','status');status.textContent='Loading added geometry…';
-  const canvas=document.createElement('canvas');canvas.setAttribute('aria-label',world.kind==='rigid'?'Touch a stone, lift it vertically and release it':'Swipe to orbit the tree and lawn');
+  const canvas=document.createElement('canvas');canvas.setAttribute('aria-label',world.kind==='rigid'?'Drag a stone to lift it; drag empty space to orbit; pinch or wheel to zoom':'Swipe to orbit the tree and lawn; pinch or wheel to zoom');
   const error=document.createElement('pre');error.id='world-error';error.hidden=true;error.setAttribute('role','alert');document.body.append(controls,status,canvas,error);
   let paused=false,particles=false,grass=true,active=true,pending=false,previous=null,accumulator=0,drag=null,stopped=false,bodyRead=null,snapshot=null,frames=0;
   const pointers=new Map();let pinchDistance=0;
@@ -149,13 +166,14 @@ export async function bootMaterialWorlds(compiled){
   const {initial,meshes}=prepareMechanicalInitialState(world,compiled.worldLayerViews(),asset);
   const prefix=`$world$gpu$${world.world_id}`;const physics=await createMechanicalWorldGpu(device,world,initial,compiled.readBinding(`${prefix}$physics`));
   const embedding=await createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,compiled.readBinding(`${prefix}$embedding`));
-  const camera=world.kind==='rigid'?{pos:[3.4,-5.6,3.2],target:[0,0,.95],fov:42}:{pos:[8,-17,7],target:[0,0,3.7],fov:42};
-  const report=()=>{status.textContent=world.kind==='rigid'?`5 stones · rigid contacts + friction · ${drag?'lifted':'touch, lift and drop'} · ${physics.time.toFixed(2)} s`:`8 m tree · ${world.properties.grass_count.toLocaleString()} grass blades · ${initial.parcelCount.toLocaleString()} coherent air parcels · ${particles?'contact parcels, α ≤ 0.5':'particles hidden'} · ${physics.time.toFixed(2)} s`;};
+  const camera=world.kind==='rigid'?initial.sceneFrame.camera:{pos:[8,-17,7],target:[0,0,3.7],fov:42};
+  const bodyMasses=world.kind==='rigid'?Array.from({length:initial.bodyCount},(_,body)=>initial.bodies[body*20+16]):[];
+  const report=()=>{status.textContent=world.kind==='rigid'?`5 stones · ${Math.min(...bodyMasses).toFixed(1)}–${Math.max(...bodyMasses).toFixed(1)} kg · rigid contacts + floor friction · g ${Math.abs(world.gravity[2]).toFixed(2)} m/s² @ ${(1/world.time_step).toFixed(0)} Hz · ${drag?.kind==='stone'?'lifted':'stone drag · empty-space orbit · zoom'} · ${physics.time.toFixed(2)} s`:`8 m tree · ${world.properties.grass_count.toLocaleString()} grass blades · ${initial.parcelCount.toLocaleString()} coherent air parcels · ${particles?'contact parcels, α ≤ 0.5':'particles hidden'} · ${physics.time.toFixed(2)} s`;};
   const button=(label,pressed,handler)=>{const b=document.createElement('button');b.textContent=label;b.type='button';if(pressed!==null)b.setAttribute('aria-pressed',String(pressed));b.addEventListener('click',()=>handler(b));controls.append(b);return b;};
   if(settings.pause)button('Pause',false,b=>{paused=!paused;b.textContent=paused?'Play':'Pause';b.setAttribute('aria-pressed',String(paused));previous=null;report();});
-  if(settings.reset)button('Reset',null,()=>{physics.reset();drag=null;snapshot=initial.bodies.slice();previous=null;accumulator=0;report();});
+  if(settings.reset)button('Reset',null,()=>{physics.setHeld(-1,0);physics.reset();drag=null;pointers.clear();pinchDistance=0;snapshot=initial.bodies.slice();previous=null;accumulator=0;report();});
   if(new URLSearchParams(location.search).has('verify')){const output=document.createElement('pre');output.id='world-inspection';output.setAttribute('role','status');output.style.cssText='margin:0;font:11px monospace;white-space:pre-wrap';document.body.append(output);button('Inspect GPU state',null,async()=>{output.textContent=JSON.stringify(await physics.inspect());});
-    if(world.kind==='wind')button('Verify pinch gesture',null,()=>{const rect=canvas.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,before=camera.pos.slice(),orbit=Number(canvas.dataset.orbitRevision??0);
+    if(settings.orbit)button('Verify pinch gesture',null,()=>{const rect=canvas.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,before=camera.pos.slice(),orbit=Number(canvas.dataset.orbitRevision??0);
       const dispatch=(type,id,dx)=>canvas.dispatchEvent(new PointerEvent(type,{pointerId:id,pointerType:'touch',button:0,clientX:x+dx,clientY:y,bubbles:true,cancelable:true}));
       dispatch('pointerdown',901,-40);dispatch('pointerdown',902,40);dispatch('pointermove',902,100);dispatch('pointerup',902,100);dispatch('pointerup',901,-40);
       output.textContent=JSON.stringify({pinchZoom:Math.hypot(...sub(camera.pos,camera.target))<Math.hypot(...sub(before,camera.target)),orbitUnchanged:Number(canvas.dataset.orbitRevision??0)===orbit,position:camera.pos});
@@ -166,22 +184,23 @@ export async function bootMaterialWorlds(compiled){
   if(source.variants){const select=document.createElement('select');select.setAttribute('aria-label','Branch and leaf distribution');for(const name of ['original',...Object.keys(source.variants)]){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);}select.value=requested;select.addEventListener('change',()=>{const url=new URL(location.href);url.searchParams.set('generation',select.value);location.replace(url);});controls.append(select);}
   const read=()=>{if(bodyRead||world.kind!=='rigid')return;bodyRead=physics.readBodies().then(data=>{snapshot=data;},fail).finally(()=>{bodyRead=null;});};snapshot=initial.bodies.slice();
   canvas.addEventListener('pointerdown',event=>{event.preventDefault();if(event.button!==0)return;
-    if(world.kind==='wind'){pointers.set(event.pointerId,[event.clientX,event.clientY]);if(pointers.size===2){const [a,b]=[...pointers.values()];pinchDistance=Math.hypot(a[0]-b[0],a[1]-b[1]);drag=null;if(event.isTrusted)canvas.setPointerCapture(event.pointerId);return;}}
+    if(settings.orbit){pointers.set(event.pointerId,[event.clientX,event.clientY]);if(pointers.size===2){const [a,b]=[...pointers.values()];pinchDistance=Math.hypot(a[0]-b[0],a[1]-b[1]);if(drag?.kind==='stone')physics.setHeld(-1,0);drag=null;if(event.isTrusted)canvas.setPointerCapture(event.pointerId);return;}}
     if(world.kind==='rigid'){
       const rect=canvas.getBoundingClientRect();const choices=Array.from({length:initial.bodyCount},(_,i)=>({i,p:projectPoint(Array.from(snapshot.subarray(i*20,i*20+3)),camera,rect)})).filter(({p})=>p.depth>0).sort((a,b)=>Math.hypot(a.p.x-event.clientX,a.p.y-event.clientY)-Math.hypot(b.p.x-event.clientX,b.p.y-event.clientY));
-      const choice=choices[0];if(!choice||Math.hypot(choice.p.x-event.clientX,choice.p.y-event.clientY)>Math.max(30,snapshot[choice.i*20+18]/choice.p.depth*rect.height*1.2))return;
-      drag={id:event.pointerId,body:choice.i,y:event.clientY,z:snapshot[choice.i*20+2],depth:choice.p.depth};physics.setHeld(choice.i,drag.z);
-    }else if(settings.orbit){drag={id:event.pointerId,x:event.clientX,y:event.clientY};}else return;
+      const choice=choices[0],hit=choice&&Math.hypot(choice.p.x-event.clientX,choice.p.y-event.clientY)<=Math.max(30,snapshot[choice.i*20+18]/choice.p.depth*rect.height*1.2);
+      if(hit){drag={kind:'stone',id:event.pointerId,body:choice.i,y:event.clientY,z:snapshot[choice.i*20+2],depth:choice.p.depth};physics.setHeld(choice.i,drag.z);}
+      else if(settings.orbit)drag={kind:'orbit',id:event.pointerId,x:event.clientX,y:event.clientY};else return;
+    }else if(settings.orbit){drag={kind:'orbit',id:event.pointerId,x:event.clientX,y:event.clientY};}else return;
     if(event.isTrusted)canvas.setPointerCapture(event.pointerId);report();
   });
   canvas.addEventListener('pointermove',event=>{event.preventDefault();
-    if(world.kind==='wind'&&pointers.has(event.pointerId)){pointers.set(event.pointerId,[event.clientX,event.clientY]);if(pointers.size>=2){const [a,b]=[...pointers.values()],distance=Math.hypot(a[0]-b[0],a[1]-b[1]);if(distance>0&&pinchDistance>0)zoomCamera(camera,pinchDistance/distance);pinchDistance=distance;canvas.dataset.zoomRevision=String(Number(canvas.dataset.zoomRevision??0)+1);return;}}
+    if(settings.orbit&&pointers.has(event.pointerId)){pointers.set(event.pointerId,[event.clientX,event.clientY]);if(pointers.size>=2){const [a,b]=[...pointers.values()],distance=Math.hypot(a[0]-b[0],a[1]-b[1]);if(distance>0&&pinchDistance>0)zoomCamera(camera,pinchDistance/distance);pinchDistance=distance;canvas.dataset.zoomRevision=String(Number(canvas.dataset.zoomRevision??0)+1);return;}}
     if(!drag||drag.id!==event.pointerId)return;
-    if(world.kind==='rigid'){const metres=2*drag.depth*Math.tan(camera.fov*Math.PI/360)/canvas.getBoundingClientRect().height;physics.setHeld(drag.body,Math.max(drag.z,Math.min(4,drag.z+(drag.y-event.clientY)*metres)));}
+    if(drag.kind==='stone'){const metres=2*drag.depth*Math.tan(camera.fov*Math.PI/360)/canvas.getBoundingClientRect().height;physics.setHeld(drag.body,Math.max(drag.z,Math.min(initial.sceneFrame.liftCeiling,drag.z+(drag.y-event.clientY)*metres)));}
     else{const dx=event.clientX-drag.x,dy=event.clientY-drag.y;drag.x=event.clientX;drag.y=event.clientY;const v=sub(camera.pos,camera.target),r=Math.hypot(...v),yaw=Math.atan2(v[1],v[0])-dx*.008,pitch=Math.max(-.1,Math.min(1.25,Math.asin(v[2]/r)+dy*.006));camera.pos=[camera.target[0]+Math.cos(yaw)*Math.cos(pitch)*r,camera.target[1]+Math.sin(yaw)*Math.cos(pitch)*r,camera.target[2]+Math.sin(pitch)*r];canvas.dataset.orbitRevision=String(Number(canvas.dataset.orbitRevision??0)+1);}
   });
-  const release=event=>{event.preventDefault();pointers.delete(event.pointerId);pinchDistance=0;if(world.kind==='wind'){const remaining=[...pointers.entries()][0];drag=remaining?{id:remaining[0],x:remaining[1][0],y:remaining[1][1]}:null;}else if(drag?.id===event.pointerId){physics.setHeld(-1,0);drag=null;}if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);report();};canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);canvas.addEventListener('lostpointercapture',event=>{pointers.delete(event.pointerId);if(drag?.id===event.pointerId){physics.setHeld(-1,0);drag=null;}});
-  canvas.addEventListener('wheel',event=>{event.preventDefault();if(world.kind==='wind')zoomCamera(camera,Math.exp(event.deltaY*.001));},{passive:false});
+  const release=event=>{event.preventDefault();pointers.delete(event.pointerId);pinchDistance=0;if(drag?.id===event.pointerId){if(drag.kind==='stone')physics.setHeld(-1,0);drag=null;}if(settings.orbit&&pointers.size===1){const remaining=[...pointers.entries()][0];drag={kind:'orbit',id:remaining[0],x:remaining[1][0],y:remaining[1][1]};}if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);report();};canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);canvas.addEventListener('lostpointercapture',event=>{pointers.delete(event.pointerId);if(drag?.id===event.pointerId){if(drag.kind==='stone')physics.setHeld(-1,0);drag=null;}});
+  canvas.addEventListener('wheel',event=>{event.preventDefault();if(settings.orbit)zoomCamera(camera,Math.exp(event.deltaY*.001));},{passive:false});
   for(const type of ['touchstart','touchmove','touchend','touchcancel'])canvas.addEventListener(type,event=>event.preventDefault(),{passive:false});
   window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===window.parent&&event.data?.type==='vf-preview-visibility'){active=event.data.active;previous=null;}});
   if(window.parent!==window)window.parent.postMessage({type:'vf-preview-ready'},location.origin);

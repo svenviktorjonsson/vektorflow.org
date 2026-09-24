@@ -49,30 +49,30 @@ fn mineral_noise(p:vec3<f32>,seed:u32)->f32{
 // Crystal colour lives in object-space, not latitude/UV or screen coordinates.
 // Identical coordinates on either side of any mesh seam sample the same field.
 fn granite(p:vec3<f32>,tint:vec3<f32>,seed:u32,kind:u32,footprint:f32)->vec4<f32>{
-  let q=p*48.0;let cell=vec3<i32>(floor(q-0.5));var nearest=1.0e10;var crystal=0u;
+  let q=p*220.0;let cell=vec3<i32>(floor(q-0.5));var nearest=1.0e10;var crystal=0u;
   for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
     let at=cell+vec3<i32>(x,y,z);let h=mineral_hash(at,seed);
     let center=vec3<f32>(at)+0.5+vec3<f32>(unit(h),unit(h+17u),unit(h+71u))*0.44-0.22;
     let d=dot(q-center,q-center);if(d<nearest){nearest=d;crystal=h;}
   }}}
   let mineral=unit(crystal);let coarse=mineral_noise(p*9.0,seed+43u);
-  let fine=mineral_noise(p*145.0,seed+91u);
+  let fine=mineral_noise(p*430.0,seed+91u);
   let feldspar=tint*(0.80+coarse*0.40);
   let quartz=mix(vec3<f32>(0.64,0.65,0.61),tint,0.22);
-  let mica=vec3<f32>(0.10,0.115,0.108);
-  var color=select(feldspar,quartz,mineral>0.55);color=select(color,mica,mineral<0.17);
-  var roughness=select(0.90,0.56,mineral<0.17);
+  let mica=vec3<f32>(0.14,0.15,0.14);
+  var color=select(feldspar,quartz,mineral>0.62);color=select(color,mica,mineral<0.09);
+  var roughness=select(0.90,0.62,mineral<0.09);
   if(kind==1u){
     // Dense basalt: fine pale phenocrysts, subtle vesicles and a blue-black matrix.
-    let speckle=smoothstep(0.78,0.91,mineral_noise(p*72.0,seed+211u));
-    let vesicle=1.0-smoothstep(0.018,0.075,abs(mineral_noise(p*19.0,seed+307u)-0.50));
+    let speckle=smoothstep(0.78,0.91,mineral_noise(p*220.0,seed+211u));
+    let vesicle=1.0-smoothstep(0.018,0.075,abs(mineral_noise(p*90.0,seed+307u)-0.50));
     color=mix(vec3<f32>(0.105,0.125,0.14)*(0.78+coarse*0.32),vec3<f32>(0.43,0.45,0.44),speckle*0.38);
     color*=1.0-vesicle*0.22;roughness=0.88;
   }else if(kind==2u){
     // Potassium-feldspar-rich red granite with quartz and mica inclusions.
     let red_feldspar=vec3<f32>(0.56,0.29,0.23)*(0.78+coarse*0.42);
     color=select(red_feldspar,vec3<f32>(0.70,0.63,0.57),mineral>0.62);
-    color=select(color,vec3<f32>(0.09,0.095,0.10),mineral<0.14);roughness=0.76;
+    color=select(color,vec3<f32>(0.14,0.14,0.14),mineral<0.09);roughness=0.76;
   }else if(kind==3u){
     // Pale quartzite: interlocking grains crossed by broad mineral veins.
     let vein=1.0-smoothstep(0.025,0.105,abs(mineral_noise(p*5.2,seed+419u)-0.51));
@@ -85,7 +85,11 @@ fn granite(p:vec3<f32>,tint:vec3<f32>,seed:u32,kind:u32,footprint:f32)->vec4<f32
     color=mix(vec3<f32>(0.19,0.235,0.22),vec3<f32>(0.49,0.51,0.45),light)*(0.86+fine*0.20);roughness=0.83;
   }
   let grainContrast=1.0-smoothstep(0.003,0.025,footprint);
-  color=mix(tint,color,grainContrast)*(0.88+fine*0.24);
+  // Fine mineral recesses self-occlude below shadow-map resolution. Fade the
+  // effect with pixel footprint so a distant stone does not shimmer.
+  let cavity=smoothstep(0.38,0.64,fine)*smoothstep(0.28,0.60,coarse);
+  color=mix(tint,color,grainContrast)*(0.88+fine*0.24)*(1.0-0.26*cavity*grainContrast);
+  roughness=clamp(roughness+0.08*cavity*grainContrast,0.0,1.0);
   return vec4<f32>(clamp(color,vec3<f32>(0.025),vec3<f32>(0.88)),roughness);
 }
 fn grass_pose(vertex:u32,id:u32)->Out {
@@ -131,7 +135,8 @@ fn grass_pose(vertex:u32,id:u32)->Out {
     let material=granite(v.local,albedo,seed,u32(max(v.stone,0.0)),footprint);albedo=select(albedo,material.rgb,stone);roughness=select(roughness,material.a,stone);
     // Sub-pixel bump derivatives alias into rings on a curved mesh. Keep
     // relief below a pixel's slope budget; finer grains are optical detail.
-    let relief=mineral_noise(v.local*36.0,seed)*mix(0.00022,0.00052,unit(seed+131u))*(1.0-smoothstep(0.008,0.025,footprint));
+    let relief=(mineral_noise(v.local*95.0,seed)*0.6+mineral_noise(v.local*380.0,seed+71u)*0.4)
+      *mix(0.00045,0.00085,unit(seed+131u))*(1.0-smoothstep(0.008,0.025,footprint));
     let dx=dpdx(v.p);let dy=dpdy(v.p);let determinant=dot(dx,cross(dy,n));
     let gradient=(cross(dy,n)*dpdx(relief)+cross(n,dx)*dpdy(relief))/select(1.0,determinant,abs(determinant)>1.0e-10);
     n=select(n,normalize(n-clamp(gradient,vec3<f32>(-0.3),vec3<f32>(0.3))),stone);

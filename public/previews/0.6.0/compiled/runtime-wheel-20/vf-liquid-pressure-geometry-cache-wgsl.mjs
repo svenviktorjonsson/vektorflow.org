@@ -7,7 +7,7 @@ fn cache_pressure_geometry_body(index:u32){
  let position=particles[index].position;let inverse_density=1.0/params.material.x;let inverse_mass=1.0/params.fluid.w;
  var density=params.fluid.w*sample_kernel(vec2<f32>(0.0)).weight;var center_gradient=vec2<f32>(0.0);var norm_sum=0.0;var neighbor_count=0u;let center_cell=cell_coordinate(position);
  for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){let cell=center_cell+vec2<i32>(x,y);if(!valid_cell(cell)){continue;}let bucket=cell_index(cell);let count=min(atomicLoad(&cell_counts[bucket]),params.counts.w);
-  for(var slot=0u;slot<count;slot++){let other=atomicLoad(&cell_items[bucket*params.counts.w+slot]);if(other>=params.counts.x||other==index||!particle_occupies_cell(other,cell)){continue;}let kernel=sample_kernel(position-particles[other].position);if(kernel.supported==0u){continue;}let gradient=params.fluid.w*inverse_density*kernel.gradient;
+  for(var slot=0u;slot<count;slot++){let other=atomicLoad(&cell_items[bucket*params.counts.w+slot]);if(other>=params.counts.x||other==index||!particle_occupies_cell(other,cell)){continue;}let kernel=sample_particle_kernel(position-particles[other].position,index,other);if(kernel.supported==0u){continue;}let gradient=params.fluid.w*inverse_density*kernel.gradient;
    // At most nine buckets, each with the declared validated occupancy. The
    // adapter allocates all 9*occupancy slots; no neighbor can be truncated.
    pressure_geometry[pressure_geometry_slot(index,3u+neighbor_count)]=vec4<u32>(other,bitcast<vec2<u32>>(gradient),0u);neighbor_count++;
@@ -38,7 +38,9 @@ fn cached_apply_pressure_body(i:u32){
  // Static and analytic boundary gradients share the same scalar own lambda.
  // Grouping them changes only f32 summation order, checked independently.
  correction+=inverse_mass*own*bitcast<vec2<f32>>(boundary.xy);
- particles[i].velocity+=correction*params.force.z;
+ // Same per-iteration displacement trust region as the uncached pressure Law.
+ let change=correction*params.force.z;let trust_radius=params.fluid.y*0.25/params.fluid.x;
+ particles[i].velocity+=change*min(1.0,trust_radius/max(length(change),1.0e-8));
 }
 @compute @workgroup_size(128) fn cached_divergence_lambda(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i<params.counts.x){cached_divergence_lambda_body(i);}}
 @compute @workgroup_size(128) fn cached_density_lambda(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i<params.counts.x){cached_density_lambda_body(i);}}
