@@ -1,1 +1,1 @@
-stone: (density:2700,friction:0.65,restitution:0.08,sleep:true,asset:"/previews/0.6.0/live/rocks/assets/rigid-stones-granite-7.bin.gz")
+stone: (friction:0.72,restitution:0.10,rolling_friction:0.08,spin_friction:0.035,sleep:true,asset:"/previews/0.6.0/live/rocks/assets/rigid-stones-mixed-8.bin.gz")

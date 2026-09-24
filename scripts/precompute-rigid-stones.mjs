@@ -3,8 +3,10 @@ import { mkdir,writeFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { stoneShape } from '../../vektor-flow/build/branches/pre-gen/web/vf-ui/vf-stone-shape.mjs';
 const surfaceContacts=!process.argv.includes('--legacy');
-const centers=[[-1.12,0,.69],[0,.08,.91],[1.15,0,.65],[-.63,0,2.15],[.64,0,2.04]];
-const sizes=[.68,.90,.58,.49,.37],colors=[[.48,.49,.47],[.29,.32,.30],[.57,.43,.36],[.69,.66,.58],[.40,.45,.45]];
+const centers=[[-1.12,-.10,.69],[0,.18,.91],[1.15,-.08,.65],[-.55,-.18,2.15],[.58,.20,2.04]];
+const sizes=[.68,.82,.62,.50,.42];
+const colors=[[.50,.49,.47],[.18,.20,.22],[.58,.34,.28],[.70,.68,.61],[.34,.40,.37]];
+const densities=[2650,3000,2630,2650,2750],species=['gray-granite','basalt','red-granite','quartzite','gneiss'];
 const hash=x=>{x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return (x^(x>>>16))>>>0;};
 const unit=x=>hash(x)/4294967296;
 const chunks=[],supports=[];let vertices=0,indices=0;
@@ -41,12 +43,14 @@ for(let i=0;i<5;i++){
   let volume=0;for(let j=0;j<source.indices.length;j+=3){const a=source.indices[j]*10,b=source.indices[j+1]*10,c=source.indices[j+2]*10;
     volume+=(data[a]*(data[b+1]*data[c+2]-data[b+2]*data[c+1])+data[a+1]*(data[b+2]*data[c]-data[b]*data[c+2])+data[a+2]*(data[b]*data[c+1]-data[b+1]*data[c]))/6;
   }
-  const mass=Math.max(.1,Math.abs(volume)*2700),inertia=.4*mass*radius*radius;
-  const meta=Buffer.from(JSON.stringify({id:`stone-${i}`,collision:{center,mass,inertia,radius,hull},shape:'direction-space radial Fourier',seed}));
+  const referenceDensity=2700,mass=Math.max(.1,Math.abs(volume)*referenceDensity);
+  const extents=[0,1,2].map(axis=>Math.max(...positions.map(p=>Math.abs(p[axis]))));
+  const inertia=2*mass*(extents[0]**2+extents[1]**2+extents[2]**2)/15;
+  const meta=Buffer.from(JSON.stringify({id:`stone-${i}`,species:species[i],collision:{center,mass,inertia,radius,hull,density:densities[i],reference_density:referenceDensity},shape:'direction-space radial Fourier',seed}));
   const header=Buffer.alloc(20);[meta.length,data.length,source.indices.length,0,0].forEach((n,a)=>header.writeUInt32LE(n,a*4));
   chunks.push(header,meta,Buffer.alloc((4-meta.length%4)%4),Buffer.from(data.buffer),Buffer.from(source.indices.buffer,source.indices.byteOffset,source.indices.byteLength));vertices+=data.length/10;indices+=source.indices.length;
 }
 const header=Buffer.alloc(20);header.write('VFTREE02');header.writeUInt32LE(5,8);header.writeUInt32LE(vertices,12);header.writeUInt32LE(indices,16);
 await mkdir(new URL('../public/previews/0.6.0/live/rocks/assets/',import.meta.url),{recursive:true});
-const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-granite-7.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
+const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-mixed-8.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
 console.log(JSON.stringify({centers,vertices,indices,compressedBytes:output.length}));

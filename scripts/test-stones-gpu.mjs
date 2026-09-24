@@ -9,14 +9,14 @@ const isTree=process.argv.includes('--tree'),closeup=process.argv.includes('--cl
 const parent=path.resolve(root,'../.w');await mkdir(parent,{recursive:true});const work=await mkdtemp(path.join(parent,'stones-gpu-'));
 let finish;const completed=new Promise(resolve=>finish=resolve);
 const html=String.raw`<!doctype html><canvas width="800" height="650" style="width:800px;height:650px"></canvas>
-<script src="/previews/0.6.0/compiled/runtime-stones-8/vf-compiled-runtime-bridge.js"></script>
+<script src="/previews/0.6.0/compiled/runtime-stones-9/vf-compiled-runtime-bridge.js"></script>
 <script type="module">
-import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-8/vf-world-mechanical-runtime.mjs';
-import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-8/vf-world-mechanical-gpu.mjs';
-import {createWorldSceneEmbeddingGpu} from '/previews/0.6.0/compiled/runtime-stones-8/vf-world-scene-embedding-gpu.mjs';
+import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-9/vf-world-mechanical-runtime.mjs';
+import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-9/vf-world-mechanical-gpu.mjs';
+import {createWorldSceneEmbeddingGpu} from '/previews/0.6.0/compiled/runtime-stones-9/vf-world-scene-embedding-gpu.mjs';
 const check=(x,m)=>{if(!x)throw Error(m)};let device;
 try{
- const base='/previews/0.6.0/compiled/stones-granite-8/';
+ const base='/previews/0.6.0/compiled/stones-mixed-9/';
  const inputs={bytes:new Uint8Array(await(await fetch(base+'main.wasm')).arrayBuffer()),manifest:await(await fetch(base+'manifest.json')).json()};
  const runtime=await (VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync?VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync(inputs):VfCompiledRuntimeBridge.instantiateWasmRuntime(inputs));runtime.init();
  const world=runtime.worldProgram().gpu_worlds[0],asset=await readMechanicalAsset((world.kind==='wind'?world.solid_properties:world.properties).asset);
@@ -26,7 +26,7 @@ try{
  const {initial,meshes}=prepareMechanicalInitialState(world,runtime.worldLayerViews(),asset),prefix='$world$gpu$'+world.world_id;
  const physics=await createMechanicalWorldGpu(device,world,initial,runtime.readBinding(prefix+'$physics'));
  const canvas=document.querySelector('canvas'),embedding=await createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,runtime.readBinding(prefix+'$embedding'));
- let encoder,z=null,expected=null,wind=null,coupling=null;
+ let encoder,z=null,expected=null,wind=null,coupling=null,stoneDynamics=null;
  if(isTree){
   coupling=[];
   // A free branch and its attached leaf must exchange internal momentum.
@@ -52,6 +52,13 @@ try{
  encoder=device.createCommandEncoder();for(let i=0;i<48;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
  const state=await physics.readBodies();z=state[3*20+2];expected=4+world.gravity[2]*world.time_step**2*48*49/2;
  check(state.every(Number.isFinite),'Nonfinite rigid state');check(Math.abs(z-expected)<0.002,'Drop differs from gravity: '+z+' / '+expected);check(Math.abs(physics.time-.2)<1e-6,'Physical clock differs');physics.reset();
+ physics.setHeld(3,4);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.setHeld(-1,0);
+ let minimumVerticalSpeed=0,maximumUpwardSpeed=0,maximumAngularSpeed=0,maximumTransferredSpeed=0;const timings=[];
+ for(let batch=0;batch<120;batch++){encoder=device.createCommandEncoder();for(let i=0;i<8;i++)physics.step(encoder);const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();timings.push(performance.now()-started);const bodies=await physics.readBodies();minimumVerticalSpeed=Math.min(minimumVerticalSpeed,bodies[3*20+6]);maximumUpwardSpeed=Math.max(maximumUpwardSpeed,bodies[3*20+6]);maximumAngularSpeed=Math.max(maximumAngularSpeed,Math.hypot(...bodies.subarray(3*20+12,3*20+15)));for(let body=0;body<3;body++)maximumTransferredSpeed=Math.max(maximumTransferredSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));}
+ const settled=await physics.readBodies(),linearSpeed=Math.hypot(...settled.subarray(3*20+4,3*20+7)),angularSpeed=Math.hypot(...settled.subarray(3*20+12,3*20+15));timings.sort((a,b)=>a-b);
+ physics.reset();for(let warmup=0;warmup<12;warmup++){encoder=device.createCommandEncoder();physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();}const stepTimings=[];for(let sample=0;sample<120;sample++){encoder=device.createCommandEncoder();physics.step(encoder);const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();stepTimings.push(performance.now()-started);}stepTimings.sort((a,b)=>a-b);
+ stoneDynamics={minimumVerticalSpeed,maximumUpwardSpeed,maximumAngularSpeed,maximumTransferredSpeed,finalLinearSpeed:linearSpeed,finalAngularSpeed:angularSpeed,trajectoryBatchP95Ms:timings[Math.floor(timings.length*.95)],medianStepMs:stepTimings[Math.floor(stepTimings.length*.5)],p95StepMs:stepTimings[Math.floor(stepTimings.length*.95)]};
+ check(minimumVerticalSpeed<-1,'Stone never reached impact speed: '+JSON.stringify(stoneDynamics));check(maximumAngularSpeed>.03,'Irregular stone contact produced no angular response: '+JSON.stringify(stoneDynamics));check(maximumTransferredSpeed>.002,'Stone collision transferred no momentum into the pile: '+JSON.stringify(stoneDynamics));check(linearSpeed<.12&&angularSpeed<.35,'Dropped stone did not settle: '+JSON.stringify(stoneDynamics));check(stoneDynamics.p95StepMs<10,'Rigid step exceeds 10 ms p95: '+JSON.stringify(stoneDynamics));
  }else{physics.setSpeed(8);const samples=[];for(let batch=0;batch<30;batch++){encoder=device.createCommandEncoder();for(let step=0;step<8;step++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();if(batch===14||batch===29)samples.push(await physics.inspectLeafModes());}wind=await physics.inspect();wind.leaves=samples;check(wind.finite&&samples.every(s=>s.finite),'Nonfinite wind state');check(samples.every(s=>s.maxAngle>.02&&s.maxAngle<2.73),'Leaf angle outside elastic response: '+JSON.stringify(wind));check(samples[1].maxAngularVelocity>.01,'Leaves stopped moving');}
  const format=navigator.gpu.getPreferredCanvasFormat(),context=canvas.getContext('webgpu');context.configure({device,format,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
  let camera=isTree?{pos:[8,-17,7],target:[0,0,3.7],fov:42}:{pos:[3.4,-5.6,3.2],target:[0,0,.95],fov:42};
@@ -67,7 +74,7 @@ try{
  readback.unmap();readback.destroy();check(new Set(pixels).size>20,'Blank rendered image');
  const copy=document.createElement('canvas');copy.width=canvas.width;copy.height=canvas.height;copy.getContext('2d').putImageData(new ImageData(pixels,canvas.width,canvas.height),0,0);
  const png=copy.toDataURL('image/png');check(errors.length===0,errors.join('\n'));
- await fetch('/result',{method:'POST',body:JSON.stringify({passed:true,adapter:adapter.info,z,expected,wind,coupling,png})});embedding.destroy();physics.destroy();device.destroy();
+ await fetch('/result',{method:'POST',body:JSON.stringify({passed:true,adapter:adapter.info,z,expected,wind,coupling,stoneDynamics,png})});embedding.destroy();physics.destroy();device.destroy();
 }catch(error){await fetch('/result',{method:'POST',body:JSON.stringify({passed:false,error:String(error.stack??error)})});device?.destroy();}
 </script>`;
 const server=createServer(async(req,res)=>{try{
