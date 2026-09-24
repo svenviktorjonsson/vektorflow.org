@@ -46,6 +46,36 @@ async function checkWaterVolume(current){
  const telemetry=await current.physics.readTelemetry();
  return {vertices:n,totalArea,physicalVolume,retainedFraction,resolvedArea,numericalDensityVolumeFraction,baselineOccupiedArea:baseline.area,occupiedArea:actual.area,occupiedAreaFraction,initialBounds:baseline.bounds,bounds:actual.bounds,minimumDensity,meanDensity,p90Density:percentile(.9),p99Density:percentile(.99),p999Density:percentile(.999),maximumDensity,telemetry};
 }
+async function measurePhysicsSteps(current){
+ if(!auditDevice.features.has('timestamp-query'))throw Error('GPU timestamp query unavailable');
+ current.paused=true;await auditDevice.queue.onSubmittedWorkDone();
+ const query=auditDevice.createQuerySet({type:'timestamp',count:2});
+ const resolved=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
+ const read=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const encoder=auditDevice.createCommandEncoder();
+ const start=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:0}});start.end();
+ current.physics.stepMany(encoder,4);
+ const end=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:1}});end.end();
+ encoder.resolveQuerySet(query,0,2,resolved,0);encoder.copyBufferToBuffer(resolved,0,read,0,16);
+ const wallStart=performance.now();auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+ const values=new BigUint64Array(read.getMappedRange().slice(0));read.unmap();
+ const gpuMs=Number(values[1]-values[0])/1e6,wallMs=performance.now()-wallStart;
+ query.destroy();resolved.destroy();read.destroy();return {gpuMs,wallMs,steps:4};
+}
+async function measureEmbedding(current,app){
+ const query=auditDevice.createQuerySet({type:'timestamp',count:3});
+ const resolved=auditDevice.createBuffer({size:24,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
+ const read=auditDevice.createBuffer({size:24,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const encoder=auditDevice.createCommandEncoder();
+ const mark=i=>{const pass=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:i}});pass.end();};
+ mark(0);current.embedding.render(encoder,{time:current.time,mode:'fluid'});mark(1);
+ current.boundary.render(encoder,app.canvas.getContext('webgpu').getCurrentTexture().createView(),current.physics.policy,current.physics.wheel,current.angle);mark(2);
+ encoder.resolveQuerySet(query,0,3,resolved,0);encoder.copyBufferToBuffer(resolved,0,read,0,24);
+ const wallStart=performance.now();auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+ const values=new BigUint64Array(read.getMappedRange().slice(0));read.unmap();
+ const result={embeddingGpuMs:Number(values[1]-values[0])/1e6,boundaryGpuMs:Number(values[2]-values[1])/1e6,wallMs:performance.now()-wallStart};
+ query.destroy();resolved.destroy();read.destroy();return result;
+}
 const rejectCaches=${process.argv.includes('--reject-caches')};
 const legacyOverrides=${process.argv.includes('--legacy-overrides')};
 if(legacyOverrides){const create=GPUDevice.prototype.createComputePipelineAsync;
@@ -62,7 +92,7 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
   }return create.call(this,descriptor);
  };
 }
-const sandMotion=${process.argv.includes('--sand-motion')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,waterReceipt,sandFrame,dragTarget,dragStarted,pausedProfileStart;
+const sandMotion=${process.argv.includes('--sand-motion')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,waterReceipt,sandFrame,dragTarget,dragStarted,pausedProfileStart;
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
 async function inspect(){
@@ -101,6 +131,10 @@ async function inspect(){
   const conservation=await checkWaterVolume(current),passed=conservation.retainedFraction>=.9999&&conservation.retainedFraction<=1.000001&&conservation.minimumDensity>0&&conservation.p90Density<=current.physics.policy.restDensity*1.04&&conservation.p999Density<=current.physics.policy.restDensity*1.15&&!conservation.telemetry.nonFinite;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,conservation,pausedReceipt,...state,error:passed?undefined:'Water lost occupied volume'})});return;
  }
+ if(played&&gpuProfile&&state.time>=(sustained?12:5)){
+  const telemetry=await current.physics.readTelemetry(),physics=await measurePhysicsSteps(current),embedding=await measureEmbedding(current,app);
+  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,physics,embedding,telemetry,pausedReceipt,...state})});return;
+ }
  if(played&&runningDrag){
   if(dragTarget===undefined&&state.time>=5){const beforeDrag=await checkExclusion(current,{assert:false});await fetch('/page-progress',{method:'POST',body:JSON.stringify({beforeDrag})});dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
   if(dragTarget!==undefined&&Math.abs(current.logicalAngle-dragTarget)<.005){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,dragMs:performance.now()-dragStarted,...state})});return;}
@@ -110,7 +144,7 @@ async function inspect(){
   const wallSeconds=(state.elapsedMs-pausedReceipt.elapsedMs)/1000;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,playing:{fps:(state.frames-pausedReceipt.frames)/wallSeconds,realtimeFactor:(state.time-pausedReceipt.time)/wallSeconds},...state})});return;
  }
- if(played&&!checkVolume&&!profileFps&&!runningDrag&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
+ if(played&&!checkVolume&&!profileFps&&!gpuProfile&&!runningDrag&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
   if(!checkSand){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
  waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
   const particles=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Particles');
