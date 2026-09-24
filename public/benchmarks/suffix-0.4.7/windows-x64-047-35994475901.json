@@ -1,0 +1,113 @@
+{
+  "schema": "vektor-flow/suffix-semantics-baseline-v1",
+  "version": "0.4.7",
+  "purpose": "Ten-run baseline for structural suffix lowering; not a cross-machine performance comparison.",
+  "conditions": {
+    "compiler": "D:\\a\\vektor-flow\\vektor-flow\\build\\native-compiler\\bin\\Release\\vkf-strict.exe",
+    "compilerSha256": "e2e1d3ecc27c0912066d86ecfae38e4655550680e659346a269eb605a4058254",
+    "os": "win32 10.0.26100",
+    "architecture": "x64",
+    "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "logicalCpus": 2
+  },
+  "sourceHashNormalization": "CRLF-to-LF",
+  "runs": 10,
+  "entries": [
+    {
+      "source": "tests/vkf/stat_sum_step_suffix.vkf",
+      "sourceSha256": "796d0dae1d2d61dba20d641d8bfff5b53508b1959ae5a1416df03989dd7912bf",
+      "rawSourceSha256": "4233165769ecad16b89e5091c96bf13796605eb88fd0ca5717d07fc9d8110547",
+      "sourceBytes": 1002,
+      "semanticTest": "native -t",
+      "compile": {
+        "count": 10,
+        "meanMs": 4237.6222099999995,
+        "sampleStddevMs": 26.210381862683025,
+        "samplesMs": [
+          4236.5388,
+          4241.3323,
+          4235.9511,
+          4225.7085,
+          4245.7239,
+          4300.2954,
+          4194.7987,
+          4223.9232,
+          4237.133,
+          4234.8172
+        ]
+      }
+    },
+    {
+      "source": "tests/vkf/stat_suffix_labels.vkf",
+      "sourceSha256": "94cc55f9a6c5b73faade239c0ae38a3a6bcb2bbe7e1a59b0bfabc0128f38bb21",
+      "rawSourceSha256": "b13dc6df7e5dfbbef907a365b3764a5f13833af8c0585ee9131c6516a94a3ecd",
+      "sourceBytes": 887,
+      "semanticTest": "native -t",
+      "compile": {
+        "count": 10,
+        "meanMs": 94.40282,
+        "sampleStddevMs": 7.908088471909983,
+        "samplesMs": [
+          109.1269,
+          94.6727,
+          86.38,
+          95.1654,
+          101.8698,
+          87.2554,
+          89.4927,
+          86.9885,
+          103.095,
+          89.9818
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/numerical_suffix_analysis_native.vkf",
+      "sourceSha256": "28419ee58aa29b26c6e9334de13b1ed11fe142567b579adbac8d8b121ab51b04",
+      "rawSourceSha256": "7086e81490ed509d155c4ffa75be97ebb32571d26f2c508141cb524cfa4208df",
+      "sourceBytes": 2411,
+      "semanticTest": "native -t",
+      "compile": {
+        "count": 10,
+        "meanMs": 4315.50968,
+        "sampleStddevMs": 38.583593548375276,
+        "samplesMs": [
+          4392.6511,
+          4308.2926,
+          4310.8014,
+          4267.5938,
+          4368.1411,
+          4321.8607,
+          4293.9059,
+          4294.9155,
+          4318.4064,
+          4278.5283
+        ]
+      }
+    },
+    {
+      "source": "tests/stdlib/symbolic_suffix_integrate_native.vkf",
+      "sourceSha256": "6afd98eb5ac11e0d1789331dcefdb966d47f4d50f7ab855fe8c0311951218de7",
+      "rawSourceSha256": "362ddf251187764153334d5786296057bc4829be52de0a8a03ef558f6d21b2c4",
+      "sourceBytes": 1027,
+      "semanticTest": "native -t",
+      "compile": {
+        "count": 10,
+        "meanMs": 4134.69549,
+        "sampleStddevMs": 111.7053153759029,
+        "samplesMs": [
+          4076.7355,
+          4067.7688,
+          4135.7233,
+          4044.6839,
+          3924.8585,
+          4169.6715,
+          4165.0628,
+          4239.4921,
+          4320.8652,
+          4202.0933
+        ]
+      }
+    }
+  ]
+}
