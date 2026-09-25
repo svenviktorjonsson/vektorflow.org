@@ -3,8 +3,8 @@ import { normalizeLiquidContainedWorldPolicy, createLiquidParticleWorldGpuRuntim
 import { calibrateUniformLocalLiquidParticleMassReference } from './vf-physics-liquid-local-particle-reference.mjs';
 import { normalizeGranularParticleWorldGpuPolicy, createGranularParticleWorldGpuRuntime }
   from './vf-granular-particle-world-gpu.mjs';
-import { createLiquidParticleEmbeddingGpu } from './vf-liquid-particle-embedding-gpu.mjs?v=sand-fluid-friction-1';
-import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=sand-fluid-friction-1';
+import { createLiquidParticleEmbeddingGpu } from './vf-liquid-particle-embedding-gpu.mjs?v=sand-grain-range-1';
+import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=sand-grain-range-1';
 import { createWheelEmbeddingGpu } from './vf-contained-boundary-embedding-gpu.mjs';
 import { PREVENTIVE_PARTICLE_CONTACT_WGSL, createPreventiveContactResources,
   createPreventiveParticleContactGpu } from './vf-preventive-particle-contact-gpu.mjs';
@@ -114,6 +114,8 @@ export async function createMaterialWorld(device,canvas,compiled,world,arena,eng
   const embedding=await embeddingFactory(device,canvas,physics,{maximumPixelRatio:1.5,
     wheelGeometry:world.kind==='liquid'?world.geometry:undefined});
   if(world.kind==='granular'){
+    physics.setEffectiveGrainRadius(engineeringOptions.effectiveGrainRadius??initialState.policy.grainRadius);
+    embedding.setEffectiveGrainRadius(engineeringOptions.effectiveGrainRadius??initialState.policy.grainRadius);
     physics.setWetness(engineeringOptions.wetness??0);
     embedding.setWetness(engineeringOptions.wetness??0);
     embedding.setLaneWidth(engineeringOptions.laneWidthPixels??1);
@@ -232,6 +234,7 @@ export async function bootMaterialWorlds(compiled) {
   const liquidWorld=program.gpu_worlds.find(world=>world.kind==='liquid');
   let sandWetness=0,sandLaneWidth=1,
     sandRadius=sandWorld?.properties.radius??0.0075,
+    sandGuideRadius=sandRadius,
     sandFormation='bed';
   const fail=error=>{stopped=true;errorBox.hidden=false;errorBox.textContent=gpuErrorMessage(error,'Material World stopped');console.error(error);};
   device.lost.then(info=>fail(new Error(`WebGPU device lost: ${info.message}`)));
@@ -245,7 +248,7 @@ export async function bootMaterialWorlds(compiled) {
     return createMaterialWorld(device,canvas,compiled,world,arena,{startPaused:view?.controls?.start_paused===true,
       wetness:world.kind==='granular'?sandWetness:undefined,
       laneWidthPixels:world.kind==='granular'?sandLaneWidth:undefined,
-      grainRadius:world.kind==='granular'&&sandRadius!==world.properties.radius?sandRadius:undefined,
+      effectiveGrainRadius:world.kind==='granular'?sandRadius:undefined,
       formation:world.kind==='granular'?sandFormation:'bed',
       onStage:stage=>{status.textContent=`Starting ${world.kind==='liquid'?'water':'sand'}: ${stage}…`;}});
   },world=>world.layer_id);
@@ -331,8 +334,8 @@ export async function bootMaterialWorlds(compiled) {
     if(!app.paused&&app.world.kind==='granular')app.physics.setSweepReference(app.angle);
     previous=null;refreshControls();});
   resetButton=button('Reset',false,()=>{current().reset();angle=current().world.geometry.rotation;omega=0;previous=null;refreshControls();});
-  const rebuildSand=async(requestedRadius,requestedFormation)=>{
-    if(Math.abs(requestedRadius-sandRadius)<1e-9&&requestedFormation===sandFormation)return;
+  const rebuildSand=async(requestedFormation)=>{
+    if(requestedFormation===sandFormation)return;
     switching=true;drag=null;omega=0;
     for(const element of controls.querySelectorAll('button,input'))element.disabled=true;
     status.textContent='Rebuilding the conserved sand formation…';
@@ -344,12 +347,12 @@ export async function bootMaterialWorlds(compiled) {
       const replacement=await createMaterialWorld(device,canvas,compiled,sandWorld,arena,{
         startPaused:view?.controls?.start_paused===true,wetness:sandWetness,
         laneWidthPixels:sandLaneWidth,
-        grainRadius:requestedRadius,formation:requestedFormation,
+        effectiveGrainRadius:sandRadius,formation:requestedFormation,
         onStage:stage=>{status.textContent=`Rebuilding sand: ${stage}…`;}});
       const index=applications.indexOf(old);
       if(index<0){replacement.destroy();throw new Error('Sand application disappeared during rebuild');}
       old.revision++;applications[index]=replacement;old.destroy();
-      sandRadius=requestedRadius;sandFormation=requestedFormation;
+      sandFormation=requestedFormation;
       if(current()===replacement){angle=replacement.angle;previous=null;}
       refreshControls();
     }catch(error){errorBox.hidden=false;
@@ -359,9 +362,9 @@ export async function bootMaterialWorlds(compiled) {
       for(const element of controls.querySelectorAll('button,input'))element.disabled=false;}
   };
   formationButton=button('Dropcastle',false,()=>{
-    rebuildSand(sandRadius,sandFormation==='bed'?'dropcastle':'bed');
+    rebuildSand(sandFormation==='bed'?'dropcastle':'bed');
   });
-  rainButton=button('Sandfall',false,()=>rebuildSand(sandRadius,'rain'));
+  rainButton=button('Sandfall',false,()=>rebuildSand('rain'));
   const slider=(name,min,max,step,value,format)=>{
     const label=document.createElement('label');
     const title=document.createElement('span');title.textContent=name;
@@ -382,18 +385,17 @@ export async function bootMaterialWorlds(compiled) {
     }
     refreshStatus();
   });
-  const grainSlider=slider('Effective grain Ø',11,20,1,sandRadius*2000,
-    value=>`${Number(value).toFixed(0)} mm`);
+  const grainSlider=slider('Effective grain Ø',sandGuideRadius*200,sandGuideRadius*2000,0.1,sandRadius*2000,
+    value=>`${Number(value).toFixed(1)} mm`);
   grainControl=grainSlider.label;
   grainSlider.input.addEventListener('input',()=>{
-    grainSlider.output.value=`${grainSlider.input.value} mm`;
-  });
-  grainSlider.input.addEventListener('change',async()=>{
-    const requestedRadius=Number(grainSlider.input.value)/2000;
-    await rebuildSand(requestedRadius,sandFormation);
-    if(Math.abs(requestedRadius-sandRadius)>1e-9){grainSlider.input.value=String(sandRadius*2000);
-      grainSlider.output.value=`${(sandRadius*2000).toFixed(0)} mm`;
+    sandRadius=Number(grainSlider.input.value)/2000;
+    grainSlider.output.value=`${(sandRadius*2000).toFixed(1)} mm`;
+    for(const app of applications)if(app.world.kind==='granular'){
+      app.physics.setEffectiveGrainRadius(sandRadius);
+      app.embedding.setEffectiveGrainRadius(sandRadius);
     }
+    refreshStatus();
   });
   const laneWidthSlider=slider('Lane width',0.75,5,0.25,sandLaneWidth,
     value=>`${Number(value).toFixed(2)} px`);

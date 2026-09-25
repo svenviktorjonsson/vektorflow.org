@@ -548,16 +548,17 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
     speed > 1.0e-6);
   // A resting pile has a world-locked mineral pattern. Density-weighted guide
   // IDs can change with tiny contact jitter even when no sand visibly moves.
-  let locked_seed = pixel_noise(floor(world * 950.0), 0u);
+  let texture_scale = 950.0 * sqrt(params.canvas.w / params.visual.y);
+  let locked_seed = pixel_noise(floor(world * texture_scale), 0u);
   let flowing_seed = pixel_noise(floor((world
-    - field_velocity * params.floor_color.w) * 950.0), 0u);
+    - field_velocity * params.floor_color.w) * texture_scale), 0u);
   let material_seed = mix(locked_seed, flowing_seed, motion);
   let material_phase = u32(clamp(material_seed, 0.0, 1.0) * 16777215.0);
   let fine = stable_unit(material_phase ^ 0x9e3779b9u);
   let pixel_world = (params.view.z - params.view.x)
     / max(params.canvas.x, 1.0);
   let next_seed = pixel_noise(floor((world + direction * pixel_world
-    - field_velocity * params.floor_color.w) * 950.0), 0u);
+    - field_velocity * params.floor_color.w) * texture_scale), 0u);
   let fine_next = stable_unit(u32(clamp(next_seed, 0.0, 1.0)
     * 16777215.0) ^ 0x9e3779b9u);
   let mineral_noise = stable_unit(material_phase ^ 0x85ebca6bu);
@@ -1026,6 +1027,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
 
   let wetness = 0;
   let laneWidthPixels = 1.0;
+  let effectiveGrainRadius = worldRuntime.policy.grainRadius;
   const setWetness = value => {
     if (!Number.isFinite(value) || value < 0 || value > 1)
       throw new RangeError('Sand wetness must be between zero and one');
@@ -1035,6 +1037,11 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     if (!Number.isFinite(value) || value < 0.75 || value > 5)
       throw new RangeError('Sand lane width must be 0.75 through 5 pixels');
     laneWidthPixels = value;
+  };
+  const setEffectiveGrainRadius = value => {
+    if (!Number.isFinite(value) || value <= 0)
+      throw new RangeError('Effective grain radius must be positive');
+    effectiveGrainRadius = value;
   };
   const updateParams = (mode, time, deltaTime, wheelAngle) => {
     const { policy } = worldRuntime;
@@ -1061,7 +1068,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     values.set(colors.sand, 28);
     values.set(colors.particles, 32);
     values.set([...lightDirection, lightIntensity], 36);
-    values.set([deltaTime, policy.grainRadius,
+    values.set([deltaTime, effectiveGrainRadius,
       laneWidthPixels, wetness], 40);
     const wheel = worldRuntime.wheel;
     values.set([wheel.center[0], wheel.center[1], wheel.radius,
@@ -1202,10 +1209,12 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     setColors,
     setWetness,
     setLaneWidth,
+    setEffectiveGrainRadius,
     readFieldArea,
     destroy,
     get laneCount() { return 1; },
     get laneWidthPixels() { return laneWidthPixels; },
+    get effectiveGrainRadius() { return effectiveGrainRadius; },
     get width() { return width; },
     get height() { return height; },
   });

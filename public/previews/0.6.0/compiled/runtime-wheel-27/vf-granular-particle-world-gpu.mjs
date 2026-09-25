@@ -1166,6 +1166,7 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
   const paramsU32 = new Uint32Array(paramsBytes);
   const paramsF32 = new Float32Array(paramsBytes);
   let wetness = 0;
+  let effectiveGrainRadius = policy.grainRadius;
   let wheelAngle = 0;
   let wheelAngularVelocity = 0;
   const updateParams = () => {
@@ -1179,7 +1180,7 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     paramsF32.set([...policy.gravity, policy.timeStep, policy.linearDamping], 16);
     paramsF32.set([policy.contactSlop, policy.boundaryFriction,
       wheelAngle, wheelAngularVelocity], 20);
-    const state = sandConstitutiveState(wetness, policy.grainRadius);
+    const state = sandConstitutiveState(wetness, effectiveGrainRadius);
     paramsF32.set([wetness, state.bridgeFraction,
       state.cohesionAcceleration, state.frictionBoost], 28);
     paramsF32.set([policy.rollingResistance, 0, 0, 0], 32);
@@ -1188,6 +1189,11 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
   const setWetness = value => {
     sandConstitutiveState(value);
     wetness = value;
+    updateParams();
+  };
+  const setEffectiveGrainRadius = value => {
+    sandConstitutiveState(wetness, value);
+    effectiveGrainRadius = value;
     updateParams();
   };
   const dispatch = (pass, entryPoint, bindGroup, count) => {
@@ -1435,6 +1441,8 @@ export async function createGranularParticleWorldGpuRuntime(deviceArgument, opti
     reset,
     setWheel,
     setWetness,
+    setEffectiveGrainRadius,
+    get effectiveGrainRadius() { return effectiveGrainRadius; },
     wheel: Object.freeze({ center: Object.freeze(options.geometry?.center ?? [0, 0.32]),
       radius: options.geometry?.radius ?? 0.50, barHalfWidth: options.geometry?.half_width ?? 0.012,
       segments: Object.freeze((options.geometry?.segments ?? []).map(segment =>

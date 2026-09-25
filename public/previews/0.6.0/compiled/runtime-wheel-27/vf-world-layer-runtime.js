@@ -66,7 +66,7 @@
       var script = document.querySelector('script[src*="vf-world-layer-runtime.js"]');
       var mechanical = authored.gpu_worlds.every(function(world){return world.kind==='rigid'||world.kind==='wind';});
       var moduleUrl = new URL(mechanical?'vf-world-mechanical-runtime.mjs':'vf-world-material-runtime.mjs',script.src);
-      moduleUrl.searchParams.set('v','sand-fluid-friction-1');
+      moduleUrl.searchParams.set('v','sand-grain-range-1');
       globalThis.__vfWorldLayerStage='import World GPU adapter';
       var adapter = await import(moduleUrl.href);
       globalThis.__vfWorldLayerStage='compile World GPU laws and embedding';
