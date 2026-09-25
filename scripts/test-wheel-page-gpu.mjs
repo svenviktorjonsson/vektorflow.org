@@ -158,7 +158,7 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
   }return create.call(this,descriptor);
  };
 }
-const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.argv.includes('--water-wall-spin')},realtimeSpinLong=${process.argv.includes('--water-realtime-spin-long')},realtimeSpin=${process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadySpin=${process.argv.includes('--water-steady-spin')||process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadyOmega=${process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')?6:2},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisualLong=${process.argv.includes('--sand-visual-long')},sandVisual=${process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')},sandStaticImageSettled=${process.argv.includes('--sand-static-image-settled')},sandStaticImage=${process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},sandGpuProfileFalling=${process.argv.includes('--sand-gpu-profile-falling')},sandLaneControls=${process.argv.includes('--sand-lane-controls')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')||process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')||process.argv.includes('--sand-gpu-profile-falling')||process.argv.includes('--sand-lane-controls')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,dragReachedMs,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],steadySpinSamples=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial,sandVisualInitialIds;
+const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.argv.includes('--water-wall-spin')},realtimeSpinLong=${process.argv.includes('--water-realtime-spin-long')},realtimeSpin=${process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadySpin=${process.argv.includes('--water-steady-spin')||process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadyOmega=${process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')?6:2},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisualLong=${process.argv.includes('--sand-visual-long')},sandVisual=${process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')},sandStaticImageSettled=${process.argv.includes('--sand-static-image-settled')},sandStaticImage=${process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},sandGpuProfileFalling=${process.argv.includes('--sand-gpu-profile-falling')},sandLaneControls=${process.argv.includes('--sand-lane-controls')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')||process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')||process.argv.includes('--sand-gpu-profile-falling')||process.argv.includes('--sand-lane-controls')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,dragReachedMs,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],steadySpinSamples=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial,sandVisualInitialIds,sandLaneControlAudit;
   const waterTurnSamples=[],sandAreaSamples=[];let steadySpinStartTime,steadySpinStartAngle,steadySpinStartMs;
 let browserRafFrames=0;
 function countBrowserRaf(){browserRafFrames++;requestAnimationFrame(countBrowserRaf);}
@@ -269,27 +269,33 @@ async function inspect(){
  if(sandStarted&&current?.world.kind==='granular'&&state.frames>=sandFrame+3){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
   if(sandLaneControls){
-   const lanes=document.querySelector('input[aria-label="Lanes"]');
-   const spread=document.querySelector('input[aria-label="Spread"]');
-   if(!lanes||!spread)throw Error('Sand lane appearance sliders missing');
-   const before={count:current.embedding.laneCount,spread:current.embedding.laneSpreadDegrees};
-   lanes.value='2';lanes.dispatchEvent(new Event('input',{bubbles:true}));
-   spread.value='0';spread.dispatchEvent(new Event('input',{bubbles:true}));
-   const minimum={count:current.embedding.laneCount,spread:current.embedding.laneSpreadDegrees};
-   lanes.value='4';lanes.dispatchEvent(new Event('input',{bubbles:true}));
-   spread.value='30';spread.dispatchEvent(new Event('input',{bubbles:true}));
-   const after={count:current.embedding.laneCount,spread:current.embedding.laneSpreadDegrees};
-   const encoder=auditDevice.createCommandEncoder();
-   current.embedding.render(encoder,{mode:'sand',time:current.time,wheelAngle:current.angle});
-   auditDevice.queue.submit([encoder.finish()]);await auditDevice.queue.onSubmittedWorkDone();
-   const area=await current.embedding.readFieldArea();
-   const passed=before.count===3&&before.spread===12
-    &&minimum.count===2&&minimum.spread===0
-    &&after.count===4&&after.spread===30
-    &&lanes.parentElement.querySelector('output')?.value==='4'
-    &&spread.parentElement.querySelector('output')?.value==='30°'
-    &&Math.abs(area.retainedFraction-1)<.01;
-   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,before,minimum,after,area,...state,error:passed?undefined:'Sand lane controls or rested field area failed'})});return;
+   const width=document.querySelector('input[aria-label="Lane width"]');
+   if(!width)throw Error('Sand lane width slider missing');
+   if(!sandLaneControlAudit){
+    const before={count:current.embedding.laneCount,width:current.embedding.laneWidthPixels};
+    width.value='0.75';width.dispatchEvent(new Event('input',{bubbles:true}));
+    const minimum={count:current.embedding.laneCount,width:current.embedding.laneWidthPixels};
+    width.value='5';width.dispatchEvent(new Event('input',{bubbles:true}));
+    const after={count:current.embedding.laneCount,width:current.embedding.laneWidthPixels};
+    sandLaneControlAudit={before,minimum,after,output:width.parentElement.querySelector('output')?.value};
+    play.click();setTimeout(inspect,250);return;
+   }
+   if(current.time<.3){setTimeout(inspect,250);return;}
+   const audit=async value=>{
+    width.value=String(value);width.dispatchEvent(new Event('input',{bubbles:true}));
+    const encoder=auditDevice.createCommandEncoder();
+    current.embedding.render(encoder,{mode:'sand',time:current.time,wheelAngle:current.angle});
+    auditDevice.queue.submit([encoder.finish()]);await auditDevice.queue.onSubmittedWorkDone();
+    return current.embedding.readFieldArea();
+   };
+   const wideArea=await audit(5),narrowArea=await audit(.75);
+   const {before,minimum,after,output}=sandLaneControlAudit;
+   const passed=before.count===1&&before.width===1
+    &&minimum.count===1&&minimum.width===.75
+    &&after.count===1&&after.width===5&&output==='5.00 px'
+    &&Math.abs(wideArea.retainedFraction-1)<.01
+    &&Math.abs(narrowArea.retainedFraction-1)<.01;
+   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,before,minimum,after,wideArea,narrowArea,...state,error:passed?undefined:'Sand lane width changed transported area'})});return;
   }
   if(sandStaticImage){
    if(sandStaticImageSettled){

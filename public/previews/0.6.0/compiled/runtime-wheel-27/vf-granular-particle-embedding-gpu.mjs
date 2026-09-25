@@ -135,18 +135,9 @@ fn flow_fraction(grain: Grain) -> f32 {
 }
 
 fn visible_flow(transport: VisualTransport) -> f32 {
-  // A subpixel path cannot carry a resolvable lane. Put that fractional area
-  // in the packed destination instead of losing it to raster undersampling.
-  let velocity = transport.anchor.zw;
-  let speed = length(velocity);
-  let gravity = max(-params.boundary_pose.z, 0.01);
-  let duration = min(min(0.38, 0.30 / max(speed, 0.65)),
-    0.90 * max(-velocity.y, 0.0) / gravity);
-  let extent = length(-velocity * duration
-    + vec2<f32>(0.0, -gravity) * (0.5 * duration * duration));
-  let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
-  return transport.state.x * smoothstep(1.5, 4.0,
-    extent / max(pixel_world, 1.0e-7));
+  // The packed source and stream use complementary fractions of one parcel.
+  // Never hide low-speed stream mass by attenuating it a second time.
+  return transport.state.x;
 }
 
 fn mineral_color(id: u32) -> vec3<f32> {
@@ -215,21 +206,24 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   @builtin(instance_index) instance_index: u32) -> DensitySplatOut {
   let grain = grains[instance_index];
   let local = quad_corner(vertex_index);
-  let speed = length(grain.velocity);
+  let transport = transports[instance_index];
+  let departing = transport.state.w > 0.0;
+  let speed = select(length(grain.velocity), 0.0, departing);
   let motion_direction = select(vec2<f32>(0.0, 1.0),
     grain.velocity / max(speed, 1.0e-6), speed > 1.0e-6);
   let motion_normal = vec2<f32>(-motion_direction.y, motion_direction.x);
-  let flow = visible_flow(transports[instance_index]);
+  let flow = visible_flow(transport);
   // A compact settled kernel restores a crisp edge after the flowing share
   // has left. Its integral is still normalized to the same guide area.
-  let radius = params.canvas.w * 2.4;
+  let radius = params.canvas.w * 2.0;
   let stretch = 1.0 + clamp(speed * 0.055, 0.0, 0.34);
   let offset = (motion_normal * local.x
     + motion_direction * local.y * stretch) * radius;
   var output: DensitySplatOut;
-  output.position = vec4<f32>(world_to_clip(grain.position + offset), 0.0, 1.0);
+  let packed_position = select(grain.position, transport.state.yz, departing);
+  output.position = vec4<f32>(world_to_clip(packed_position + offset), 0.0, 1.0);
   output.local = local;
-  output.velocity = grain.velocity;
+  output.velocity = select(grain.velocity, vec2<f32>(0.0), departing);
   output.airborne = flow;
   output.age_fraction = 0.0;
   output.lane_weight = 0.0;
@@ -262,8 +256,7 @@ fn gaussian_lane(seed: u32) -> f32 {
 @vertex
 fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
   @builtin(instance_index) instance_index: u32) -> DensitySplatOut {
-  let particle_index = instance_index / 12u;
-  let lane_index = (instance_index / 3u) % 4u;
+  let particle_index = instance_index / 3u;
   let segment_index = instance_index % 3u;
   let grain = grains[particle_index];
   let transport = transports[particle_index];
@@ -271,30 +264,33 @@ fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
   let anchor_velocity = transport.anchor.zw;
   let speed = length(anchor_velocity);
   let flow = visible_flow(transport);
-  let lane_count = u32(params.boundary_pose.w);
-  let lane_enabled = flow > 0.005 && lane_index < lane_count;
-  let seed = grain.id ^ (lane_index * 0x9e3779b9u);
-  let lateral = vec2<f32>(-anchor_velocity.y, anchor_velocity.x)
-    / max(speed, 1.0e-6);
-  let deviation = gaussian_lane(seed) * tan(params.visual.z)
-    * max(speed, 0.65);
-  let lane_velocity = vec2<f32>(anchor_velocity.x + lateral.x * deviation,
-    min(anchor_velocity.y + lateral.y * deviation, -0.02));
-  // More time spreads the same parcel area, without extrapolating back
-  // through the ballistic apex into a false lower arc.
-  let duration = min(min(0.38, 0.30 / max(speed, 0.65)),
-    0.90 * max(-lane_velocity.y, 0.0) / max(-params.boundary_pose.z, 0.01));
-  let age0 = duration * f32(segment_index) / 3.0;
-  let age1 = duration * f32(segment_index + 1u) / 3.0;
+  let lane_enabled = flow > 0.005;
+  let seed = grain.id;
+  let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
+  let direction = select(vec2<f32>(0.0, -1.0),
+    anchor_velocity / max(speed, 1.0e-6), speed > 1.0e-6);
+  let minimum_length = pixel_world * 10.0;
+  let physical_source = transport.state.yz;
+  let source = select(anchor_position - direction * minimum_length,
+    physical_source, length(anchor_position - physical_source) >= minimum_length);
+  let duration = max(abs(transport.state.w), 0.04);
   let gravity = vec2<f32>(0.0, params.boundary_pose.z);
-  let start = anchor_position - lane_velocity * age0
-    + gravity * (0.5 * age0 * age0);
-  let end = anchor_position - lane_velocity * age1
-    + gravity * (0.5 * age1 * age1);
+  let displacement = anchor_position - source;
+  let raw_curvature = gravity * (0.5 * duration * duration);
+  let curvature = raw_curvature * min(1.0,
+    0.65 * length(displacement) / max(length(raw_curvature), 1.0e-6));
+  let initial_displacement = displacement - curvature;
+  let age0 = f32(segment_index) / 3.0;
+  let age1 = f32(segment_index + 1u) / 3.0;
+  let travel0 = 1.0 - age0;
+  let travel1 = 1.0 - age1;
+  let start = source + initial_displacement * travel0
+    + curvature * travel0 * travel0;
+  let end = source + initial_displacement * travel1
+    + curvature * travel1 * travel1;
   let axis = end - start;
   let normal = vec2<f32>(-axis.y, axis.x) / max(length(axis), 1.0e-6);
-  let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
-  let half_width = max(pixel_world * 1.30, params.canvas.w * 0.18);
+  let half_width = pixel_world * params.visual.z * 3.0;
   let local = quad_corner(vertex_index);
   let along = (local.y + 1.0) * 0.5;
   let position = mix(start, end, along) + normal * local.x * half_width;
@@ -304,12 +300,12 @@ fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
   output.local = local;
   output.velocity = anchor_velocity;
   output.airborne = select(0.0, flow, lane_enabled);
-  output.age_fraction = mix(age0, age1, along) / max(duration, 1.0e-6);
-  // The cross-lane Gaussian integrates to 1.03460446 over [-1,1]. The normalized
+  output.age_fraction = mix(age0, age1, along);
+  // A 3-sigma Gaussian integrates to 0.83328696 over [-1,1]. The normalized
   // time density below integrates to one over [0,1].
   let parcel_area = 3.14159265 * params.canvas.w * params.canvas.w;
   output.lane_weight = parcel_area * flow
-    / max(f32(lane_count) * 3.0 * length(axis) * half_width * 1.03460446,
+    / max(3.0 * length(axis) * half_width * 0.83328696,
       1.0e-8);
   output.seed = seed;
   output.packed_weight = 0.0;
@@ -323,7 +319,7 @@ fn lane_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
   // Gamma-like time density: soft front and long tail, normalized over [0,1].
   let temporal = age * exp(-5.0 * age)
     * (25.0 / (1.0 - 6.0 * exp(-5.0)));
-  let cross = exp(-0.5 * pow(input.local.x / 0.42, 2.0));
+  let cross = exp(-0.5 * pow(input.local.x * 3.0, 2.0));
   let weight = input.lane_weight * temporal * cross;
   // The fourth channel separates airborne visual mass from settled density.
   return vec4<f32>(weight, input.velocity * weight, weight);
@@ -453,10 +449,12 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let field = field_at(uv);
   let neighborhood = neighborhood_density_at(uv);
   let density = neighborhood.x;
+  let local_packed = max(field.x - field.w, 0.0);
   let field_velocity = field.yz / max(field.x, 1.0e-5);
-  // Both distributions feed one additive field. The neighborhood-averaged
-  // packed density fills a pile continuously; isolated lanes stay translucent.
-  let packed_coverage = clamp(density, 0.0, 1.0);
+  // The neighborhood closes interior lattice gaps, but the local sample
+  // gates the exterior. Do not blur a settled pile outward into the vacuum.
+  let packed_coverage = clamp(min(density,
+    local_packed * 1.25), 0.0, 1.0);
   var coverage = packed_coverage;
   let flowing_density = max(field.w, 0.0);
 
@@ -634,9 +632,9 @@ fn grain_fragment(input: GrainOut) -> @location(0) vec4<f32> {
 }
 `;
 
-// A guide remains one parcel. As its motion ceases, the moving share decays
-// into the current packed footprint; the old ballistic source stays fixed
-// during that decay. This buffer is visual state, never a second physics World.
+// A guide remains one parcel. During departure the packed share stays at its
+// release point while the stream gains exactly that area. On landing the
+// frozen stream fades into the destination. No second physics World exists.
 const GRANULAR_TRANSPORT_UPDATE_WGSL = /* wgsl */`
 struct Grain {
   position: vec2<f32>, velocity: vec2<f32>, previous_position: vec2<f32>,
@@ -654,13 +652,29 @@ fn advance(@builtin(global_invocation_id) invocation: vec3<u32>) {
   let descent = smoothstep(0.02, 0.25, -grain.velocity.y);
   let support = smoothstep(1.0, 6.0, f32(grain.contact_count));
   let moving = descent * (1.0 - 0.38 * visual.y * support);
+  let free_fall = grain.velocity.y < -0.08;
   var transport = transports[index];
-  if (moving > 0.005) {
+  if (moving > 0.04) {
+    if (transport.state.w <= 0.0) {
+      transport.state = vec4<f32>(transport.state.x,
+        grain.previous_position, transport.state.w);
+      transport.state.w = max(visual.x, 1.0 / 120.0);
+    } else {
+      transport.state.w += max(visual.x, 0.0);
+    }
     transport.anchor = vec4<f32>(grain.position, grain.velocity);
+  } else {
+    transport.state.w = -abs(transport.state.w);
   }
   // Source fades on physical simulation time, with exactly the same area
   // appearing in the packed destination via (1 - flowing).
-  transport.state.x = clamp(max(moving,
+  // A dry detached guide is a whole parcel in flight, not a moving ball.
+  // Its source share shrinks smoothly over the first 80 ms of transport.
+  let released = select(0.0,
+    select(moving, 1.0 - 0.38 * visual.y * support, free_fall)
+      * smoothstep(0.0, 0.08, transport.state.w),
+    moving > 0.04);
+  transport.state.x = clamp(max(released,
     transport.state.x * exp(-max(visual.x, 0.0) / 0.18)), 0.0, 1.0);
   transports[index] = transport;
 }
@@ -1006,22 +1020,16 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
   };
 
   let wetness = 0;
-  let laneCount = 3;
-  let laneSpreadDegrees = 12;
+  let laneWidthPixels = 1.0;
   const setWetness = value => {
     if (!Number.isFinite(value) || value < 0 || value > 1)
       throw new RangeError('Sand wetness must be between zero and one');
     wetness = value;
   };
-  const setLaneCount = value => {
-    if (!Number.isInteger(value) || value < 2 || value > 4)
-      throw new RangeError('Sand transport uses two through four lanes');
-    laneCount = value;
-  };
-  const setLaneSpread = value => {
-    if (!Number.isFinite(value) || value < 0 || value > 30)
-      throw new RangeError('Sand lane spread must be zero through thirty degrees');
-    laneSpreadDegrees = value;
+  const setLaneWidth = value => {
+    if (!Number.isFinite(value) || value < 0.75 || value > 5)
+      throw new RangeError('Sand lane width must be 0.75 through 5 pixels');
+    laneWidthPixels = value;
   };
   const updateParams = (mode, time, deltaTime, wheelAngle) => {
     const { policy } = worldRuntime;
@@ -1049,12 +1057,12 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     values.set(colors.particles, 32);
     values.set([...lightDirection, lightIntensity], 36);
     values.set([deltaTime, policy.grainRadius,
-      laneSpreadDegrees * Math.PI / 180, wetness], 40);
+      laneWidthPixels, wetness], 40);
     const wheel = worldRuntime.wheel;
     values.set([wheel.center[0], wheel.center[1], wheel.radius,
       wheel.barHalfWidth], 44);
     const segments = wheel.segments ?? [];
-    values.set([wheelAngle, segments.length, policy.gravity[1], laneCount], 48);
+    values.set([wheelAngle, segments.length, policy.gravity[1], 1], 48);
     device.queue.writeBuffer(paramsBuffer, 0, values);
   };
 
@@ -1100,7 +1108,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       densityPass.draw(4, particleCount);
       densityPass.setPipeline(lanePipeline);
       densityPass.setBindGroup(0, laneBindGroup);
-      densityPass.draw(4, particleCount * 12);
+      densityPass.draw(4, particleCount * 3);
       densityPass.end();
       lastVisualTime = renderTime;
     }
@@ -1188,12 +1196,11 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     resize,
     setColors,
     setWetness,
-    setLaneCount,
-    setLaneSpread,
+    setLaneWidth,
     readFieldArea,
     destroy,
-    get laneCount() { return laneCount; },
-    get laneSpreadDegrees() { return laneSpreadDegrees; },
+    get laneCount() { return 1; },
+    get laneWidthPixels() { return laneWidthPixels; },
     get width() { return width; },
     get height() { return height; },
   });
