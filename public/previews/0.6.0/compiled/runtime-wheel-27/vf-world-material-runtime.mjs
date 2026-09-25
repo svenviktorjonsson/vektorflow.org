@@ -3,8 +3,8 @@ import { normalizeLiquidContainedWorldPolicy, createLiquidParticleWorldGpuRuntim
 import { calibrateUniformLocalLiquidParticleMassReference } from './vf-physics-liquid-local-particle-reference.mjs';
 import { normalizeGranularParticleWorldGpuPolicy, createGranularParticleWorldGpuRuntime }
   from './vf-granular-particle-world-gpu.mjs';
-import { createLiquidParticleEmbeddingGpu } from './vf-liquid-particle-embedding-gpu.mjs?v=sand-grain-range-1';
-import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=sand-grain-range-1';
+import { createLiquidParticleEmbeddingGpu } from './vf-liquid-particle-embedding-gpu.mjs?v=water-sand-grain-2';
+import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=water-sand-grain-2';
 import { createWheelEmbeddingGpu } from './vf-contained-boundary-embedding-gpu.mjs';
 import { PREVENTIVE_PARTICLE_CONTACT_WGSL, createPreventiveContactResources,
   createPreventiveParticleContactGpu } from './vf-preventive-particle-contact-gpu.mjs';
@@ -120,6 +120,8 @@ export async function createMaterialWorld(device,canvas,compiled,world,arena,eng
     embedding.setWetness(engineeringOptions.wetness??0);
     embedding.setLaneWidth(engineeringOptions.laneWidthPixels??1);
   }
+  if(engineeringOptions.visualMode==='sand')
+    embedding.setEffectiveGrainRadius(engineeringOptions.effectiveGrainRadius??0.0075);
   if(engineeringOptions.visualMode==='sand')
     embedding.setColors({water:[0.72,0.57,0.39,1]});
   engineeringOptions.onStage?.('material embedding ready');
@@ -264,7 +266,7 @@ export async function bootMaterialWorlds(compiled) {
   let fluidSandButton;
   let particleButton,pauseButton,resetButton,formationButton,rainButton,
     wetnessControl,grainControl,laneWidthControl;
-  const refreshStatus=()=>{const app=current();status.textContent=`${comparingFluidSand?'Fluid-sand test':app.world.kind==='liquid'?'Water':'Sand'} · ${app.physics.primaryCount} vertices · Ø ${(app.world.geometry.radius*2).toFixed(1)} m · ${particles?'raw particles':'material embedding'} · time ${app.time.toFixed(2)} s · wheel ${app.angle.toFixed(2)} rad${comparingFluidSand?' · liquid pressure + Coulomb friction μ=0.8, no surface tension':app.world.kind==='granular'?` · wet ${Math.round(sandWetness*100)}% · effective grain Ø ${(sandRadius*2000).toFixed(1)} mm`:''}`;};
+  const refreshStatus=()=>{const app=current();status.textContent=`${comparingFluidSand?'Sand (liquid transport)':app.world.kind==='liquid'?'Water':'Granular (old)'} · ${app.physics.primaryCount} vertices · Ø ${(app.world.geometry.radius*2).toFixed(1)} m · ${particles?'raw particles':'material embedding'} · time ${app.time.toFixed(2)} s · wheel ${app.angle.toFixed(2)} rad${comparingFluidSand?` · visual grain Ø ${(sandRadius*2000).toFixed(1)} mm · pressure + friction μ=0.8`:app.world.kind==='granular'?` · wet ${Math.round(sandWetness*100)}% · effective grain Ø ${(sandRadius*2000).toFixed(1)} mm`:''}`;};
   const refreshControls=()=>{
     const settings=program.views[active].controls??{};
     controls.setAttribute('aria-label',settings.title??'Material World controls');
@@ -277,7 +279,10 @@ export async function bootMaterialWorlds(compiled) {
       formationButton.textContent=sandFormation==='bed'?'Dropcastle':'Level bed';}
     if(rainButton)rainButton.hidden=current().world.kind!=='granular';
     if(wetnessControl)wetnessControl.hidden=current().world.kind!=='granular';
-    if(grainControl)grainControl.hidden=current().world.kind!=='granular';
+    if(grainControl){grainControl.hidden=current().world.kind!=='granular'&&!comparingFluidSand;
+      const label=comparingFluidSand?'Visual grain Ø':'Effective grain Ø';
+      grainControl.querySelector('span').textContent=label;
+      grainControl.querySelector('input').setAttribute('aria-label',label);}
     if(laneWidthControl)laneWidthControl.hidden=current().world.kind!=='granular'||particles;
     refreshStatus();
   };
@@ -297,12 +302,12 @@ export async function bootMaterialWorlds(compiled) {
   };
   for(let i=0;i<program.views.length;i++) {
     const world=layerForView(program.views[i]);
-    if(!world)continue;
-    materialButtons.push({i,b:button(world.kind==='liquid'?'Water':'Sand',i===active,()=>{
+    if(world?.kind!=='liquid')continue;
+    materialButtons.push({i,b:button('Water',i===active,()=>{
       flip(i).catch(error=>console.error('VKF View startup',error));
     })});
   }
-  fluidSandButton=button('Fluid-sand test',false,async()=>{
+  fluidSandButton=button('Sand',false,async()=>{
     if(switching||comparingFluidSand)return;
     switching=true;drag=null;omega=0;
     for(const element of controls.querySelectorAll('button,input'))element.disabled=true;
@@ -313,8 +318,8 @@ export async function bootMaterialWorlds(compiled) {
         const arena=arenas.find(item=>item.layer.id===liquidWorld.layer_id);
         fluidSandApplication=await createMaterialWorld(device,canvas,compiled,
           liquidWorld,arena,{startPaused:true,formation:'dropcastle',liquidViscosity:3.6,liquidFriction:0.8,
-            visualMode:'sand',onStage:stage=>{
-              status.textContent=`Fluid-sand test: ${stage}…`;}});
+            visualMode:'sand',effectiveGrainRadius:sandRadius,onStage:stage=>{
+              status.textContent=`Starting sand: ${stage}…`;}});
         applications.push(fluidSandApplication);
       }
       current().targetAngle=angle;
@@ -324,11 +329,18 @@ export async function bootMaterialWorlds(compiled) {
       angle=fluidSandApplication.targetAngle;
       particles=false;previous=null;errorBox.hidden=true;refreshControls();
     }catch(error){errorBox.hidden=false;
-      errorBox.textContent=`Fluid-sand test could not start: ${error.message||error}`;
+      errorBox.textContent=`Sand could not start: ${error.message||error}`;
       refreshControls();}
     finally{switching=false;previous=null;
       for(const element of controls.querySelectorAll('button,input'))element.disabled=false;}
   });
+  for(let i=0;i<program.views.length;i++) {
+    const world=layerForView(program.views[i]);
+    if(world?.kind!=='granular')continue;
+    materialButtons.push({i,b:button('Granular (old)',false,()=>{
+      flip(i).catch(error=>console.error('VKF View startup',error));
+    })});
+  }
   particleButton=button('Particles',particles,()=>{particles=!particles;refreshControls();});
   pauseButton=button('Pause',false,()=>{const app=current();app.paused=!app.paused;app.pausedReferenceAngle=undefined;
     if(!app.paused&&app.world.kind==='granular')app.physics.setSweepReference(app.angle);
@@ -395,6 +407,7 @@ export async function bootMaterialWorlds(compiled) {
       app.physics.setEffectiveGrainRadius(sandRadius);
       app.embedding.setEffectiveGrainRadius(sandRadius);
     }
+    fluidSandApplication?.embedding.setEffectiveGrainRadius(sandRadius);
     refreshStatus();
   });
   const laneWidthSlider=slider('Lane width',0.75,5,0.25,sandLaneWidth,

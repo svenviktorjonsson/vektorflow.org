@@ -160,7 +160,8 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
 }
 const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.argv.includes('--water-wall-spin')},realtimeSpinLong=${process.argv.includes('--water-realtime-spin-long')},realtimeSpin=${process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadySpin=${process.argv.includes('--water-steady-spin')||process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadyOmega=${process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')?6:2},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisualLong=${process.argv.includes('--sand-visual-long')},sandVisual=${process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')},sandStaticImageSettled=${process.argv.includes('--sand-static-image-settled')},sandStaticImage=${process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},sandGpuProfileFalling=${process.argv.includes('--sand-gpu-profile-falling')},sandLaneControls=${process.argv.includes('--sand-lane-controls')},sandGrainRange=${process.argv.includes('--sand-grain-range')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')||process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')||process.argv.includes('--sand-gpu-profile-falling')||process.argv.includes('--sand-lane-controls')||process.argv.includes('--sand-grain-range')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,dragReachedMs,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],steadySpinSamples=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial,sandVisualInitialIds,sandLaneControlAudit;
   const waterTurnSamples=[],sandAreaSamples=[];let steadySpinStartTime,steadySpinStartAngle,steadySpinStartMs;
-const fluidSandPrototype=${process.argv.includes('--fluid-sand-prototype')};
+const fluidSandGrainRange=${process.argv.includes('--fluid-sand-grain-range')};
+const fluidSandPrototype=${process.argv.includes('--fluid-sand-prototype')||process.argv.includes('--fluid-sand-grain-range')};
 const fluidSandSpin=${process.argv.includes('--fluid-sand-spin')};
 let fluidSandStage=0;
 let browserRafFrames=0;
@@ -184,13 +185,37 @@ async function inspect(){
  if(fluidSandPrototype){
   const prototype=app?.applications?.find(candidate=>candidate.visualMode==='sand');
   if(fluidSandStage===0&&state.ready==='true'&&state.frames>=3){
-   const button=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Fluid-sand test');
+   const button=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Sand');
    if(!button)throw Error('Fluid-sand comparison button missing');
    fluidSandStage=1;button.click();setTimeout(inspect,300);return;
   }
   if(fluidSandStage===1&&prototype){
    if(prototype.physics.policy.viscosity!==3.6||prototype.physics.policy.friction!==0.8||!prototype.paused)
     throw Error('Fluid-sand comparison did not use its isolated frictional World');
+   if(fluidSandGrainRange){
+    const slider=document.querySelector('input[aria-label="Visual grain Ø"]');
+    if(!slider||slider.parentElement.hidden)throw Error('Water-based sand grain-size slider is hidden');
+    const count=prototype.physics.primaryCount;
+    const renderAt=async diameter=>{
+     slider.value=String(diameter);slider.dispatchEvent(new Event('input',{bubbles:true}));
+     const encoder=auditDevice.createCommandEncoder();
+     prototype.embedding.render(encoder,{mode:'sand',time:prototype.time,wheelAngle:prototype.angle});
+     auditDevice.queue.submit([encoder.finish()]);await auditDevice.queue.onSubmittedWorkDone();
+     return {diameter:slider.parentElement.querySelector('output')?.value,
+      radius:prototype.embedding.effectiveGrainRadius,count:prototype.physics.primaryCount,
+      image:app.canvas.toDataURL('image/png')};
+    };
+    const small=await renderAt(1.5),large=await renderAt(15);
+    const imageChanged=small.image!==large.image;
+    const passed=Number(slider.min)===1.5&&Number(slider.max)===15
+     &&small.diameter==='1.5 mm'&&large.diameter==='15.0 mm'
+     &&Math.abs(small.radius-.00075)<1e-9&&Math.abs(large.radius-.0075)<1e-9
+     &&small.count===count&&large.count===count&&imageChanged;
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,count,
+     small:{diameter:small.diameter,radius:small.radius,count:small.count},
+     large:{diameter:large.diameter,radius:large.radius,count:large.count},imageChanged,
+     ...state,error:passed?undefined:'Water-based sand grain range or embedding failed'})});return;
+   }
    const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
    if(!play)throw Error('Fluid-sand Play button missing');
    fluidSandStage=2;play.click();setTimeout(inspect,250);return;
@@ -301,7 +326,7 @@ async function inspect(){
   const particles=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Particles');
   particles.click();if(particles.getAttribute('aria-pressed')!=='true')throw Error('Raw particle embedding did not activate');
   particles.click();if(particles.getAttribute('aria-pressed')!=='false')throw Error('Material embedding did not reactivate');
-  [...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Sand').click();
+  [...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Granular (old)').click();
  }
  if(sandStarted&&current?.world.kind==='granular'&&state.frames>=sandFrame+3){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');

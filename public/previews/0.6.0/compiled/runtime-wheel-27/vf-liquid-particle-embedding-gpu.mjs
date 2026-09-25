@@ -42,6 +42,7 @@ struct RenderParams {
   wheel: vec4<f32>,
   wheel_pose: vec4<f32>,
   baffles: array<vec4<f32>, 7>,
+  sand_parameters: vec4<f32>,
 };
 
 struct DensitySplatOut {
@@ -233,8 +234,9 @@ fn composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   // Comparison mode deliberately shares the liquid solver and its smooth
   // reconstructed surface, but has no water refraction, foam or highlights.
   if (params.wheel_pose.w > 0.5) {
-    let mineral = sand_pixel_noise(floor(world * 680.0));
-    let bright = sand_pixel_noise(floor(world * 1130.0));
+    let grain_scale = sqrt(0.0075 / params.sand_parameters.x);
+    let mineral = sand_pixel_noise(floor(world * 680.0 * grain_scale));
+    let bright = sand_pixel_noise(floor(world * 1130.0 * grain_scale));
     var sand = params.water_color.rgb * (0.87 + 0.22 * mineral);
     sand += vec3<f32>(0.12, 0.11, 0.09)
       * smoothstep(0.988, 0.999, bright);
@@ -468,7 +470,7 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
     primitive: { topology: 'triangle-strip' },
   });
 
-  const paramsBuffer = createBuffer(device, 'VKF Liquid embedding params', 320,
+  const paramsBuffer = createBuffer(device, 'VKF Liquid embedding params', 336,
     GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
   const sampler = device.createSampler({
     label: 'VKF Liquid continuous field sampler',
@@ -572,9 +574,15 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
     return true;
   };
 
+  let effectiveGrainRadius = 0.0075;
+  const setEffectiveGrainRadius = value => {
+    if (!Number.isFinite(value) || value <= 0)
+      throw new RangeError('Effective grain radius must be positive');
+    effectiveGrainRadius = value;
+  };
   const updateParams = (time, mode, wheelAngle) => {
     const policy = worldRuntime.policy;
-    const values = new Float32Array(80);
+    const values = new Float32Array(84);
     const centerX = (policy.viewMinimum[0] + policy.viewMaximum[0]) * 0.5;
     const centerY = (policy.viewMinimum[1] + policy.viewMaximum[1]) * 0.5;
     let viewWidth = policy.viewMaximum[0] - policy.viewMinimum[0];
@@ -611,6 +619,7 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
         values.set(segments[index], 52 + index * 4);
       }
     }
+    values.set([effectiveGrainRadius, 0, 0, 0], 80);
     device.queue.writeBuffer(paramsBuffer, 0, values);
   };
 
@@ -692,7 +701,9 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
     render,
     resize,
     setColors,
+    setEffectiveGrainRadius,
     destroy,
+    get effectiveGrainRadius() { return effectiveGrainRadius; },
     get width() { return width; },
     get height() { return height; },
   });
