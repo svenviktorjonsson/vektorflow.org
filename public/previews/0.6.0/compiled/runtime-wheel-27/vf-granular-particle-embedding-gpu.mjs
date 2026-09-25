@@ -117,6 +117,15 @@ fn stable_unit(value: u32) -> f32 {
   return f32(mix_u32(value) >> 8u) * (1.0 / 16777216.0);
 }
 
+fn flow_fraction(grain: Grain) -> f32 {
+  // Motion dominates: a falling group stays flowing even while its guides
+  // touch. Contact only gently shifts weight toward the packed distribution.
+  let descent = smoothstep(0.03, 0.50, -grain.velocity.y);
+  let support = smoothstep(1.0, 6.0, f32(grain.contact_count));
+  let fast = smoothstep(0.20, 0.75, -grain.velocity.y);
+  return descent * (1.0 - support * (0.75 - 0.55 * fast));
+}
+
 fn mineral_color(id: u32) -> vec3<f32> {
   let mineral = stable_unit(id ^ 0x51a7d39bu);
   let tone = 0.80 + 0.30 * stable_unit(id ^ 0x9e3779b9u);
@@ -187,33 +196,16 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   let motion_direction = select(vec2<f32>(0.0, 1.0),
     grain.velocity / max(speed, 1.0e-6), speed > 1.0e-6);
   let motion_normal = vec2<f32>(-motion_direction.y, motion_direction.x);
-  let airborne = (grain.contact_count == 0u && grain.velocity.y < -0.04)
-    || grain.velocity.y < -0.20;
-  // Packed material needs a wider reconstruction kernel to hide the guide
-  // lattice. Freefall deposits its mass along a short upstream trajectory,
-  // so nearby guides form a flow field rather than isolated round blobs.
-  let radius = params.canvas.w * select(3.2, 1.8, airborne);
-  let stretch = select(1.0 + clamp(speed * 0.055, 0.0, 0.34),
-    1.0, airborne);
-  let trail_length = clamp(speed * 0.055, 2.0 * radius, 4.0 * radius);
-  let packed_offset = (motion_normal * local.x
+  let flow = flow_fraction(grain);
+  let radius = params.canvas.w * 3.2;
+  let stretch = 1.0 + clamp(speed * 0.055, 0.0, 0.34);
+  let offset = (motion_normal * local.x
     + motion_direction * local.y * stretch) * radius;
-  let falling_offset = motion_normal * local.x * radius
-    + motion_direction * (local.y - 1.0) * trail_length * 0.5;
-  let offset = select(packed_offset, falling_offset, airborne);
   var output: DensitySplatOut;
-  // Freefall is represented by ballistic lanes below, not a round splat.
-  output.position = vec4<f32>(select(world_to_clip(grain.position + offset),
-    vec2<f32>(2.0), airborne), 0.0, 1.0);
+  output.position = vec4<f32>(world_to_clip(grain.position + offset), 0.0, 1.0);
   output.local = local;
   output.velocity = grain.velocity;
-  // Neighbor contact alone does not make a descending cluster supported.
-  // Fast downward flow remains discrete even when its guides touch.
-  // Integral of (1-r^2)^2 over a unit disk is pi/3. Compensate for the
-  // swept ellipse area so field alpha still represents physical grain area.
-  output.airborne = select(0.0,
-    6.0 * params.canvas.w * params.canvas.w
-      / max(radius * trail_length, 1.0e-8), airborne);
+  output.airborne = flow;
   output.age_fraction = 0.0;
   output.lane_weight = 0.0;
   output.seed = grain.id;
@@ -224,13 +216,9 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
 fn density_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
   let radius_squared = dot(input.local, input.local);
   if (radius_squared >= 1.0) { discard; }
-  let weight = pow(1.0 - radius_squared, 2.0);
-  // The fourth channel records unsupported falling material, not color.
-  // A fast-moving supported heap must not be cut into smoky holes.
-  let mass_weight = weight * select(1.0, input.airborne,
-    input.airborne > 0.0);
-  return vec4<f32>(mass_weight, input.velocity * mass_weight,
-    input.airborne * weight);
+  let packed_weight = pow(1.0 - radius_squared, 2.0)
+    * (1.0 - input.airborne);
+  return vec4<f32>(packed_weight, input.velocity * packed_weight, 0.0);
 }
 
 fn gaussian_lane(seed: u32) -> f32 {
@@ -250,10 +238,9 @@ fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
   let segment_index = instance_index % 3u;
   let grain = grains[particle_index];
   let speed = length(grain.velocity);
-  let airborne = (grain.contact_count == 0u && grain.velocity.y < -0.04)
-    || grain.velocity.y < -0.20;
+  let flow = flow_fraction(grain);
   let lane_count = u32(params.boundary_pose.w);
-  let lane_enabled = airborne && lane_index < lane_count;
+  let lane_enabled = flow > 0.005 && lane_index < lane_count;
   let seed = grain.id ^ (lane_index * 0x9e3779b9u);
   let lateral = vec2<f32>(-grain.velocity.y, grain.velocity.x)
     / max(speed, 1.0e-6);
@@ -281,16 +268,16 @@ fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
     world_to_clip(position), lane_enabled), 0.0, 1.0);
   output.local = local;
   output.velocity = grain.velocity;
-  output.airborne = select(0.0, 1.0, lane_enabled);
+  output.airborne = select(0.0, flow, lane_enabled);
   output.age_fraction = mix(age0, age1, along) / duration;
-  output.lane_weight = 1.0 / max(f32(lane_count), 1.0);
+  output.lane_weight = flow / max(f32(lane_count), 1.0);
   output.seed = seed;
   return output;
 }
 
 @fragment
 fn lane_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
-  if (input.airborne < 0.5) { discard; }
+  if (input.airborne <= 0.005) { discard; }
   let age = input.age_fraction;
   // Soft Gaussian-like front; exponential decay leaves a long trailing tail.
   let onset = 1.0 - exp(-pow(age / 0.13, 2.0));
@@ -298,7 +285,7 @@ fn lane_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
   let cross = exp(-0.5 * pow(input.local.x / 0.42, 2.0));
   let time_cell = u32(floor(age * 42.0));
   let granularity = 0.74 + 0.52 * stable_unit(input.seed ^ time_cell);
-  let weight = 0.46 * input.lane_weight * onset * tail * cross * granularity;
+  let weight = 0.68 * input.lane_weight * onset * tail * cross * granularity;
   // The fourth channel separates airborne visual mass from settled density.
   return vec4<f32>(weight, input.velocity * weight, weight);
 }
@@ -395,7 +382,7 @@ fn field_at(uv: vec2<f32>) -> vec4<f32> {
     clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
 }
 
-fn closed_density_at(uv: vec2<f32>) -> f32 {
+fn neighborhood_density_at(uv: vec2<f32>) -> vec2<f32> {
   // Integrate over roughly one represented grain footprint. Point sampling
   // exposes the seed lattice as horizontal/vertical stripes in settled sand.
   let offset = params.canvas.w * params.canvas.x
@@ -406,30 +393,33 @@ fn closed_density_at(uv: vec2<f32>) -> f32 {
   let right = field_at(uv + vec2<f32>(offset.x, 0.0));
   let below = field_at(uv - vec2<f32>(0.0, offset.y));
   let above = field_at(uv + vec2<f32>(0.0, offset.y));
-  return (max(center.x - center.w, 0.0)
+  let packed = (max(center.x - center.w, 0.0)
     + max(left.x - left.w, 0.0)
     + max(right.x - right.w, 0.0)
     + max(below.x - below.w, 0.0)
     + max(above.x - above.w, 0.0)) * 0.2;
+  let flowing = (max(center.w, 0.0) + max(left.w, 0.0)
+    + max(right.w, 0.0) + max(below.w, 0.0)
+    + max(above.w, 0.0)) * 0.2;
+  return vec2<f32>(packed, flowing);
+}
+
+fn closed_density_at(uv: vec2<f32>) -> f32 {
+  return neighborhood_density_at(uv).x;
 }
 
 @fragment
 fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let uv = input.position.xy / params.canvas.xy;
   let field = field_at(uv);
-  let density = closed_density_at(uv);
-  let edge_width = clamp(fwidth(density) * 1.15, 0.018, 0.06);
+  let neighborhood = neighborhood_density_at(uv);
+  let density = neighborhood.x;
   let field_velocity = field.yz / max(field.x, 1.0e-5);
-  // Low coverage alone does not mean motion: the edge of a resting pile is
-  // sparse too. Only a measured moving field may become a diffuse fall.
-  // One isolated compact splat peaks at one. Only overlapping neighborhoods
-  // reconstruct a packed surface: isolated grains must not become mud blobs.
-  let packed_coverage = smoothstep(1.35 - edge_width,
-    1.35 + edge_width, density);
-  // The packed surface excludes airborne mass. Freefall remains a continuous
-  // projected-density field; physical guides never become visible disks.
+  // Both distributions feed one additive field. The neighborhood-averaged
+  // packed density fills a pile continuously; isolated lanes stay translucent.
+  let packed_coverage = 1.0 - exp(-density * density);
   var coverage = packed_coverage;
-  let airborne_density = max(field.w, 0.0);
+  let flowing_density = max(field.w, 0.0);
 
   let screen_uv = input.position.xy / params.canvas.xy;
   let world = vec2<f32>(
@@ -445,9 +435,9 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
     let near_rim = 1.0 - smoothstep(0.0,
       params.canvas.w * 1.35, rim_gap);
     coverage = max(coverage,
-      smoothstep(0.18, 0.72, density) * near_rim);
+      (1.0 - exp(-1.5 * density)) * near_rim);
   }
-  if (density > 0.12 || airborne_density > 0.0001) {
+  if (density > 0.0001 || flowing_density > 0.0001) {
     let relative = world - params.boundary.xy;
     let c = cos(params.boundary_pose.x);
     let s = sin(params.boundary_pose.x);
@@ -483,19 +473,22 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
       let support_density = max(density,
         closed_density_at(support_uv) * 0.82);
       coverage = max(coverage,
-        smoothstep(0.18, 0.72, support_density) * near_bar);
+        (1.0 - exp(-1.5 * support_density)) * near_bar);
     }
   }
-  // Airborne splats already carry area-normalized mass. Alpha stays
-  // continuous; subpixel noise changes tone, not geometry or mass.
+  // Flowing lanes add optical density to the same field. Beer-Lambert
+  // compositing has no abrupt packed/airborne surface boundary.
   let visual_pixel_world = (params.view.z - params.view.x)
     / max(params.canvas.x, 1.0);
   let visual_seed = pixel_noise(floor((world
     - field_velocity * params.floor_color.w) / visual_pixel_world),
     0xa511e9b3u);
-  let airborne_alpha = clamp(airborne_density, 0.0, 1.0)
-    * (0.94 + 0.12 * visual_seed);
-  let visual_coverage = select(airborne_alpha, 0.0, solid_gap < 0.0);
+  // Only overlapping moving neighborhoods gain extra optical depth. A lone
+  // trajectory remains fine; a falling group fills without a contour switch.
+  let group_density = 1.2 * neighborhood.y * neighborhood.y;
+  let flowing_alpha = 1.0 - exp(-(flowing_density + group_density)
+    * (0.94 + 0.12 * visual_seed));
+  let visual_coverage = select(flowing_alpha, 0.0, solid_gap < 0.0);
   coverage = 1.0 - (1.0 - coverage) * (1.0 - visual_coverage);
   let view_height = max(params.view.w - params.view.y, 1.0e-6);
   let vertical = clamp((world.y - params.view.y) / view_height, 0.0, 1.0);
