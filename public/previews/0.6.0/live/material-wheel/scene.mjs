@@ -2,7 +2,7 @@ import { createLiquidParticleWorldGpuRuntime } from './runtime/vf-liquid-particl
 import { createLiquidParticleEmbeddingGpu } from './runtime/vf-liquid-particle-embedding-gpu.mjs?v=raw-particles-11';
 import { createFixedStepRealtimeClock } from './runtime/fixed-step-realtime-clock.mjs';
 import { createGranularParticleWorldGpuRuntime } from '../sand/runtime/vf-granular-particle-world-gpu.mjs?v=sand-repose-11';
-import { createGranularParticleEmbeddingGpu } from '../sand/runtime/vf-granular-particle-embedding-gpu.mjs?v=sand-density-11';
+import { createGranularParticleEmbeddingGpu } from '../sand/runtime/vf-granular-particle-embedding-gpu.mjs?v=sand-lanes-1';
 import { createWheelEmbeddingGpu } from './wheel-embedding-gpu.mjs';
 import { createVfLiveWorldStackReference } from '../runtime/vf-live-world-stack.mjs?v=world-stack-1';
 

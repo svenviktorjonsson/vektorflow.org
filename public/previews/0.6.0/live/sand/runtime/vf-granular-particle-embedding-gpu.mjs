@@ -35,6 +35,7 @@ struct RenderParams {
   sand_color: vec4<f32>,
   particle_color: vec4<f32>,
   light: vec4<f32>,
+  gravity: vec4<f32>,
 };
 
 struct FullscreenOut {
@@ -56,6 +57,9 @@ struct DensitySplatOut {
   @location(0) local: vec2<f32>,
   @location(1) velocity: vec2<f32>,
   @location(2) contact_count: f32,
+  @location(3) freefall: f32,
+  @location(4) age_fraction: f32,
+  @interpolate(flat) @location(5) seed: u32,
 };
 
 @group(0) @binding(0) var<storage, read> grains: array<Grain>;
@@ -172,7 +176,10 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   let motion_normal = vec2<f32>(-motion_direction.y, motion_direction.x);
   // A granular reconstruction closes sub-grain gaps without the broad kernel
   // that makes a heap resemble a cohesive liquid.
-  let radius = params.canvas.w * 4.15;
+  let freefall = grain.contact_count == 0u && speed > 0.25;
+  let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
+  let radius = select(params.canvas.w * 4.15,
+    max(pixel_world * 0.8, params.canvas.w * 0.5), freefall);
   let stretch = 1.0 + clamp(speed * 0.055, 0.0, 0.34);
   let offset = (motion_normal * local.x + motion_direction * local.y * stretch) * radius;
   var output: DensitySplatOut;
@@ -180,6 +187,9 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   output.local = local;
   output.velocity = grain.velocity;
   output.contact_count = f32(grain.contact_count);
+  output.freefall = select(0.0, 1.0, freefall);
+  output.age_fraction = 0.0;
+  output.seed = grain.id;
   return output;
 }
 
@@ -187,9 +197,80 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
 fn density_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
   let radius_squared = dot(input.local, input.local);
   if (radius_squared >= 1.0) { discard; }
-  let weight = pow(1.0 - radius_squared, 3.0);
+  let weight = pow(1.0 - radius_squared, 3.0)
+    * mix(1.0, 0.12, input.freefall);
   return vec4<f32>(weight, input.velocity * weight,
     input.contact_count * weight);
+}
+
+fn gaussian_lane(seed: u32) -> f32 {
+  // Four independent uniform draws approximate a normal variate without
+  // trigonometry in every vertex. Lane positions are stable, not evenly spaced.
+  let sum = stable_unit(seed ^ 0x1b873593u)
+    + stable_unit(seed ^ 0x85ebca6bu)
+    + stable_unit(seed ^ 0xc2b2ae35u)
+    + stable_unit(seed ^ 0x27d4eb2fu);
+  return clamp((sum - 2.0) * 1.7320508, -1.8, 1.8);
+}
+
+@vertex
+fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
+  @builtin(instance_index) instance_index: u32) -> DensitySplatOut {
+  let particle_index = instance_index / 12u;
+  let lane_index = (instance_index / 3u) % 4u;
+  let segment_index = instance_index % 3u;
+  let grain = grains[particle_index];
+  let lane_count = 2u + mix_u32(grain.id ^ 0x51a7d39bu) % 3u;
+  let speed = length(grain.velocity);
+  let active = lane_index < lane_count
+    && grain.contact_count == 0u && speed > 0.25;
+  let seed = grain.id ^ (lane_index * 0x9e3779b9u);
+  let lateral = vec2<f32>(-grain.velocity.y, grain.velocity.x)
+    / max(speed, 1.0e-6);
+  let lane_velocity = grain.velocity
+    + lateral * gaussian_lane(seed) * max(0.11, speed * 0.065);
+  let duration = min(0.18, 0.13 / max(speed, 0.25));
+  let age0 = duration * f32(segment_index) / 3.0;
+  let age1 = duration * f32(segment_index + 1u) / 3.0;
+  let gravity = params.gravity.xy;
+  let start = grain.position - lane_velocity * age0
+    + gravity * (0.5 * age0 * age0);
+  let end = grain.position - lane_velocity * age1
+    + gravity * (0.5 * age1 * age1);
+  let axis = end - start;
+  let normal = vec2<f32>(-axis.y, axis.x) / max(length(axis), 1.0e-6);
+  let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
+  let half_width = max(pixel_world * 1.8, params.canvas.w * 0.3);
+  let local = quad_corner(vertex_index);
+  let along = (local.y + 1.0) * 0.5;
+  let position = mix(start, end, along) + normal * local.x * half_width;
+  var output: DensitySplatOut;
+  // Inactive lanes clip before rasterization, so resting beds only pay the
+  // vertex cost rather than shading thousands of invisible trail fragments.
+  output.position = vec4<f32>(select(vec2<f32>(2.0),
+    world_to_clip(position), active), 0.0, 1.0);
+  output.local = local;
+  output.velocity = grain.velocity;
+  output.contact_count = 0.0;
+  output.freefall = select(0.0, 1.0, active);
+  output.age_fraction = mix(age0, age1, along) / duration;
+  output.seed = seed;
+  return output;
+}
+
+@fragment
+fn lane_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
+  if (input.freefall < 0.5) { discard; }
+  let age = input.age_fraction;
+  // A soft Gaussian-like onset and slow exponential tail make a visibly
+  // skewed front, with density distributed through time rather than a disk.
+  let onset = 1.0 - exp(-pow(age / 0.13, 2.0));
+  let tail = exp(-2.7 * age);
+  let cross = exp(-0.5 * pow(input.local.x / 0.42, 2.0));
+  let time_cell = u32(floor(age * 42.0));
+  let granularity = 0.74 + 0.52 * stable_unit(input.seed ^ time_cell);
+  let weight = 0.18 * onset * tail * cross * granularity;
+  return vec4<f32>(weight, input.velocity * weight, 0.0);
 }
 
 fn fresnel_schlick(cosine: f32, f0: f32) -> f32 {
@@ -297,8 +378,9 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let uv = input.position.xy / params.canvas.xy;
   let field = field_at(uv);
   let density = closed_density_at(uv);
-  let edge_width = max(fwidth(density) * 1.15, 0.018);
-  let coverage = smoothstep(1.06 - edge_width, 1.06 + edge_width, density);
+  // Beer-Lambert coverage preserves faint, overlapping falling lanes while
+  // dense settled material still becomes opaque. No hard density cutoff.
+  let coverage = 1.0 - exp(-1.35 * density);
 
   let screen_uv = input.position.xy / params.canvas.xy;
   let world = vec2<f32>(
@@ -329,7 +411,7 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
     speed > 1.0e-6);
   let across = vec2<f32>(-direction.y, direction.x);
   let time = params.floor_color.w;
-  let settled_phase = u32(floor(time * 1.2));
+  let settled_phase = 0u;
   let moving_phase = u32(floor(time * (7.0 + speed * 10.0)));
   let phase = select(settled_phase, moving_phase, motion > 0.04);
   let pixel = floor(input.position.xy);
@@ -352,7 +434,8 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let glimmer = sparkle * (0.16 + params.material.w * 0.72)
     + motion_shimmer * 0.15;
   sand += vec3<f32>(1.0, 0.84, 0.56) * glimmer * params.light.w;
-  return vec4<f32>(mix(background, sand, coverage), 1.0);
+  let fine_coverage = clamp(coverage * (0.88 + 0.24 * fine), 0.0, 1.0);
+  return vec4<f32>(mix(background, sand, fine_coverage), 1.0);
 }
 
 fn sand_material_shading(input: GrainOut) -> vec3<f32> {
@@ -594,6 +677,23 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     },
     primitive: { topology: 'triangle-strip' },
   });
+  const lanePipeline = await device.createRenderPipelineAsync({
+    label: 'VKF Granular ballistic falling lanes',
+    layout: 'auto',
+    vertex: { module: shader, entryPoint: 'lane_vertex' },
+    fragment: {
+      module: shader,
+      entryPoint: 'lane_fragment',
+      targets: [{
+        format: GRANULAR_FIELD_FORMAT_GPU,
+        blend: {
+          color: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+          alpha: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+        },
+      }],
+    },
+    primitive: { topology: 'triangle-strip' },
+  });
   const compositePipeline = await device.createRenderPipelineAsync({
     label: 'VKF Granular continuous material composite',
     layout: 'auto',
@@ -606,7 +706,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     primitive: { topology: 'triangle-list' },
   });
 
-  const paramsBuffer = createBuffer(device, 'VKF Granular embedding params', 160,
+  const paramsBuffer = createBuffer(device, 'VKF Granular embedding params', 176,
     GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
   const storageBinding = {
     buffer: worldRuntime.particleBuffer,
@@ -638,6 +738,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
   let densityTexture = null;
   let densityView = null;
   let densityBindGroup = null;
+  let laneBindGroup = null;
   let compositeBindGroup = null;
 
   const resize = () => {
@@ -669,6 +770,14 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
         { binding: 1, resource: { buffer: paramsBuffer } },
       ],
     });
+    laneBindGroup = device.createBindGroup({
+      label: 'VKF Granular ballistic lane bindings',
+      layout: lanePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: storageBinding },
+        { binding: 1, resource: { buffer: paramsBuffer } },
+      ],
+    });
     compositeBindGroup = device.createBindGroup({
       label: 'VKF Granular material composite bindings',
       layout: compositePipeline.getBindGroupLayout(0),
@@ -693,7 +802,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     if (canvasAspect < worldAspect) viewHeight = viewWidth / canvasAspect;
     else viewWidth = viewHeight * canvasAspect;
 
-    const values = new Float32Array(40);
+    const values = new Float32Array(44);
     values.set([centerX - viewWidth * 0.5, centerY - viewHeight * 0.5,
       centerX + viewWidth * 0.5, centerY + viewHeight * 0.5], 0);
     values.set([width, height, mode === 'particles' ? 1 : 0, policy.grainRadius], 4);
@@ -706,6 +815,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     values.set(colors.sand, 28);
     values.set(colors.particles, 32);
     values.set([...lightDirection, lightIntensity], 36);
+    values.set([policy.gravity[0], policy.gravity[1], 0, 0], 40);
     device.queue.writeBuffer(paramsBuffer, 0, values);
   };
 
@@ -737,6 +847,9 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       densityPass.setPipeline(densityPipeline);
       densityPass.setBindGroup(0, densityBindGroup);
       densityPass.draw(4, particleCount);
+      densityPass.setPipeline(lanePipeline);
+      densityPass.setBindGroup(0, laneBindGroup);
+      densityPass.draw(4, particleCount * 12);
       densityPass.end();
     }
     const pass = encoder.beginRenderPass({
