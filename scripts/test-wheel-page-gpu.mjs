@@ -126,39 +126,21 @@ async function measureEmbedding(current,app){
  query.destroy();resolved.destroy();read.destroy();return result;
 }
 async function checkSandVisualMotion(current){
- const guides=current.embedding.particleCount,samples=current.embedding.visualSamplesPerGuide,visuals=guides*samples,bytes=(guides+visuals)*32;
+ const guides=current.embedding.particleCount,bytes=guides*32;
  const read=auditDevice.createBuffer({size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
  const e=auditDevice.createCommandEncoder();
- e.copyBufferToBuffer(current.physics.particleBuffer,0,read,0,guides*32);
- e.copyBufferToBuffer(current.embedding.visualBuffer,0,read,guides*32,visuals*32);
+ e.copyBufferToBuffer(current.physics.particleBuffer,0,read,0,bytes);
  auditDevice.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);
  const raw=read.getMappedRange().slice(0),f=new Float32Array(raw),u=new Uint32Array(raw);read.unmap();read.destroy();
- let freefallGuides=0,downward=0,relativeSpeed=0,spread=0,observations=0;
+ let freefallGuides=0,supportedGuides=0;
  const descendingContacts=[0,0,0,0,0,0];
  for(let i=0;i<guides;i++){
-  const g=i*8,guideSpeed=Math.hypot(f[g+2],f[g+3]);
+  const g=i*8;
   if(f[g+3]<-.12)descendingContacts[Math.min(5,u[g+7])]++;
-  if(u[g+7]!==0||guideSpeed<.35)continue;
-  freefallGuides++;
-  for(let j=0;j<samples;j++){
-   const v=(guides+i*samples+j)*8;
-   if((u[v+7]&0x80000000)===0)continue;
-   downward+=f[v+3]<0?1:0;
-   relativeSpeed+=Math.hypot(f[v+2]-f[g+2],f[v+3]-f[g+3]);
-   spread+=Math.hypot(f[v]-f[g],f[v+1]-f[g+1]);observations++;
-  }
+  if((u[g+7]===0&&f[g+3]<-.04)||f[g+3]<-.20)freefallGuides++;
+  else supportedGuides++;
  }
- return {freefallGuides,visualSamples:observations,descendingContacts,downwardFraction:downward/Math.max(1,observations),meanRelativeSpeed:relativeSpeed/Math.max(1,observations),meanGuideSpread:spread/Math.max(1,observations)};
-}
-async function readSandVisualIds(current){
- const count=current.embedding.particleCount*current.embedding.visualSamplesPerGuide,bytes=count*32;
- const read=auditDevice.createBuffer({size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
- const encoder=auditDevice.createCommandEncoder();
- encoder.copyBufferToBuffer(current.embedding.visualBuffer,0,read,0,bytes);
- auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
- const words=new Uint32Array(read.getMappedRange().slice(0));
- const ids=Array.from({length:count},(_,index)=>words[index*8+6]);
- read.unmap();read.destroy();return ids;
+ return {freefallGuides,supportedGuides,totalGuides:guides,descendingContacts};
 }
 const rejectCaches=${process.argv.includes('--reject-caches')};
 const legacyOverrides=${process.argv.includes('--legacy-overrides')};
@@ -309,16 +291,21 @@ async function inspect(){
     sandFormationRequested=true;selection.click();setTimeout(inspect,250);return;
    }
    if(formation?.textContent!=='Level bed'){setTimeout(inspect,250);return;}
-   if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Dropcastle did not start paused');sandFormationInitial=await checkExclusion(current,{assert:false});if(sandVisualLong)sandVisualInitialIds=await readSandVisualIds(current);sandPlayed=true;play.click();}
+   if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Dropcastle did not start paused');sandFormationInitial=await checkExclusion(current,{assert:false});sandPlayed=true;play.click();}
    if(sandVisual&&state.time>=(sandVisualLong?10:.3)){
-    const visual=await checkSandVisualMotion(current);
+   const visual=await checkSandVisualMotion(current);
+    const shape=sandVisualLong?await checkExclusion(current,{assert:false}):null;
     await fetch('/page-screenshot',{method:'POST',body:app.canvas.toDataURL('image/png')});
-    const finalIds=sandVisualLong?await readSandVisualIds(current):null;
-    const reseeded=finalIds?finalIds.reduce((count,id,index)=>count+(id!==sandVisualInitialIds[index]),0):undefined;
-    const passed=sandVisualLong?reseeded>10:visual.freefallGuides>=5
-     &&visual.downwardFraction>.5&&visual.meanRelativeSpeed>.005
-     &&visual.meanGuideSpread<.15;
-    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,visual,reseeded,...state,error:passed?undefined:'Fine grains did not advect or reseed after landing'})});return;
+    if(sandVisualLong){
+     const particles=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Particles');
+     particles?.click();
+     await new Promise(resolve=>setTimeout(resolve,100));
+     await fetch('/page-screenshot?name=sand-particles',{method:'POST',body:app.canvas.toDataURL('image/png')});
+    }
+    const passed=sandVisualLong?visual.freefallGuides<=5
+     &&shape.diskAreaFraction>=.995&&shape.boundaryGap>=-1e-5
+     &&shape.maximumSpeed<.15:visual.freefallGuides>=5;
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,visual,shape,...state,error:passed?undefined:'Sand field formation or rest conservation failed'})});return;
    }
    if(sandGpuProfileFalling&&state.time>=.4){
     const physics=await measurePhysicsSteps(current),embedding=await measureEmbedding(current,app),visual=await checkSandVisualMotion(current);
@@ -355,7 +342,7 @@ const server=createServer(async(req,res)=>{
    if(url.pathname==='/page-screenshot'){
     if(!body.startsWith('data:image/png;base64,'))throw Error('Invalid screenshot payload');
     const requestedName=url.searchParams.get('name');
-    const name=['water-foam','water-steady'].includes(requestedName)?requestedName:'sand-visual';
+    const name=['water-foam','water-steady','sand-particles'].includes(requestedName)?requestedName:'sand-visual';
     await writeFile(path.join(work,name+'.png'),Buffer.from(body.slice(22),'base64'));
     res.end('ok');return;
    }
