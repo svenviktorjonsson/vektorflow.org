@@ -63,6 +63,9 @@ struct DensitySplatOut {
   @location(0) local: vec2<f32>,
   @location(1) velocity: vec2<f32>,
   @interpolate(flat) @location(2) airborne: f32,
+  @location(3) age_fraction: f32,
+  @location(4) lane_weight: f32,
+  @interpolate(flat) @location(5) seed: u32,
 };
 
 @group(0) @binding(0) var<storage, read> grains: array<Grain>;
@@ -199,7 +202,9 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
     + motion_direction * (local.y - 1.0) * trail_length * 0.5;
   let offset = select(packed_offset, falling_offset, airborne);
   var output: DensitySplatOut;
-  output.position = vec4<f32>(world_to_clip(grain.position + offset), 0.0, 1.0);
+  // Freefall is represented by ballistic lanes below, not a round splat.
+  output.position = vec4<f32>(select(world_to_clip(grain.position + offset),
+    vec2<f32>(2.0), airborne), 0.0, 1.0);
   output.local = local;
   output.velocity = grain.velocity;
   // Neighbor contact alone does not make a descending cluster supported.
@@ -209,6 +214,9 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   output.airborne = select(0.0,
     6.0 * params.canvas.w * params.canvas.w
       / max(radius * trail_length, 1.0e-8), airborne);
+  output.age_fraction = 0.0;
+  output.lane_weight = 0.0;
+  output.seed = grain.id;
   return output;
 }
 
@@ -223,6 +231,76 @@ fn density_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
     input.airborne > 0.0);
   return vec4<f32>(mass_weight, input.velocity * mass_weight,
     input.airborne * weight);
+}
+
+fn gaussian_lane(seed: u32) -> f32 {
+  // Stable approximate normal distribution; no evenly spaced fan or trigonometry.
+  let sum = stable_unit(seed ^ 0x1b873593u)
+    + stable_unit(seed ^ 0x85ebca6bu)
+    + stable_unit(seed ^ 0xc2b2ae35u)
+    + stable_unit(seed ^ 0x27d4eb2fu);
+  return clamp((sum - 2.0) * 1.7320508, -1.8, 1.8);
+}
+
+@vertex
+fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
+  @builtin(instance_index) instance_index: u32) -> DensitySplatOut {
+  let particle_index = instance_index / 9u;
+  let lane_index = (instance_index / 3u) % 3u;
+  let segment_index = instance_index % 3u;
+  let grain = grains[particle_index];
+  let speed = length(grain.velocity);
+  let airborne = (grain.contact_count == 0u && grain.velocity.y < -0.04)
+    || grain.velocity.y < -0.20;
+  let lane_count = u32(params.boundary_pose.w);
+  let lane_enabled = airborne && lane_index < lane_count;
+  let seed = grain.id ^ (lane_index * 0x9e3779b9u);
+  let lateral = vec2<f32>(-grain.velocity.y, grain.velocity.x)
+    / max(speed, 1.0e-6);
+  let deviation = gaussian_lane(seed) * tan(params.visual.z)
+    * max(speed, 0.65);
+  let lane_velocity = vec2<f32>(grain.velocity.x + lateral.x * deviation,
+    min(grain.velocity.y + lateral.y * deviation, -0.02));
+  let duration = min(0.18, 0.12 / max(speed, 0.65));
+  let age0 = duration * f32(segment_index) / 3.0;
+  let age1 = duration * f32(segment_index + 1u) / 3.0;
+  let gravity = vec2<f32>(0.0, params.boundary_pose.z);
+  let start = grain.position - lane_velocity * age0
+    + gravity * (0.5 * age0 * age0);
+  let end = grain.position - lane_velocity * age1
+    + gravity * (0.5 * age1 * age1);
+  let axis = end - start;
+  let normal = vec2<f32>(-axis.y, axis.x) / max(length(axis), 1.0e-6);
+  let pixel_world = (params.view.z - params.view.x) / max(params.canvas.x, 1.0);
+  let half_width = max(pixel_world * 1.8, params.canvas.w * 0.3);
+  let local = quad_corner(vertex_index);
+  let along = (local.y + 1.0) * 0.5;
+  let position = mix(start, end, along) + normal * local.x * half_width;
+  var output: DensitySplatOut;
+  output.position = vec4<f32>(select(vec2<f32>(2.0),
+    world_to_clip(position), lane_enabled), 0.0, 1.0);
+  output.local = local;
+  output.velocity = grain.velocity;
+  output.airborne = select(0.0, 1.0, lane_enabled);
+  output.age_fraction = mix(age0, age1, along) / duration;
+  output.lane_weight = 1.0 / max(f32(lane_count), 1.0);
+  output.seed = seed;
+  return output;
+}
+
+@fragment
+fn lane_fragment(input: DensitySplatOut) -> @location(0) vec4<f32> {
+  if (input.airborne < 0.5) { discard; }
+  let age = input.age_fraction;
+  // Soft Gaussian-like front; exponential decay leaves a long trailing tail.
+  let onset = 1.0 - exp(-pow(age / 0.13, 2.0));
+  let tail = exp(-2.7 * age);
+  let cross = exp(-0.5 * pow(input.local.x / 0.42, 2.0));
+  let time_cell = u32(floor(age * 42.0));
+  let granularity = 0.74 + 0.52 * stable_unit(input.seed ^ time_cell);
+  let weight = 0.46 * input.lane_weight * onset * tail * cross * granularity;
+  // The fourth channel separates airborne visual mass from settled density.
+  return vec4<f32>(weight, input.velocity * weight, weight);
 }
 
 fn fresnel_schlick(cosine: f32, f0: f32) -> f32 {
@@ -704,6 +782,23 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     },
     primitive: { topology: 'triangle-strip' },
   });
+  const lanePipeline = await createCheckedGpuPipeline(device,'render',{
+    label: 'VKF Granular ballistic visual lanes',
+    layout: 'auto',
+    vertex: { module: shader, entryPoint: 'lane_vertex' },
+    fragment: {
+      module: shader,
+      entryPoint: 'lane_fragment',
+      targets: [{
+        format: GRANULAR_FIELD_FORMAT_GPU,
+        blend: {
+          color: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+          alpha: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+        },
+      }],
+    },
+    primitive: { topology: 'triangle-strip' },
+  });
   const compositePipeline = await createCheckedGpuPipeline(device,'render',{
     label: 'VKF Granular continuous material composite',
     layout: 'auto',
@@ -747,6 +842,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
   let densityTexture = null;
   let densityView = null;
   let densityBindGroup = null;
+  let laneBindGroup = null;
   let compositeBindGroup = null;
   let particleBindGroup = null;
   let lastVisualTime = null;
@@ -788,6 +884,14 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
         { binding: 1, resource: { buffer: paramsBuffer } },
       ],
     });
+    laneBindGroup = device.createBindGroup({
+      label: 'VKF Granular lane bindings',
+      layout: lanePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: storageBinding },
+        { binding: 1, resource: { buffer: paramsBuffer } },
+      ],
+    });
     compositeBindGroup = device.createBindGroup({
       label: 'VKF Granular material composite bindings',
       layout: compositePipeline.getBindGroupLayout(0),
@@ -803,10 +907,22 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
   };
 
   let wetness = 0;
+  let laneCount = 2;
+  let laneSpreadDegrees = 12;
   const setWetness = value => {
     if (!Number.isFinite(value) || value < 0 || value > 1)
       throw new RangeError('Sand wetness must be between zero and one');
     wetness = value;
+  };
+  const setLaneCount = value => {
+    if (!Number.isInteger(value) || value < 1 || value > 3)
+      throw new RangeError('Sand lane count must be one through three');
+    laneCount = value;
+  };
+  const setLaneSpread = value => {
+    if (!Number.isFinite(value) || value < 0 || value > 30)
+      throw new RangeError('Sand lane spread must be zero through thirty degrees');
+    laneSpreadDegrees = value;
   };
   const updateParams = (mode, time, deltaTime, wheelAngle) => {
     const { policy } = worldRuntime;
@@ -832,12 +948,13 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     values.set(colors.sand, 28);
     values.set(colors.particles, 32);
     values.set([...lightDirection, lightIntensity], 36);
-    values.set([deltaTime, policy.grainRadius, 0, wetness], 40);
+    values.set([deltaTime, policy.grainRadius,
+      laneSpreadDegrees * Math.PI / 180, wetness], 40);
     const wheel = worldRuntime.wheel;
     values.set([wheel.center[0], wheel.center[1], wheel.radius,
       wheel.barHalfWidth], 44);
     const segments = wheel.segments ?? [];
-    values.set([wheelAngle, segments.length, policy.gravity[1], 0], 48);
+    values.set([wheelAngle, segments.length, policy.gravity[1], laneCount], 48);
     device.queue.writeBuffer(paramsBuffer, 0, values);
   };
 
@@ -872,6 +989,9 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       densityPass.setPipeline(densityPipeline);
       densityPass.setBindGroup(0, densityBindGroup);
       densityPass.draw(4, particleCount);
+      densityPass.setPipeline(lanePipeline);
+      densityPass.setBindGroup(0, laneBindGroup);
+      densityPass.draw(4, particleCount * 9);
       densityPass.end();
       lastVisualTime = renderTime;
     }
@@ -917,7 +1037,11 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     resize,
     setColors,
     setWetness,
+    setLaneCount,
+    setLaneSpread,
     destroy,
+    get laneCount() { return laneCount; },
+    get laneSpreadDegrees() { return laneSpreadDegrees; },
     get width() { return width; },
     get height() { return height; },
   });

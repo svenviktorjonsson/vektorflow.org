@@ -222,7 +222,7 @@ fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
   let grain = grains[particle_index];
   let lane_count = 2u + mix_u32(grain.id ^ 0x51a7d39bu) % 3u;
   let speed = length(grain.velocity);
-  let active = lane_index < lane_count
+  let lane_enabled = lane_index < lane_count
     && grain.contact_count == 0u && speed > 0.25;
   let seed = grain.id ^ (lane_index * 0x9e3779b9u);
   let lateral = vec2<f32>(-grain.velocity.y, grain.velocity.x)
@@ -248,11 +248,11 @@ fn lane_vertex(@builtin(vertex_index) vertex_index: u32,
   // Inactive lanes clip before rasterization, so resting beds only pay the
   // vertex cost rather than shading thousands of invisible trail fragments.
   output.position = vec4<f32>(select(vec2<f32>(2.0),
-    world_to_clip(position), active), 0.0, 1.0);
+    world_to_clip(position), lane_enabled), 0.0, 1.0);
   output.local = local;
   output.velocity = grain.velocity;
   output.contact_count = 0.0;
-  output.freefall = select(0.0, 1.0, active);
+  output.freefall = select(0.0, 1.0, lane_enabled);
   output.age_fraction = mix(age0, age1, along) / duration;
   output.seed = seed;
   return output;

@@ -6,9 +6,9 @@
       "directory": "wheel-performance-27",
       "runtime_directory": "runtime-wheel-27",
       "runtime": {
-        "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
+        "vf-world-layer-runtime.js": "447570e69a2aa959cb4c380cd5fdf6f2b84e1ff4bf402f1fabc2d3a0a70cc66a",
         "vf-compiled-runtime-bridge.js": "7282c34cbfe4387a5472a3586168c8aa1ec5aad1e28ecf4083527263f26b8c3a",
-        "vf-world-material-runtime.mjs": "226e72cf1ab16ceae5ad83101044e0d473ad25cbcdd8dfa5752e9bc437d7466a",
+        "vf-world-material-runtime.mjs": "1a6c6ef2c291057a8eb7108d2912976722e0c7563380d79b3b545003ba8f2046",
         "vf-liquid-contained-world-gpu.mjs": "205319bf8c80e53d788535cc0e8cbd0b512e01bcb52ee01ed958f1e2f2fe2338",
         "vf-gpu-pipeline-errors.mjs": "74f4cb1c62e433812cab8f9c39e69493814aba03388d2ec5fe3fe6f94a6ec84f",
         "vf-physics-liquid-local-particle-reference.mjs": "f8d351846e0cddf5bc5a0af5a2e9fbe9138b0355aae506062edcb36dc79c5587",
@@ -32,7 +32,7 @@
         "vf-physics-granular-core-reference.mjs": "c1885a7e1841d7ddba8aa680c2b0f8b8387ea2d0a2b21542b34b3dcb710067ca",
         "vf-physics-regime-verifier-reference.mjs": "68f0e7abed6d82342c9fddb1c7afe223b2bc6c7267c6c89a7d99094e49d08a3a",
         "vf-liquid-particle-embedding-gpu.mjs": "26866cf06c12416ec45e559fef6a3275d68366ea4490ff146c79a21f95a4bb9c",
-        "vf-granular-particle-embedding-gpu.mjs": "af8cd7858b907b7e567270e3d7b9349a7b728ee162a2bb4b442e8259e015e250",
+        "vf-granular-particle-embedding-gpu.mjs": "e588c6ac611be55cffa070bdaa545bd6d93f5ff343ac3c225416e67608705b17",
         "vf-contained-boundary-embedding-gpu.mjs": "d5c4ada399c3fd52b19512e116fe667ff6158e4d71be25605aec9b3d02efb19f",
         "vf-retained-world-loader.mjs": "69a60830cd488766d123bcb2c8b6faf7418012220a92e58cec29e0a4bf164d66",
         "vf-granular-formation-seed.mjs": "f902708eb5b918674f18a3d74012ca1893adc929543e4cac169ffcbde5ce5325"
