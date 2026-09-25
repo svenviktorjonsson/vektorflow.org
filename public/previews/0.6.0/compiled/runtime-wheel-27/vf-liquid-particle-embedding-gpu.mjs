@@ -189,6 +189,15 @@ fn field_at(uv: vec2<f32>) -> vec4<f32> {
     clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
 }
 
+fn sand_pixel_noise(cell: vec2<f32>) -> f32 {
+  let x = u32(i32(cell.x));
+  let y = u32(i32(cell.y));
+  var seed = (x * 0x9e3779b9u) ^ (y * 0x85ebca6bu);
+  seed = (seed ^ (seed >> 16u)) * 0x7feb352du;
+  seed = (seed ^ (seed >> 15u)) * 0x846ca68bu;
+  return f32(seed ^ (seed >> 16u)) / 4294967295.0;
+}
+
 @fragment
 fn background_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let screen_uv = input.position.xy / params.canvas.xy;
@@ -220,6 +229,17 @@ fn composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
     params.fluid.z + edge_width, field.x);
   if (coverage <= 0.001) { return vec4<f32>(color, 1.0); }
   if (wheel_solid_at(world)) { return vec4<f32>(color, 1.0); }
+
+  // Comparison mode deliberately shares the liquid solver and its smooth
+  // reconstructed surface, but has no water refraction, foam or highlights.
+  if (params.wheel_pose.w > 0.5) {
+    let mineral = sand_pixel_noise(floor(world * 680.0));
+    let bright = sand_pixel_noise(floor(world * 1130.0));
+    var sand = params.water_color.rgb * (0.87 + 0.22 * mineral);
+    sand += vec3<f32>(0.12, 0.11, 0.09)
+      * smoothstep(0.988, 0.999, bright);
+    return vec4<f32>(mix(color, sand, coverage), 1.0);
+  }
 
   let gradient = vec2<f32>(
     field_at(screen_uv + vec2<f32>(texel.x, 0.0)).x
@@ -565,7 +585,7 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
     else viewWidth = viewHeight * canvasAspect;
     values.set([centerX - viewWidth * 0.5, centerY - viewHeight * 0.5,
       centerX + viewWidth * 0.5, centerY + viewHeight * 0.5], 0);
-    values.set([width, height, time, mode === 'fluid' ? 1 : 0], 4);
+    values.set([width, height, time, mode === 'particles' ? 0 : 1], 4);
     values.set([policy.particleSpacing, worldRuntime.seed.supportRadius,
       Number.isFinite(options.isoThreshold) ? options.isoThreshold : 1.32,
       Number.isFinite(options.refractionScale) ? options.refractionScale : 0.0055], 8);
@@ -585,7 +605,8 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
       const segments = wheel.segments ?? [];
       values.set([wheel.center[0], wheel.center[1], wheel.radius,
         wheel.half_width ?? worldRuntime.wheel?.barHalfWidth ?? 0.012], 44);
-      values.set([wheelAngle, Math.min(segments.length, 7), 1, 0], 48);
+      values.set([wheelAngle, Math.min(segments.length, 7), 1,
+        mode === 'sand' ? 1 : 0], 48);
       for (let index = 0; index < Math.min(segments.length, 7); index++) {
         values.set(segments[index], 52 + index * 4);
       }
@@ -609,8 +630,8 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
     if (!encoder || typeof encoder.beginRenderPass !== 'function') {
       throw new TypeError('WebGPU command encoder required for Liquid embedding render');
     }
-    if (mode !== 'fluid' && mode !== 'particles') {
-      throw new RangeError('Liquid embedding mode must be fluid or particles');
+    if (mode !== 'fluid' && mode !== 'particles' && mode !== 'sand') {
+      throw new RangeError('Liquid embedding mode must be fluid, sand, or particles');
     }
     resize();
     updateParams(time, mode, wheelAngle);
@@ -652,7 +673,7 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
       scenePass.setPipeline(primaryPipeline);
       scenePass.setBindGroup(0, primaryBindGroup);
       scenePass.draw(4, worldRuntime.primaryCount);
-    } else {
+    } else if (mode === 'fluid') {
       scenePass.setPipeline(diffusePipeline);
       scenePass.setBindGroup(0, diffuseBindGroup);
       scenePass.draw(4, worldRuntime.diffuseCapacity);

@@ -1402,6 +1402,7 @@ export const LIQUID_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   divergenceTolerance: 0.4,
   densityTolerance: 0.001,
   viscosity: 1.8,
+  friction: 0,
   jacobiRelaxation: 1,
   bulkModulus: 2.2e9,
   gravity: Object.freeze([0, -9.82]),
@@ -1428,6 +1429,92 @@ export const LIQUID_PARTICLE_WORLD_GPU_POLICY = Object.freeze({
   diffuseCapacity: 1024,
   diffuseEmissionRate: 18,
 });
+
+// Optional dry-contact Law for the fluid-transport comparison. Pressure
+// projection supplies a normal impulse; only that impulse may support
+// tangential friction. In free flight lambda is zero, so no artificial
+// cohesion, clumping or velocity drag is introduced.
+const pressureFrictionWgsl = coefficient => /* wgsl */`
+const PRESSURE_FRICTION: f32 = ${Math.fround(coefficient).toExponential(8)};
+
+fn pressure_friction_candidate_body(index: u32) {
+  if (index >= params.counts.x) { return; }
+  let position = particles[index].position;
+  let velocity = particles[index].velocity;
+  let center_cell = cell_coordinate(position);
+  var change = vec2<f32>(0.0);
+  for (var dy = -1; dy <= 1; dy = dy + 1) {
+    for (var dx = -1; dx <= 1; dx = dx + 1) {
+      let cell = center_cell + vec2<i32>(dx, dy);
+      if (!valid_cell(cell)) { continue; }
+      let bucket = cell_index(cell);
+      let count = min(atomicLoad(&cell_counts[bucket]), params.counts.w);
+      for (var slot = 0u; slot < count; slot = slot + 1u) {
+        let other = atomicLoad(&cell_items[bucket * params.counts.w + slot]);
+        if (other >= params.counts.x || other == index) { continue; }
+        if (!particle_occupies_cell(other, cell)) { continue; }
+        let separation = position - particles[other].position;
+        let kernel = sample_particle_kernel(separation, index, other);
+        if (kernel.supported == 0u) { continue; }
+        let distance = length(separation);
+        if (distance < 1.0e-6) { continue; }
+        let normal = separation / distance;
+        let relative = velocity - particles[other].velocity;
+        let tangential = relative - normal * dot(relative, normal);
+        let speed = length(tangential);
+        if (speed < 1.0e-7) { continue; }
+        // The DFSPH lambda is the normal pressure impulse in this step.
+        // Symmetric pair impulses cancel in total linear momentum.
+        let normal_speed = max(0.0, -particles[index].lambda
+          - particles[other].lambda) * length(kernel.gradient)
+          * params.force.z / max(params.material.x * params.fluid.w, 1.0e-12);
+        let slip = min(0.5 * speed, PRESSURE_FRICTION * normal_speed);
+        change = change - tangential * (slip / speed);
+      }
+    }
+  }
+  // A rigid wall can supply normal load even if no particle pair is nearby.
+  // Its Coulomb limit is based on gravity into the wall, not a global drag.
+  let offset = position - params.terrain.zw;
+  let radius = length(offset);
+  let gap = WHEEL_RADIUS - params.fluid.y * 0.46 - WHEEL_BAR_HALF_WIDTH - radius;
+  if (radius > 1.0e-6 && gap < params.fluid.z * 0.45) {
+    let outward = offset / radius;
+    let tangent = vec2<f32>(-outward.y, outward.x);
+    let wall_velocity = params.terrain.y * radius;
+    let relative_tangent = dot(velocity + change, tangent) - wall_velocity;
+    let normal_support = max(0.0, dot(params.force.xy, outward))
+      * params.fluid.x * clamp(1.0 - max(0.0, gap)
+        / (params.fluid.z * 0.45), 0.0, 1.0);
+    change = change - tangent * sign(relative_tangent)
+      * min(abs(relative_tangent), PRESSURE_FRICTION * normal_support);
+  }
+  particles[index].scratch_velocity = velocity + change;
+}
+
+fn pressure_friction_apply_body(index: u32) {
+  if (index >= params.counts.x) { return; }
+  particles[index].velocity = particles[index].scratch_velocity;
+  particles[index].scratch_velocity = vec2<f32>(0.0);
+}
+
+@compute @workgroup_size(128) fn pressure_friction_candidate(
+  @builtin(global_invocation_id) gid: vec3<u32>) {
+  pressure_friction_candidate_body(gid.x);
+}
+@compute @workgroup_size(128) fn pressure_friction_apply(
+  @builtin(global_invocation_id) gid: vec3<u32>) {
+  pressure_friction_apply_body(gid.x);
+}
+@compute @workgroup_size(128) fn preventive_pressure_friction_candidate(
+  @builtin(global_invocation_id) gid: vec3<u32>) {
+  if (motion_force_ready()) { pressure_friction_candidate_body(gid.x); }
+}
+@compute @workgroup_size(128) fn preventive_pressure_friction_apply(
+  @builtin(global_invocation_id) gid: vec3<u32>) {
+  if (motion_force_ready()) { pressure_friction_apply_body(gid.x); }
+}
+`;
 
 function normalizePolicy(overrides = {}) {
   if (overrides === null || typeof overrides !== 'object' || Array.isArray(overrides)) {
@@ -1482,7 +1569,7 @@ function normalizePolicy(overrides = {}) {
   if (policy.supportScale < 2 || policy.supportScale > 4) {
     throw new RangeError('Liquid particle world supportScale must be from two through four');
   }
-  for (const name of ['divergenceTolerance', 'densityTolerance', 'viscosity',
+  for (const name of ['divergenceTolerance', 'densityTolerance', 'viscosity', 'friction',
     'stoneHeight', 'initialSpeed']) {
     if (!finiteF32(policy[name]) || Math.fround(policy[name]) < 0) {
       throw new RangeError(`Liquid particle world ${name} must be nonnegative`);
@@ -1543,6 +1630,9 @@ function normalizePolicy(overrides = {}) {
   }
   if (policy.maximumParticlesPerCell > 256) {
     throw new RangeError('Liquid maximumParticlesPerCell must be at most 256');
+  }
+  if (policy.friction > 2) {
+    throw new RangeError('Liquid particle world friction must be at most two');
   }
   const minimumSeedX = policy.seedMaximumX
     - (policy.columns - 1) * policy.particleSpacing;
@@ -1900,7 +1990,8 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     LIQUID_PARTICLE_WORLD_GPU_ABI.parameterBytes, GPUBufferUsage.UNIFORM | copyDst);
   const shader = device.createShaderModule({
     label: 'VKF 2D Liquid particle world GPU specialization',
-    code: options.shaderSource ?? (LIQUID_PARTICLE_WORLD_GPU_WGSL + SWEPT_WHEEL_CONTACT_WGSL + PREVENTIVE_PARTICLE_CONTACT_WGSL + LIQUID_PRESSURE_GEOMETRY_CACHE_WGSL),
+    code: (options.shaderSource ?? (LIQUID_PARTICLE_WORLD_GPU_WGSL + SWEPT_WHEEL_CONTACT_WGSL + PREVENTIVE_PARTICLE_CONTACT_WGSL + LIQUID_PRESSURE_GEOMETRY_CACHE_WGSL))
+      + (policy.friction > 0 ? pressureFrictionWgsl(policy.friction) : ''),
   });
   if (typeof shader.getCompilationInfo === 'function') {
     const compilation = await shader.getCompilationInfo();
@@ -1929,6 +2020,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     'density_lambda', 'apply_pressure', 'classify_and_filter',
     'apply_filter', 'update_compressibility', 'update_compressibility_and_advect',
     'update_diffuse_and_render', 'sweep_wheel'];
+  if (policy.friction > 0) entryPoints.push('pressure_friction_candidate', 'pressure_friction_apply');
   if (typeof device.pushErrorScope === 'function') device.pushErrorScope('validation');
   let pipelineEntries;
   try {
@@ -1948,7 +2040,9 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
   if(options.preventiveContact){
     const r=options.preventiveContact;
     const guardedLayout=device.createPipelineLayout({bindGroupLayouts:[layout,r.emptyLayout,r.forceLayout]});
-    await Promise.all(['predict','divergence_lambda','density_lambda','apply_pressure','classify_and_filter','apply_filter','update_compressibility','audit_predicted'].map(async name=>{
+    const guardedNames=['predict','divergence_lambda','density_lambda','apply_pressure','classify_and_filter','apply_filter','update_compressibility','audit_predicted'];
+    if(policy.friction>0)guardedNames.push('pressure_friction_candidate','pressure_friction_apply');
+    await Promise.all(guardedNames.map(async name=>{
       preventivePipelines[name]=await createCheckedGpuPipeline(device,'compute',{label:'VKF liquid guarded forces',layout:guardedLayout,compute:{module:shader,entryPoint:`preventive_${name}`}});
     }));
     if(options.forceGeometryCaching){
@@ -2058,6 +2152,10 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     }
     dispatch(pass, 'update_compressibility_and_advect', seed.count);
     buildGrid(pass);
+    if (policy.friction > 0) {
+      dispatch(pass, 'pressure_friction_candidate', seed.count);
+      dispatch(pass, 'pressure_friction_apply', seed.count);
+    }
   };
   const stepMany = (encoder, count, timeStep = policy.timeStep) => {
     if (!Number.isSafeInteger(count) || count < 0) {
@@ -2143,6 +2241,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     for(let i=0;i<policy.densityIterations;i++){pressure('density_lambda');pressure('apply_pressure');}
     pass.setBindGroup(0,bindGroup);pass.setBindGroup(2,r.forceGroup);
     run('update_compressibility');
+    if(policy.friction>0){run('pressure_friction_candidate');run('pressure_friction_apply');}
     run('audit_predicted');
     pass.end();
   };

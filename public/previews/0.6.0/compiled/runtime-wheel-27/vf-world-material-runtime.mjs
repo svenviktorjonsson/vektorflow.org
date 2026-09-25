@@ -3,8 +3,8 @@ import { normalizeLiquidContainedWorldPolicy, createLiquidParticleWorldGpuRuntim
 import { calibrateUniformLocalLiquidParticleMassReference } from './vf-physics-liquid-local-particle-reference.mjs';
 import { normalizeGranularParticleWorldGpuPolicy, createGranularParticleWorldGpuRuntime }
   from './vf-granular-particle-world-gpu.mjs';
-import { createLiquidParticleEmbeddingGpu } from './vf-liquid-particle-embedding-gpu.mjs';
-import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=sand-transport-4';
+import { createLiquidParticleEmbeddingGpu } from './vf-liquid-particle-embedding-gpu.mjs?v=sand-fluid-friction-1';
+import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=sand-fluid-friction-1';
 import { createWheelEmbeddingGpu } from './vf-contained-boundary-embedding-gpu.mjs';
 import { PREVENTIVE_PARTICLE_CONTACT_WGSL, createPreventiveContactResources,
   createPreventiveParticleContactGpu } from './vf-preventive-particle-contact-gpu.mjs';
@@ -15,12 +15,14 @@ import {granularFormationSeed} from './vf-granular-formation-seed.mjs';
 // Arena/GPU adapter only: authored data, properties, laws and shader
 // specializations come from the compiler. No host material integration.
 export function materialInitialState(world, arena, grainRadiusOverride,
-  formation='bed') {
+  formation='bed', liquidViscosityOverride, liquidFrictionOverride) {
   const p=world.properties;
-  const sandSeed=world.kind==='granular'
-    &&(grainRadiusOverride!==undefined||formation!=='bed')
-    ?granularFormationSeed(grainRadiusOverride??p.radius??0.004,
-      arena.layer.count*Math.PI*(p.radius??0.004)**2,
+  const liquidPile=world.kind==='liquid'&&formation==='dropcastle';
+  const seedRadius=liquidPile?(p.spacing??0.009)*0.5:grainRadiusOverride??p.radius??0.004;
+  const sandSeed=(world.kind==='granular'
+    &&(grainRadiusOverride!==undefined||formation!=='bed'))||liquidPile
+    ?granularFormationSeed(seedRadius,
+      arena.layer.count*Math.PI*(liquidPile?seedRadius:p.radius??0.004)**2,
       world.geometry,formation):null;
   const count=sandSeed?.positions.length??arena.layer.count;
   const liquid=world.kind==='liquid', stride=liquid?12:8;
@@ -41,7 +43,9 @@ export function materialInitialState(world, arena, grainRadiusOverride,
     const policy=normalizeLiquidContainedWorldPolicy({...bounds,columns:1,rows:1,
       seedMaximumX:c[0],seedMinimumY:c[1]-r*0.7,bedAtStone:c[1]-r*1.3,
       particleSpacing:p.spacing??0.009,restDensity:p.density??1000,
-      viscosity:p.viscosity??1.8,timeStep:world.time_step,gravity:world.gravity,
+      viscosity:liquidViscosityOverride??p.viscosity??1.8,
+      friction:liquidFrictionOverride??0,
+      timeStep:world.time_step,gravity:world.gravity,
       densityIterations:20,maximumParticlesPerCell:192,
       diffuseCapacity:Math.max(count,256)});
     const supportRadius=policy.particleSpacing*policy.supportScale;
@@ -67,7 +71,8 @@ export function materialInitialState(world, arena, grainRadiusOverride,
 export async function createMaterialWorld(device,canvas,compiled,world,arena,engineeringOptions={}) {
   const prefix=world.binding_prefix??`$world$gpu$${world.world_id}`;
   const initialState=materialInitialState(world,arena,
-    engineeringOptions.grainRadius,engineeringOptions.formation);
+    engineeringOptions.grainRadius,engineeringOptions.formation,
+    engineeringOptions.liquidViscosity,engineeringOptions.liquidFriction);
   const physicsSource=compiled.readBinding(`${prefix}$physics`),boundarySource=compiled.readBinding(`${prefix}$boundary`);
   if(typeof physicsSource!=='string'||!physicsSource||typeof boundarySource!=='string'||!boundarySource)throw new Error('compiled GPU shaders are missing');
   const contactSeam=physicsSource.indexOf('struct MotionParams');
@@ -113,13 +118,17 @@ export async function createMaterialWorld(device,canvas,compiled,world,arena,eng
     embedding.setWetness(engineeringOptions.wetness??0);
     embedding.setLaneWidth(engineeringOptions.laneWidthPixels??1);
   }
+  if(engineeringOptions.visualMode==='sand')
+    embedding.setColors({water:[0.72,0.57,0.39,1]});
   engineeringOptions.onStage?.('material embedding ready');
   const boundary=await createWheelEmbeddingGpu(device,canvas,navigator.gpu.getPreferredCanvasFormat(),{
     shaderSource:boundarySource});
   physics.setWheel({angle:world.geometry.rotation,angularVelocity:0});
   if(world.kind==='granular')physics.setSweepReference(world.geometry.rotation);
   const startPaused=engineeringOptions.startPaused===true;
-  return {world,physics,embedding,boundary,contact,time:0,accumulator:0,paused:startPaused,revision:0,angle:world.geometry.rotation,targetAngle:world.geometry.rotation,logicalAngle:world.geometry.rotation,wheelRate:0,
+  return {world,physics,embedding,boundary,contact,
+    visualMode:engineeringOptions.visualMode,
+    time:0,accumulator:0,paused:startPaused,revision:0,angle:world.geometry.rotation,targetAngle:world.geometry.rotation,logicalAngle:world.geometry.rotation,wheelRate:0,
     reset(){this.revision++;physics.reset();contact.reset();embedding.reset?.();this.pausedReferenceAngle=undefined;this.published=false;this.time=0;this.accumulator=0;this.paused=startPaused;this.angle=world.geometry.rotation;this.targetAngle=this.angle;this.logicalAngle=this.angle;this.wheelRate=0;
       physics.setWheel({angle:world.geometry.rotation,angularVelocity:0});
       if(world.kind==='granular')physics.setSweepReference(world.geometry.rotation);},
@@ -220,6 +229,7 @@ export async function bootMaterialWorlds(compiled) {
   const device=await adapter.requestDevice({requiredFeatures:adapter.features.has('timestamp-query')?['timestamp-query']:[]});
   let stopped=false,visible=true,parentVisible=true,active=program.active_view,particles=program.views[program.active_view].embedding?.kind==='particles',angle=0,omega=0,drag=null,previous=null,programmaticInputTime=0,pending=false,sandFramesInFlight=0,liquidFramesInFlight=0,switching=false;
   const sandWorld=program.gpu_worlds.find(world=>world.kind==='granular');
+  const liquidWorld=program.gpu_worlds.find(world=>world.kind==='liquid');
   let sandWetness=0,sandLaneWidth=1,
     sandRadius=sandWorld?.properties.radius??0.0075,
     sandFormation='bed';
@@ -241,18 +251,22 @@ export async function bootMaterialWorlds(compiled) {
   },world=>world.layer_id);
   const applications=loader.applications;
   await loader.ensure(materialLayerId(program.views[active]));
-  const current=()=>applications.find(app=>app.world.layer_id===materialLayerId(program.views[active]));
+  let fluidSandApplication=null,comparingFluidSand=false;
+  const current=()=>comparingFluidSand?fluidSandApplication:
+    applications.find(app=>app.world.layer_id===materialLayerId(program.views[active]));
   if(!current())throw new Error('The active View has no material-law application.');
   angle=current().world.geometry.rotation;
   const button=(label,pressed,handler)=>{const b=document.createElement('button');b.textContent=label;b.setAttribute('aria-pressed',String(pressed));b.addEventListener('click',()=>handler(b));controls.append(b);return b;};
   const materialButtons=[];
+  let fluidSandButton;
   let particleButton,pauseButton,resetButton,formationButton,rainButton,
     wetnessControl,grainControl,laneWidthControl;
-  const refreshStatus=()=>{const app=current();status.textContent=`${app.world.kind==='liquid'?'Water':'Sand'} · ${app.physics.primaryCount} vertices · Ø ${(app.world.geometry.radius*2).toFixed(1)} m · ${particles?'raw particles':'material embedding'} · time ${app.time.toFixed(2)} s · wheel ${app.angle.toFixed(2)} rad${app.world.kind==='granular'?` · wet ${Math.round(sandWetness*100)}% · effective grain Ø ${(sandRadius*2000).toFixed(1)} mm`:''}`;};
+  const refreshStatus=()=>{const app=current();status.textContent=`${comparingFluidSand?'Fluid-sand test':app.world.kind==='liquid'?'Water':'Sand'} · ${app.physics.primaryCount} vertices · Ø ${(app.world.geometry.radius*2).toFixed(1)} m · ${particles?'raw particles':'material embedding'} · time ${app.time.toFixed(2)} s · wheel ${app.angle.toFixed(2)} rad${comparingFluidSand?' · liquid pressure + Coulomb friction μ=0.8, no surface tension':app.world.kind==='granular'?` · wet ${Math.round(sandWetness*100)}% · effective grain Ø ${(sandRadius*2000).toFixed(1)} mm`:''}`;};
   const refreshControls=()=>{
     const settings=program.views[active].controls??{};
     controls.setAttribute('aria-label',settings.title??'Material World controls');
-    for(const entry of materialButtons)entry.b.setAttribute('aria-pressed',String(entry.i===active));
+    for(const entry of materialButtons)entry.b.setAttribute('aria-pressed',String(entry.i===active&&!comparingFluidSand));
+    if(fluidSandButton)fluidSandButton.setAttribute('aria-pressed',String(comparingFluidSand));
     if(particleButton){particleButton.hidden=settings.particles!==true;particleButton.setAttribute('aria-pressed',String(particles));}
     if(pauseButton){pauseButton.hidden=settings.pause!==true;pauseButton.textContent=current().paused?'Play':'Pause';pauseButton.setAttribute('aria-pressed',String(current().paused));}
     if(resetButton)resetButton.hidden=settings.reset!==true;
@@ -266,13 +280,14 @@ export async function bootMaterialWorlds(compiled) {
   };
   const flip=async view=>{
     if(!Number.isInteger(view)||!program.views[view]||!layerForView(program.views[view]))throw new Error('invalid material View');
-    if(switching||view===active)return;
+    if(switching||(view===active&&!comparingFluidSand))return;
     switching=true;drag=null;omega=0;
     for(const b of controls.querySelectorAll('button'))b.disabled=true;
     try{
       if(pending||sandFramesInFlight>0||liquidFramesInFlight>0)await device.queue.onSubmittedWorkDone();
       await loader.ensure(materialLayerId(program.views[view]));
-      current().targetAngle=angle;active=view;program.active_view=view;angle=current().targetAngle;previous=null;
+      current().targetAngle=angle;comparingFluidSand=false;
+      active=view;program.active_view=view;angle=current().targetAngle;previous=null;
       particles=program.views[view].embedding?.kind==='particles';errorBox.hidden=true;refreshControls();
     }catch(error){errorBox.hidden=false;errorBox.textContent=`This World could not start: ${error.message||error}`;refreshControls();throw error;}
     finally{switching=false;previous=null;for(const b of controls.querySelectorAll('button'))b.disabled=false;}
@@ -284,6 +299,33 @@ export async function bootMaterialWorlds(compiled) {
       flip(i).catch(error=>console.error('VKF View startup',error));
     })});
   }
+  fluidSandButton=button('Fluid-sand test',false,async()=>{
+    if(switching||comparingFluidSand)return;
+    switching=true;drag=null;omega=0;
+    for(const element of controls.querySelectorAll('button,input'))element.disabled=true;
+    try{
+      if(pending||sandFramesInFlight>0||liquidFramesInFlight>0)
+        await device.queue.onSubmittedWorkDone();
+      if(!fluidSandApplication){
+        const arena=arenas.find(item=>item.layer.id===liquidWorld.layer_id);
+        fluidSandApplication=await createMaterialWorld(device,canvas,compiled,
+          liquidWorld,arena,{startPaused:true,formation:'dropcastle',liquidViscosity:3.6,liquidFriction:0.8,
+            visualMode:'sand',onStage:stage=>{
+              status.textContent=`Fluid-sand test: ${stage}…`;}});
+        applications.push(fluidSandApplication);
+      }
+      current().targetAngle=angle;
+      comparingFluidSand=true;
+      active=program.views.findIndex(view=>view.world_id===liquidWorld.world_id);
+      program.active_view=active;
+      angle=fluidSandApplication.targetAngle;
+      particles=false;previous=null;errorBox.hidden=true;refreshControls();
+    }catch(error){errorBox.hidden=false;
+      errorBox.textContent=`Fluid-sand test could not start: ${error.message||error}`;
+      refreshControls();}
+    finally{switching=false;previous=null;
+      for(const element of controls.querySelectorAll('button,input'))element.disabled=false;}
+  });
   particleButton=button('Particles',particles,()=>{particles=!particles;refreshControls();});
   pauseButton=button('Pause',false,()=>{const app=current();app.paused=!app.paused;app.pausedReferenceAngle=undefined;
     if(!app.paused&&app.world.kind==='granular')app.physics.setSweepReference(app.angle);
@@ -391,7 +433,7 @@ export async function bootMaterialWorlds(compiled) {
       const encoder=device.createCommandEncoder({label:'VKF authored material World frame'});
       const updated=app.advance(encoder,elapsed,angle,omega);
       if(!updated){
-        app.embedding.render(encoder,{time:app.time,wheelAngle:app.angle,mode:particles?'particles':app.world.kind==='liquid'?'fluid':'sand'});
+        app.embedding.render(encoder,{time:app.time,wheelAngle:app.angle,mode:particles?'particles':app.visualMode??(app.world.kind==='liquid'?'fluid':'sand')});
         app.boundary.render(encoder,canvas.getContext('webgpu').getCurrentTexture().createView(),app.physics.policy,app.physics.wheel,app.angle);
         device.queue.submit([encoder.finish()]);
         if(app.world.kind==='granular')sandFramesInFlight++;else liquidFramesInFlight++;
@@ -415,7 +457,7 @@ export async function bootMaterialWorlds(compiled) {
         refreshStatus();
         if(app!==current()){pending=false;return;}
         const display=device.createCommandEncoder({label:'VKF certified material World embedding'});
-        app.embedding.render(display,{time:app.time,wheelAngle:app.angle,mode:particles?'particles':app.world.kind==='liquid'?'fluid':'sand'});
+        app.embedding.render(display,{time:app.time,wheelAngle:app.angle,mode:particles?'particles':app.visualMode??(app.world.kind==='liquid'?'fluid':'sand')});
         app.boundary.render(display,canvas.getContext('webgpu').getCurrentTexture().createView(),app.physics.policy,app.physics.wheel,app.angle);
         device.queue.submit([display.finish()]);return device.queue.onSubmittedWorkDone().then(()=>{pending=false;canvas.dataset.presentedFrames=String(Number(canvas.dataset.presentedFrames||0)+1);});
       }).catch(error=>{pending=false;if(revision!==app.revision)return;fail(error);});
