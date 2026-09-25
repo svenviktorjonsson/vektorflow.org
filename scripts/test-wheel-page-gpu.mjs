@@ -159,7 +159,7 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
  };
 }
 const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.argv.includes('--water-wall-spin')},realtimeSpinLong=${process.argv.includes('--water-realtime-spin-long')},realtimeSpin=${process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadySpin=${process.argv.includes('--water-steady-spin')||process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadyOmega=${process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')?6:2},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisualLong=${process.argv.includes('--sand-visual-long')},sandVisual=${process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')},sandStaticImageSettled=${process.argv.includes('--sand-static-image-settled')},sandStaticImage=${process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},sandGpuProfileFalling=${process.argv.includes('--sand-gpu-profile-falling')},sandLaneControls=${process.argv.includes('--sand-lane-controls')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')||process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')||process.argv.includes('--sand-gpu-profile-falling')||process.argv.includes('--sand-lane-controls')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,dragReachedMs,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],steadySpinSamples=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial,sandVisualInitialIds;
-const waterTurnSamples=[];let steadySpinStartTime,steadySpinStartAngle,steadySpinStartMs;
+  const waterTurnSamples=[],sandAreaSamples=[];let steadySpinStartTime,steadySpinStartAngle,steadySpinStartMs;
 let browserRafFrames=0;
 function countBrowserRaf(){browserRafFrames++;requestAnimationFrame(countBrowserRaf);}
 requestAnimationFrame(countBrowserRaf);
@@ -273,21 +273,23 @@ async function inspect(){
    const spread=document.querySelector('input[aria-label="Spread"]');
    if(!lanes||!spread)throw Error('Sand lane appearance sliders missing');
    const before={count:current.embedding.laneCount,spread:current.embedding.laneSpreadDegrees};
-   lanes.value='1';lanes.dispatchEvent(new Event('input',{bubbles:true}));
+   lanes.value='2';lanes.dispatchEvent(new Event('input',{bubbles:true}));
    spread.value='0';spread.dispatchEvent(new Event('input',{bubbles:true}));
    const minimum={count:current.embedding.laneCount,spread:current.embedding.laneSpreadDegrees};
-   lanes.value='3';lanes.dispatchEvent(new Event('input',{bubbles:true}));
+   lanes.value='4';lanes.dispatchEvent(new Event('input',{bubbles:true}));
    spread.value='30';spread.dispatchEvent(new Event('input',{bubbles:true}));
    const after={count:current.embedding.laneCount,spread:current.embedding.laneSpreadDegrees};
    const encoder=auditDevice.createCommandEncoder();
    current.embedding.render(encoder,{mode:'sand',time:current.time,wheelAngle:current.angle});
    auditDevice.queue.submit([encoder.finish()]);await auditDevice.queue.onSubmittedWorkDone();
-   const passed=before.count===2&&before.spread===12
-    &&minimum.count===1&&minimum.spread===0
-    &&after.count===3&&after.spread===30
-    &&lanes.parentElement.querySelector('output')?.value==='3'
-    &&spread.parentElement.querySelector('output')?.value==='30°';
-   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,before,minimum,after,...state,error:passed?undefined:'Sand lane sliders did not update the live GPU embedding'})});return;
+   const area=await current.embedding.readFieldArea();
+   const passed=before.count===3&&before.spread===12
+    &&minimum.count===2&&minimum.spread===0
+    &&after.count===4&&after.spread===30
+    &&lanes.parentElement.querySelector('output')?.value==='4'
+    &&spread.parentElement.querySelector('output')?.value==='30°'
+    &&Math.abs(area.retainedFraction-1)<.01;
+   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,before,minimum,after,area,...state,error:passed?undefined:'Sand lane controls or rested field area failed'})});return;
   }
   if(sandStaticImage){
    if(sandStaticImageSettled){
@@ -313,8 +315,11 @@ async function inspect(){
    }
    if(formation?.textContent!=='Level bed'){setTimeout(inspect,250);return;}
    if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Dropcastle did not start paused');sandFormationInitial=await checkExclusion(current,{assert:false});sandPlayed=true;play.click();}
+   if(sandVisual)for(const mark of [0.2,0.5,1,2,5,10])if(state.time>=mark&&!sandAreaSamples.some(sample=>sample.mark===mark))
+    sandAreaSamples.push({mark,time:state.time,...await current.embedding.readFieldArea()});
    if(sandVisual&&state.time>=(sandVisualLong?10:.3)){
    const visual=await checkSandVisualMotion(current);
+    const area=await current.embedding.readFieldArea();
     const shape=sandVisualLong?await checkExclusion(current,{assert:false}):null;
     await fetch('/page-screenshot',{method:'POST',body:app.canvas.toDataURL('image/png')});
     if(sandVisualLong){
@@ -323,10 +328,17 @@ async function inspect(){
      await new Promise(resolve=>setTimeout(resolve,100));
      await fetch('/page-screenshot?name=sand-particles',{method:'POST',body:app.canvas.toDataURL('image/png')});
     }
-    const passed=sandVisualLong?visual.freefallGuides<=5
+    const firstArea=sandAreaSamples[0];
+    const transported=sandVisualLong?firstArea?.flowing>.01
+     &&area.flowing<.001
+     &&area.total-area.flowing>firstArea.total-firstArea.flowing:true;
+    const passed=(sandVisualLong?visual.freefallGuides<=5
      &&shape.diskAreaFraction>=.995&&shape.boundaryGap>=-1e-5
-     &&shape.maximumSpeed<.15:visual.freefallGuides>=5;
-    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,visual,shape,...state,error:passed?undefined:'Sand field formation or rest conservation failed'})});return;
+     &&shape.maximumSpeed<.15:visual.freefallGuides>=5)
+     &&Math.abs(area.retainedFraction-1)<.01
+     &&sandAreaSamples.every(sample=>Math.abs(sample.retainedFraction-1)<.01)
+     &&transported;
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,visual,shape,area,sandAreaSamples,transported,...state,error:passed?undefined:'Sand field formation or area transport failed'})});return;
    }
    if(sandGpuProfileFalling&&state.time>=.4){
     const physics=await measurePhysicsSteps(current),embedding=await measureEmbedding(current,app),visual=await checkSandVisualMotion(current);

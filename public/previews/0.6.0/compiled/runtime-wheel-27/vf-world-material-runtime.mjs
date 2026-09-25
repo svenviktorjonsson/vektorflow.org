@@ -4,7 +4,7 @@ import { calibrateUniformLocalLiquidParticleMassReference } from './vf-physics-l
 import { normalizeGranularParticleWorldGpuPolicy, createGranularParticleWorldGpuRuntime }
   from './vf-granular-particle-world-gpu.mjs';
 import { createLiquidParticleEmbeddingGpu } from './vf-liquid-particle-embedding-gpu.mjs';
-import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=sand-lanes-3';
+import { createGranularParticleEmbeddingGpu } from './vf-granular-particle-embedding-gpu.mjs?v=sand-transport-2';
 import { createWheelEmbeddingGpu } from './vf-contained-boundary-embedding-gpu.mjs';
 import { PREVENTIVE_PARTICLE_CONTACT_WGSL, createPreventiveContactResources,
   createPreventiveParticleContactGpu } from './vf-preventive-particle-contact-gpu.mjs';
@@ -111,7 +111,7 @@ export async function createMaterialWorld(device,canvas,compiled,world,arena,eng
   if(world.kind==='granular'){
     physics.setWetness(engineeringOptions.wetness??0);
     embedding.setWetness(engineeringOptions.wetness??0);
-    embedding.setLaneCount(engineeringOptions.laneCount??2);
+    embedding.setLaneCount(engineeringOptions.laneCount??3);
     embedding.setLaneSpread(engineeringOptions.laneSpreadDegrees??12);
   }
   engineeringOptions.onStage?.('material embedding ready');
@@ -221,7 +221,7 @@ export async function bootMaterialWorlds(compiled) {
   const device=await adapter.requestDevice({requiredFeatures:adapter.features.has('timestamp-query')?['timestamp-query']:[]});
   let stopped=false,visible=true,parentVisible=true,active=program.active_view,particles=program.views[program.active_view].embedding?.kind==='particles',angle=0,omega=0,drag=null,previous=null,programmaticInputTime=0,pending=false,sandFramesInFlight=0,liquidFramesInFlight=0,switching=false;
   const sandWorld=program.gpu_worlds.find(world=>world.kind==='granular');
-  let sandWetness=0,sandLaneCount=2,sandLaneSpread=12,
+  let sandWetness=0,sandLaneCount=3,sandLaneSpread=12,
     sandRadius=sandWorld?.properties.radius??0.0075,
     sandFormation='bed';
   const fail=error=>{stopped=true;errorBox.hidden=false;errorBox.textContent=gpuErrorMessage(error,'Material World stopped');console.error(error);};
@@ -356,7 +356,7 @@ export async function bootMaterialWorlds(compiled) {
       grainSlider.output.value=`${(sandRadius*2000).toFixed(0)} mm`;
     }
   });
-  const laneCountSlider=slider('Lanes',1,3,1,sandLaneCount,value=>String(value));
+  const laneCountSlider=slider('Lanes',2,4,1,sandLaneCount,value=>String(value));
   laneCountControl=laneCountSlider.label;
   laneCountSlider.input.addEventListener('input',()=>{
     sandLaneCount=Number(laneCountSlider.input.value);
