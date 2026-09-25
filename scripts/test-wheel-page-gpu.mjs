@@ -104,6 +104,28 @@ async function measureEmbedding(current,app){
  const result={embeddingGpuMs:Number(values[1]-values[0])/1e6,boundaryGpuMs:Number(values[2]-values[1])/1e6,wallMs:performance.now()-wallStart};
  query.destroy();resolved.destroy();read.destroy();return result;
 }
+async function checkSandVisualMotion(current){
+ const guides=current.embedding.particleCount,visuals=guides*8,bytes=(guides+visuals)*32;
+ const read=auditDevice.createBuffer({size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const e=auditDevice.createCommandEncoder();
+ e.copyBufferToBuffer(current.physics.particleBuffer,0,read,0,guides*32);
+ e.copyBufferToBuffer(current.embedding.visualBuffer,0,read,guides*32,visuals*32);
+ auditDevice.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);
+ const raw=read.getMappedRange().slice(0),f=new Float32Array(raw),u=new Uint32Array(raw);read.unmap();read.destroy();
+ let freefallGuides=0,downward=0,relativeSpeed=0,spread=0,observations=0;
+ for(let i=0;i<guides;i++){
+  const g=i*8,guideSpeed=Math.hypot(f[g+2],f[g+3]);
+  if(u[g+7]!==0||guideSpeed<.35)continue;
+  freefallGuides++;
+  for(let j=0;j<8;j++){
+   const v=(guides+i*8+j)*8;
+   downward+=f[v+3]<0?1:0;
+   relativeSpeed+=Math.hypot(f[v+2]-f[g+2],f[v+3]-f[g+3]);
+   spread+=Math.hypot(f[v]-f[g],f[v+1]-f[g+1]);observations++;
+  }
+ }
+ return {freefallGuides,visualSamples:observations,downwardFraction:downward/Math.max(1,observations),meanRelativeSpeed:relativeSpeed/Math.max(1,observations),meanGuideSpread:spread/Math.max(1,observations)};
+}
 const rejectCaches=${process.argv.includes('--reject-caches')};
 const legacyOverrides=${process.argv.includes('--legacy-overrides')};
 if(legacyOverrides){const create=GPUDevice.prototype.createComputePipelineAsync;
@@ -120,7 +142,7 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
   }return create.call(this,descriptor);
  };
 }
-const fastSpin=${process.argv.includes('--water-fast-spin')},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial;
+const fastSpin=${process.argv.includes('--water-fast-spin')},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisual=${process.argv.includes('--sand-visual')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial;
 const waterTurnSamples=[];
 let browserRafFrames=0;
 function countBrowserRaf(){browserRafFrames++;requestAnimationFrame(countBrowserRaf);}
@@ -206,11 +228,22 @@ async function inspect(){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
   if(sandSteps){const snapshots=[];for(let step=1;step<=16;step++){const encoder=auditDevice.createCommandEncoder();current.physics.stepMany(encoder,1);auditDevice.queue.submit([encoder.finish()]);await auditDevice.queue.onSubmittedWorkDone();if([1,2,4,8,16].includes(step))snapshots.push({step,shape:await checkExclusion(current,{assert:false}),telemetry:await current.physics.readTelemetry()});}await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,snapshots,...state})});return;}
   if(sandGpuProfile){const physics=await measurePhysicsSteps(current),embedding=await measureEmbedding(current,app),telemetry=await current.physics.readTelemetry();await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,physics,embedding,telemetry,...state})});return;}
-  if(sandDropcastle){
+  if(sandDropcastle||sandVisual){
    const formation=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Dropcastle'||b.textContent==='Level bed');
-   if(!sandFormationRequested){if(!formation||formation.textContent!=='Dropcastle')throw Error('Dropcastle control unavailable');if(sandDropcastleWet){const slider=document.querySelector('input[aria-label="Wetness"]');slider.value='33';slider.dispatchEvent(new Event('input',{bubbles:true}));}sandFormationRequested=true;formation.click();setTimeout(inspect,250);return;}
+   if(!sandFormationRequested){
+    const selection=sandVisual?[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Sandfall'):formation;
+    if(!selection||(!sandVisual&&selection.textContent!=='Dropcastle'))throw Error('Sand formation control unavailable');
+    if(sandDropcastleWet){const slider=document.querySelector('input[aria-label="Wetness"]');slider.value='33';slider.dispatchEvent(new Event('input',{bubbles:true}));}
+    sandFormationRequested=true;selection.click();setTimeout(inspect,250);return;
+   }
    if(formation?.textContent!=='Level bed'){setTimeout(inspect,250);return;}
    if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Dropcastle did not start paused');sandFormationInitial=await checkExclusion(current,{assert:false});sandPlayed=true;play.click();}
+   if(sandVisual&&state.time>=.3){
+    const visual=await checkSandVisualMotion(current);
+    await fetch('/page-screenshot',{method:'POST',body:app.canvas.toDataURL('image/png')});
+    const passed=visual.freefallGuides>=5&&visual.downwardFraction>.5&&visual.meanRelativeSpeed>.005;
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,visual,...state,error:passed?undefined:'Fine grains did not visibly advect during free fall'})});return;
+   }
    if(state.time>=10){const shape=await checkExclusion(current,{assert:false});await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:shape.diskAreaFraction>=.995&&shape.boundaryGap>=-1e-5,wetness:sandDropcastleWet?0.33:0,initial:sandFormationInitial,shape,...state})});return;}
    setTimeout(inspect,250);return;
   }
@@ -224,7 +257,7 @@ async function inspect(){
    if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Sand did not start paused');const initial=await checkExclusion(current,{assert:false});await fetch('/page-progress',{method:'POST',body:JSON.stringify({sandInitial:initial})});sandPlayed=true;sandPlayFrame=state.frames;sandPlayElapsed=state.elapsedMs;play.click();}
    if(sandSample<4&&state.time>=[.2,.5,1,2][sandSample]){const shape=await checkExclusion(current,{assert:false}),telemetry=await current.physics.readTelemetry();await fetch('/page-progress',{method:'POST',body:JSON.stringify({sandSample:sandSample++,time:state.time,shape,telemetry})});}
    if(dragTarget===undefined&&state.time>=2){const beforeDrag=await checkExclusion(current,{assert:false}),telemetry=await current.physics.readTelemetry();await fetch('/page-progress',{method:'POST',body:JSON.stringify({sandBeforeDrag:beforeDrag,sandTelemetry:telemetry})});dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
-   if(dragTarget!==undefined&&Math.abs(current.logicalAngle-dragTarget)<.005){if(sandReleaseStart===undefined){sandReleaseStart=state.time;sandImmediate=await checkExclusion(current,{assert:false});}if(state.time-sandReleaseStart>=10){const shape=await checkExclusion(current,{assert:false}),passed=shape.diskAreaFraction>=.995&&shape.pairGap>=-current.physics.policy.grainRadius*.15&&shape.boundaryGap>=-1e-5&&shape.maximumSpeed<.15,wallSeconds=(state.elapsedMs-sandPlayElapsed)/1000;await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,pausedReceipt,waterReceipt,sandMotion:{time:state.time,dragMs:performance.now()-dragStarted,immediate:sandImmediate,shape,fps:(state.frames-sandPlayFrame)/wallSeconds,realtimeFactor:state.time/wallSeconds},...state,error:passed?undefined:'Sand area, guide penetration, wheel exclusion, or relaxation failed'})});return;}}
+   if(dragTarget!==undefined&&Math.abs(current.logicalAngle-dragTarget)<.005){if(sandReleaseStart===undefined){sandReleaseStart=state.time;sandImmediate=await checkExclusion(current,{assert:false});}if(state.time-sandReleaseStart>=10){const shape=await checkExclusion(current,{assert:false}),passed=shape.vertices===sandImmediate.vertices&&shape.diskAreaFraction>=.995&&shape.pairGap>=-current.physics.policy.grainRadius*.3&&shape.boundaryGap>=-1e-5&&shape.maximumSpeed<.15,wallSeconds=(state.elapsedMs-sandPlayElapsed)/1000;await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,pausedReceipt,waterReceipt,sandMotion:{time:state.time,dragMs:performance.now()-dragStarted,immediate:sandImmediate,shape,fps:(state.frames-sandPlayFrame)/wallSeconds,realtimeFactor:state.time/wallSeconds},...state,error:passed?undefined:'Sand support coverage, guide penetration, wheel exclusion, or relaxation failed'})});return;}}
    if(dragTarget!==undefined&&sandReleaseStart===undefined&&performance.now()-dragStarted>7000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Running sand drag not accepted within 7 seconds',...state})});return;}
    setTimeout(inspect,250);return;
   }
@@ -237,8 +270,13 @@ setTimeout(inspect,0);
 const server=createServer(async(req,res)=>{
  try{
   const url=new URL(req.url,'http://localhost');
-  if(req.method==='POST'&&['/page-progress','/page-result'].includes(url.pathname)){
-   let body='';for await(const chunk of req){body+=chunk;if(body.length>100000)throw Error('Oversize probe');}
+  if(req.method==='POST'&&['/page-progress','/page-result','/page-screenshot'].includes(url.pathname)){
+   let body='';for await(const chunk of req){body+=chunk;if(body.length>(url.pathname==='/page-screenshot'?3000000:100000))throw Error('Oversize probe');}
+   if(url.pathname==='/page-screenshot'){
+    if(!body.startsWith('data:image/png;base64,'))throw Error('Invalid screenshot payload');
+    await writeFile(path.join(work,'sand-visual.png'),Buffer.from(body.slice(22),'base64'));
+    res.end('ok');return;
+   }
    res.end('ok');const data=JSON.parse(body);if(url.pathname==='/page-result')complete(data);else console.log(body);return;
   }
   const route=url.pathname.endsWith('/')?url.pathname+'index.html':url.pathname;
