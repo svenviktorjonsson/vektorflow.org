@@ -7,7 +7,7 @@ rim():
 rim_properties: (fixed:true,plot:"lines",boundary:(kind:"circle",center:[0,0.32],radius:0.5))
 baffle_properties: (fixed:true,plot:"lines",boundary:(kind:"segments",half_width:0.006))
 
-# Four attached and three detached segments; every length <= radius / 3.
+# Four rim-adjacent and three interior segments in this authored example.
 baffles:[
     [0.5,0.32],[0.35,0.32], [0,0.82],[0,0.67],
     [-0.5,0.32],[-0.35,0.32], [0,-0.18],[0,-0.03],

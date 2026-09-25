@@ -147,6 +147,16 @@ async function checkSandVisualMotion(current){
  }
  return {freefallGuides,visualSamples:observations,downwardFraction:downward/Math.max(1,observations),meanRelativeSpeed:relativeSpeed/Math.max(1,observations),meanGuideSpread:spread/Math.max(1,observations)};
 }
+async function readSandVisualIds(current){
+ const count=current.embedding.particleCount*8,bytes=count*32;
+ const read=auditDevice.createBuffer({size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const encoder=auditDevice.createCommandEncoder();
+ encoder.copyBufferToBuffer(current.embedding.visualBuffer,0,read,0,bytes);
+ auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+ const words=new Uint32Array(read.getMappedRange().slice(0));
+ const ids=Array.from({length:count},(_,index)=>words[index*8+6]);
+ read.unmap();read.destroy();return ids;
+}
 const rejectCaches=${process.argv.includes('--reject-caches')};
 const legacyOverrides=${process.argv.includes('--legacy-overrides')};
 if(legacyOverrides){const create=GPUDevice.prototype.createComputePipelineAsync;
@@ -163,8 +173,8 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
   }return create.call(this,descriptor);
  };
 }
-const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.argv.includes('--water-wall-spin')},steadySpin=${process.argv.includes('--water-steady-spin')||process.argv.includes('--water-wall-spin')},steadyOmega=${process.argv.includes('--water-wall-spin')?6:2},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisual=${process.argv.includes('--sand-visual')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],steadySpinSamples=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial;
-const waterTurnSamples=[];let steadySpinStartTime,steadySpinStartAngle;
+const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.argv.includes('--water-wall-spin')},realtimeSpinLong=${process.argv.includes('--water-realtime-spin-long')},realtimeSpin=${process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadySpin=${process.argv.includes('--water-steady-spin')||process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadyOmega=${process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')?6:2},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisualLong=${process.argv.includes('--sand-visual-long')},sandVisual=${process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')},sandStaticImageSettled=${process.argv.includes('--sand-static-image-settled')},sandStaticImage=${process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')||process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],steadySpinSamples=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial,sandVisualInitialIds;
+const waterTurnSamples=[];let steadySpinStartTime,steadySpinStartAngle,steadySpinStartMs;
 let browserRafFrames=0;
 function countBrowserRaf(){browserRafFrames++;requestAnimationFrame(countBrowserRaf);}
 requestAnimationFrame(countBrowserRaf);
@@ -220,12 +230,20 @@ async function inspect(){
   // Follow simulation time, not wall time: a slow browser must not turn this
   // into an accidental high-speed impulse. Wall-spin is above the Froude=1
   // threshold (sqrt(g/r) ~= 4.43 rad/s) for a half-metre-radius drum.
-  if(steadySpinStartTime===undefined){steadySpinStartTime=state.time;steadySpinStartAngle=current.logicalAngle;}
-  const target=steadySpinStartAngle+steadyOmega*(state.time-steadySpinStartTime);
+  if(steadySpinStartTime===undefined){steadySpinStartTime=state.time;steadySpinStartAngle=current.logicalAngle;steadySpinStartMs=performance.now();}
+  const wallSeconds=(performance.now()-steadySpinStartMs)/1000;
+  const target=steadySpinStartAngle+steadyOmega*(realtimeSpin?wallSeconds:state.time-steadySpinStartTime);
   if(target-current.targetAngle>.015)app.setLayer(current.world.boundary_ids[0],{rotation:target});
+  if(realtimeSpin&&wallSeconds>=(realtimeSpinLong?24:8)){
+   const shape=await checkExclusion(current,{assert:false}),volume=await checkWaterVolume(current);
+   const realtimeFactor=(state.time-steadySpinStartTime)/wallSeconds;
+   const passed=realtimeFactor>=.95&&shape.boundaryGap>=-1e-5&&volume.freshDensityVolumeFraction>=.99&&!volume.telemetry.gridOverflow&&(!realtimeSpinLong||volume.nearRimFraction>=.78&&volume.occupiedSectors>=68);
+   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,realtimeFactor,wallSeconds,shape,volume,...state,error:passed?undefined:'Real-time spin, water density, or swept wheel contact failed'})});return;
+  }
   for(const mark of [3,12,24])if(state.time>=mark&&!steadySpinSamples.some(s=>s.mark===mark)){
+   const wallSeconds=(performance.now()-steadySpinStartMs)/1000;
    const volume=await checkWaterVolume(current),shape=await checkExclusion(current,{assert:false});
-   steadySpinSamples.push({mark,volume,shape,peakWheelSurfaceSpeed:state.peakWheelSurfaceSpeed});
+   steadySpinSamples.push({mark,wallSeconds,realtimeFactor:(state.time-steadySpinStartTime)/wallSeconds,volume,shape,peakWheelSurfaceSpeed:state.peakWheelSurfaceSpeed});
    if(mark===24)await fetch('/page-screenshot?name=water-steady',{method:'POST',body:app.canvas.toDataURL('image/png')});
    await fetch('/page-progress',{method:'POST',body:JSON.stringify({steadySpinMark:mark,volume,shape})});
   }
@@ -265,6 +283,18 @@ async function inspect(){
  }
  if(sandStarted&&current?.world.kind==='granular'&&state.frames>=sandFrame+3){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
+  if(sandStaticImage){
+   if(sandStaticImageSettled){
+    if(!sandPlayed){sandPlayed=true;play.click();setTimeout(inspect,250);return;}
+    if(state.time<10){setTimeout(inspect,250);return;}
+    if(!current.paused){const pause=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Pause');pause.click();setTimeout(inspect,250);return;}
+   }
+   const first=app.canvas.toDataURL('image/png');
+   await new Promise(resolve=>setTimeout(resolve,220));
+   const second=app.canvas.toDataURL('image/png');
+   const passed=current.world.kind==='granular'&&current.paused&&first===second;
+   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,staticImageIdentical:first===second,...state,error:passed?undefined:'Paused sand image changed between frames'})});return;
+  }
   if(sandSteps){const snapshots=[];for(let step=1;step<=16;step++){const encoder=auditDevice.createCommandEncoder();current.physics.stepMany(encoder,1);auditDevice.queue.submit([encoder.finish()]);await auditDevice.queue.onSubmittedWorkDone();if([1,2,4,8,16].includes(step))snapshots.push({step,shape:await checkExclusion(current,{assert:false}),telemetry:await current.physics.readTelemetry()});}await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,snapshots,...state})});return;}
   if(sandGpuProfile){const physics=await measurePhysicsSteps(current),embedding=await measureEmbedding(current,app),telemetry=await current.physics.readTelemetry();await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,physics,embedding,telemetry,...state})});return;}
   if(sandDropcastle||sandVisual){
@@ -276,12 +306,14 @@ async function inspect(){
     sandFormationRequested=true;selection.click();setTimeout(inspect,250);return;
    }
    if(formation?.textContent!=='Level bed'){setTimeout(inspect,250);return;}
-   if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Dropcastle did not start paused');sandFormationInitial=await checkExclusion(current,{assert:false});sandPlayed=true;play.click();}
-   if(sandVisual&&state.time>=.3){
+   if(!sandPlayed){if(!current.paused||state.time!==0||!play)throw Error('Dropcastle did not start paused');sandFormationInitial=await checkExclusion(current,{assert:false});if(sandVisualLong)sandVisualInitialIds=await readSandVisualIds(current);sandPlayed=true;play.click();}
+   if(sandVisual&&state.time>=(sandVisualLong?10:.3)){
     const visual=await checkSandVisualMotion(current);
     await fetch('/page-screenshot',{method:'POST',body:app.canvas.toDataURL('image/png')});
-    const passed=visual.freefallGuides>=5&&visual.downwardFraction>.5&&visual.meanRelativeSpeed>.005;
-    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,visual,...state,error:passed?undefined:'Fine grains did not visibly advect during free fall'})});return;
+    const finalIds=sandVisualLong?await readSandVisualIds(current):null;
+    const reseeded=finalIds?finalIds.reduce((count,id,index)=>count+(id!==sandVisualInitialIds[index]),0):undefined;
+    const passed=sandVisualLong?reseeded>10:visual.freefallGuides>=5&&visual.downwardFraction>.5&&visual.meanRelativeSpeed>.005;
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,visual,reseeded,...state,error:passed?undefined:'Fine grains did not advect or reseed after landing'})});return;
    }
    if(state.time>=10){const shape=await checkExclusion(current,{assert:false});await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:shape.diskAreaFraction>=.995&&shape.boundaryGap>=-1e-5,wetness:sandDropcastleWet?0.33:0,initial:sandFormationInitial,shape,...state})});return;}
    setTimeout(inspect,250);return;

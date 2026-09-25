@@ -10,7 +10,7 @@ const compiler=path.resolve(process.argv[2]??'../vektor-flow/build/branches/pre-
 const root=path.join(site,'public'),compiled=path.join(root,'previews/0.6.0/compiled');
 const id=process.argv[3]??'stones';if(!['stones','tree','wheel'].includes(id))throw Error('Unknown application');
 const committedRuntime=process.argv.includes('--committed-runtime');
-const runtime_directory=id==='wheel'?'runtime-wheel-24':id==='stones'?'runtime-stones-12':'runtime-tree-11',directory=id==='wheel'?'wheel-performance-24':id==='stones'?'stones-mixed-12':'tree-air-11';
+const runtime_directory=id==='wheel'?'runtime-wheel-25':id==='stones'?'runtime-stones-12':'runtime-tree-11',directory=id==='wheel'?'wheel-performance-25':id==='stones'?'stones-mixed-12':'tree-air-11';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');
@@ -52,8 +52,18 @@ const app=bridge.instantiateWasmRuntime({bytes,manifest:JSON.parse(await readFil
 const world=app.worldProgram().gpu_worlds[0],p=world.kind==='wind'?world.solid_properties:world.properties;
 if(id==='wheel'){
   const {GRANULAR_PARTICLE_WORLD_GPU_WGSL}=await import(pathToFileURL(path.join(compiler,'web/vf-ui/vf-granular-particle-world-gpu.mjs')).href);
+  const {LIQUID_PARTICLE_WORLD_GPU_WGSL}=await import(pathToFileURL(path.join(compiler,'web/vf-ui/vf-liquid-contained-world-gpu.mjs')).href);
+  const {SWEPT_WHEEL_CONTACT_WGSL}=await import(pathToFileURL(path.join(compiler,'web/vf-ui/vf-swept-wheel-contact-gpu.mjs')).href);
   const sand=app.worldProgram().gpu_worlds.find(world=>world.kind==='granular');
+  const water=app.worldProgram().gpu_worlds.find(world=>world.kind==='liquid');
   const compiledLaw=app.readBinding(`${sand.binding_prefix}$physics`);
+  const compiledWaterLaw=app.readBinding(`${water.binding_prefix}$physics`);
+  const liquidMarkers=['fn sweep_wheel','telemetry_base()+9u','let boundary_layer = params.fluid.y * 0.5'];
+  if(liquidMarkers.some(marker=>!LIQUID_PARTICLE_WORLD_GPU_WGSL.includes(marker)||!compiledWaterLaw.includes(marker)))
+    throw Error('Wheel WASM contains a stale liquid GPU law; rebuild vkf_wasm_artifact_smoke');
+  const sweptMarker='let angular_velocity=delta/max(elapsed,1.0e-6);';
+  if(!SWEPT_WHEEL_CONTACT_WGSL.includes(sweptMarker)||!compiledWaterLaw.includes(sweptMarker))
+    throw Error('Wheel WASM contains a stale swept-contact GPU law; rebuild vkf_wasm_artifact_smoke');
   const lawSections=[
     GRANULAR_PARTICLE_WORLD_GPU_WGSL.slice(
       GRANULAR_PARTICLE_WORLD_GPU_WGSL.indexOf('fn project_contacts('),
