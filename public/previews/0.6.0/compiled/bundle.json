@@ -3,12 +3,12 @@
   "runtime_directory": "runtime-feedback-6",
   "applications": {
     "wheel": {
-      "directory": "wheel-performance-25",
-      "runtime_directory": "runtime-wheel-25",
+      "directory": "wheel-performance-26",
+      "runtime_directory": "runtime-wheel-26",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "7282c34cbfe4387a5472a3586168c8aa1ec5aad1e28ecf4083527263f26b8c3a",
-        "vf-world-material-runtime.mjs": "5769c1fb43b08bf7a41af241d42163ea053dae51095e95dbcf4daf7d3a12176c",
+        "vf-world-material-runtime.mjs": "226e72cf1ab16ceae5ad83101044e0d473ad25cbcdd8dfa5752e9bc437d7466a",
         "vf-liquid-contained-world-gpu.mjs": "205319bf8c80e53d788535cc0e8cbd0b512e01bcb52ee01ed958f1e2f2fe2338",
         "vf-gpu-pipeline-errors.mjs": "74f4cb1c62e433812cab8f9c39e69493814aba03388d2ec5fe3fe6f94a6ec84f",
         "vf-physics-liquid-local-particle-reference.mjs": "f8d351846e0cddf5bc5a0af5a2e9fbe9138b0355aae506062edcb36dc79c5587",
@@ -27,12 +27,12 @@
         "vf-paused-world-pose-wgsl.mjs": "4ac8a6c57f45b22e5d10f1545ef05b1588b88e7708d98d3aeb885ea9b265498d",
         "vf-liquid-pressure-geometry-cache-wgsl.mjs": "d9262ea52a80edae403ffe7bd2f83b5dec29353895f1a5c7cab33aa99af6dd3c",
         "vf-physics-dynamic-grid-gpu.mjs": "eabc4c6d28d8ebc6403ad6a4573e225849806dfdf85d1abe7b47446d5f8c7417",
-        "vf-granular-particle-world-gpu.mjs": "52be2ef5778254593e746e285ea506be53bbe855dd4bc85cb31635f2d489e339",
+        "vf-granular-particle-world-gpu.mjs": "24e291503868de16b8c3af60e4911bdfc6d0b0c0ade0d3cef48cdf713e9274df",
         "vf-sand-material-state.mjs": "bc9ee98d04a6dcc849a072fdd24f690b7da6a24009d1887fb6ec88a84dbbb701",
         "vf-physics-granular-core-reference.mjs": "c1885a7e1841d7ddba8aa680c2b0f8b8387ea2d0a2b21542b34b3dcb710067ca",
         "vf-physics-regime-verifier-reference.mjs": "68f0e7abed6d82342c9fddb1c7afe223b2bc6c7267c6c89a7d99094e49d08a3a",
         "vf-liquid-particle-embedding-gpu.mjs": "26866cf06c12416ec45e559fef6a3275d68366ea4490ff146c79a21f95a4bb9c",
-        "vf-granular-particle-embedding-gpu.mjs": "ef317e944103307fd97d9c2ad946619f1f6421d51b28f3f9da017db7e73c97e5",
+        "vf-granular-particle-embedding-gpu.mjs": "5e3db08c74daa172fc7bbacb3495dc26945f29b7601cc6c1e7d6d7a53cc13d88",
         "vf-contained-boundary-embedding-gpu.mjs": "d5c4ada399c3fd52b19512e116fe667ff6158e4d71be25605aec9b3d02efb19f",
         "vf-retained-world-loader.mjs": "69a60830cd488766d123bcb2c8b6faf7418012220a92e58cec29e0a4bf164d66",
         "vf-granular-formation-seed.mjs": "f902708eb5b918674f18a3d74012ca1893adc929543e4cac169ffcbde5ce5325"
