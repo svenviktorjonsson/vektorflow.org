@@ -215,7 +215,12 @@ fn density_vertex(@builtin(vertex_index) vertex_index: u32,
   let flow = visible_flow(transport);
   // A compact settled kernel restores a crisp edge after the flowing share
   // has left. Its integral is still normalized to the same guide area.
-  let radius = params.canvas.w * 2.0;
+  // Exposed guides display finer grains; buried guides retain broader
+  // footprints so one parcel can still close the interior without a new
+  // collision particle. The weight below normalizes either footprint.
+  let exposed = 1.0 - smoothstep(2.0, 7.0,
+    f32(grain.contact_count));
+  let radius = params.canvas.w * mix(2.0, 1.35, exposed);
   let stretch = 1.0 + clamp(speed * 0.055, 0.0, 0.34);
   let offset = (motion_normal * local.x
     + motion_direction * local.y * stretch) * radius;
