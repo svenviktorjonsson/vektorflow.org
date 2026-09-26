@@ -165,6 +165,7 @@ const inputLatency=${process.argv.includes('--input-latency')};
 const pausedInputLatency=${process.argv.includes('--input-latency-paused')};
 const pointerWasm=${process.argv.includes('--pointer-wasm')};
 const pointerWasmLatency=${process.argv.includes('--pointer-wasm-latency')};
+const runningPointerWasmLatency=${process.argv.includes('--running-pointer-wasm-latency')};
 const fluidSandPrototype=${process.argv.includes('--fluid-sand-prototype')||process.argv.includes('--fluid-sand-grain-range')};
 const fluidSandSpin=${process.argv.includes('--fluid-sand-spin')};
 let fluidSandStage=0;
@@ -306,7 +307,7 @@ async function inspect(){
    if(dragTarget===undefined){const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
     dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
     if(pausedInputLatency){observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,'Paused wheel');return;}}
-   if(Math.abs(current.logicalAngle-dragTarget)<.005){const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current);await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.time===0,pausedReceipt,dragMs,exclusion,...state})});return;}
+   if(Math.abs(current.logicalAngle-dragTarget)<.005){const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current),spreadX=exclusion.bounds[2]-exclusion.bounds[0],spreadY=exclusion.bounds[3]-exclusion.bounds[1],passed=current.time===0&&spreadX>.2&&spreadY>.2;await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,pausedReceipt,dragMs,exclusion,spreadX,spreadY,...state,error:passed?undefined:'Paused drag collapsed the material configuration'})});return;}
    if(performance.now()-dragStarted>3000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused 1.2-radian wheel drag not accepted within 3 seconds',dragMs:performance.now()-dragStarted,...state})});return;}
    setTimeout(inspect,100);return;
   }
@@ -371,11 +372,26 @@ async function inspect(){
   dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
   observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,'Running wheel');return;
  }
+ if(played&&runningPointerWasmLatency&&state.time>=.5&&dragTarget===undefined){
+  const rect=app.canvas.getBoundingClientRect(),center=current.world.geometry.center;
+  const screen=point=>{const p=current.boundary.worldToScreen(point,current.physics.policy);
+   return {clientX:rect.left+p[0]*rect.width/app.canvas.width,
+    clientY:rect.top+p[1]*rect.height/app.canvas.height};};
+  const start=screen([center[0]+.35,center[1]]);
+  const end=screen([center[0]+.35*Math.cos(.4),center[1]+.35*Math.sin(.4)]);
+  const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
+  app.canvas.setPointerCapture=()=>{};app.canvas.hasPointerCapture=()=>true;
+  dragTarget=current.angle+.4;dragStarted=performance.now();
+  app.canvas.dispatchEvent(new PointerEvent('pointerdown',{pointerId:29,bubbles:true,...start}));
+  app.canvas.dispatchEvent(new PointerEvent('pointermove',{pointerId:29,bubbles:true,...end}));
+  observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,
+   'Running compiled pointer wheel');return;
+ }
  if(played&&profileFps&&state.elapsedMs-pausedReceipt.elapsedMs>=(sustained?15000:5000)){
   const wallSeconds=(state.elapsedMs-pausedReceipt.elapsedMs)/1000;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,playing:{fps:(state.frames-pausedReceipt.frames)/wallSeconds,browserRafFps:(browserRafFrames-pausedReceipt.browserRafFrames)/wallSeconds,realtimeFactor:(state.time-pausedReceipt.time)/wallSeconds},...state})});return;
  }
- if(played&&!checkVolume&&!profileFps&&!gpuProfile&&!waterRelax&&!runningDrag&&!inputLatency&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
+ if(played&&!checkVolume&&!profileFps&&!gpuProfile&&!waterRelax&&!runningDrag&&!inputLatency&&!runningPointerWasmLatency&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
   if(!checkSand){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
  waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
   const particles=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Particles');
