@@ -3,12 +3,12 @@
   "runtime_directory": "runtime-feedback-6",
   "applications": {
     "wheel": {
-      "directory": "wheel-water-only-39",
-      "runtime_directory": "runtime-wheel-39",
+      "directory": "wheel-water-only-40",
+      "runtime_directory": "runtime-wheel-40",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "1064271c827b9744d80f68b30375eb336e3a8c1c761e8ed3e5dc6cb54d682601",
-        "vf-world-material-runtime.mjs": "5eb08b5e6469801d807d4dd02206b2df3365ad709974d340e935d2ade4f4f7a6",
+        "vf-world-material-runtime.mjs": "b035f5f7ac8908c18c8ee42fb219519370ba1ed43f7979fbf3adb8fd2bfc022b",
         "vf-liquid-contained-world-gpu.mjs": "205319bf8c80e53d788535cc0e8cbd0b512e01bcb52ee01ed958f1e2f2fe2338",
         "vf-gpu-pipeline-errors.mjs": "74f4cb1c62e433812cab8f9c39e69493814aba03388d2ec5fe3fe6f94a6ec84f",
         "vf-physics-liquid-local-particle-reference.mjs": "f8d351846e0cddf5bc5a0af5a2e9fbe9138b0355aae506062edcb36dc79c5587",
