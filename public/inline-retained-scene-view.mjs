@@ -95,6 +95,11 @@ export function mountRetainedSceneResult(container, packets, {
     selector = document.createElement("nav");
     selector.className = "readme-example-view-selector";
     selector.setAttribute("aria-label", "Views");
+    const header = document.createElement("div");
+    header.className = "readme-example-view-selector__label";
+    header.textContent = String(selectors[0].header ?? "n");
+    selector.append(header);
+    const buttons = [];
     selectors.forEach((entry, selected) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -103,10 +108,11 @@ export function mountRetainedSceneResult(container, packets, {
       button.addEventListener("click", () => {
         frames.forEach((frame, index) => {
           showFrame(frame, index === selected);
-          selector.children[index]?.setAttribute?.(
+          buttons[index]?.setAttribute?.(
             "aria-pressed", index === selected ? "true" : "false");
         });
       });
+      buttons.push(button);
       selector.append(button);
     });
     viewport.append(selector, layer);

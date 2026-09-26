@@ -83,6 +83,11 @@
       "geom/vf-geom-wgpu.js",
       "vf-display.js"
     ],
+    compiledScriptDeps: [],
+    compiledWasmUrl: "",
+    compiledWasmManifestUrl: "",
+    compiledWgslUrl: "",
+    compiledWebGpuManifestUrl: "",
     scenePollMs: 1500,
     packetPollMs: 33,
     packetPollIdleMs: 180,
@@ -103,6 +108,15 @@
     if (Array.isArray(override.sceneScriptDeps)) {
       DEFAULT_RUNTIME_CONFIG.sceneScriptDeps = override.sceneScriptDeps.slice();
     }
+    if (Array.isArray(override.compiledScriptDeps)) {
+      DEFAULT_RUNTIME_CONFIG.compiledScriptDeps = override.compiledScriptDeps.slice();
+    }
+    ["compiledWasmUrl", "compiledWasmManifestUrl", "compiledWgslUrl",
+      "compiledWebGpuManifestUrl"].forEach(function(key) {
+      if (Object.prototype.hasOwnProperty.call(override, key)) {
+        DEFAULT_RUNTIME_CONFIG[key] = String(override[key] || "");
+      }
+    });
     if (Object.prototype.hasOwnProperty.call(override, "launchManifestUrl")) {
       DEFAULT_RUNTIME_CONFIG.launchManifestUrl = String(override.launchManifestUrl || "");
     }
@@ -499,6 +513,130 @@
         throw err;
       });
       return state.bootstrapPromise;
+    }
+
+    function ensureCompiledDependencies() {
+      if (state.compiledBootstrapPromise) { return state.compiledBootstrapPromise; }
+      DEFAULT_RUNTIME_CONFIG.sceneStyleDeps.forEach(function(spec) {
+        ensureStylesheetLoaded(spec).catch(function(err) {
+          runtimeLog("warn", "compiled stylesheet skipped: " + String(err));
+        });
+      });
+      state.compiledBootstrapPromise = DEFAULT_RUNTIME_CONFIG.compiledScriptDeps.reduce(
+        function(chain, name) { return chain.then(function() { return ensureScriptLoaded(name); }); },
+        Promise.resolve()
+      );
+      return state.compiledBootstrapPromise;
+    }
+
+    function fetchCompiled(url, binary) {
+      if (!url) { return Promise.reject(new Error("compiled artifact URL is missing")); }
+      return fetch(url, { cache: "force-cache" }).then(function(response) {
+        if (!response.ok) {
+          throw new Error("compiled artifact " + url + " returned " + response.status);
+        }
+        return binary ? response.arrayBuffer() : response.text();
+      });
+    }
+
+    function loadCompiledArtifacts() {
+      var config = DEFAULT_RUNTIME_CONFIG;
+      return Promise.all([
+        fetchCompiled(config.compiledWasmUrl, true),
+        fetchCompiled(config.compiledWasmManifestUrl, false),
+        fetchCompiled(config.compiledWgslUrl, false),
+        fetchCompiled(config.compiledWebGpuManifestUrl, false)
+      ]).then(function(parts) {
+        var wasmManifest = JSON.parse(parts[1]);
+        var renderManifest = JSON.parse(parts[3]);
+        return WebAssembly.instantiate(parts[0], {}).then(function(result) {
+        var exports = result.instance.exports;
+        var surface = wasmManifest.runtime_surface || {};
+        var memory = exports[surface.memory_export || "memory"];
+        if (!memory || !memory.buffer) { throw new Error("compiled WASM memory is unavailable"); }
+        function bytes(descriptor, ptr, length, live) {
+          if (!descriptor || !descriptor[ptr] || !descriptor[length]) {
+            throw new Error("compiled arena exports are missing");
+          }
+          var start = Number(exports[descriptor[ptr]]());
+          var size = Number(exports[descriptor[length]]());
+          if (start < 0 || size < 0 || start + size > memory.buffer.byteLength) {
+            throw new Error("compiled arena exceeds WASM memory");
+          }
+          var view = new Uint8Array(memory.buffer, start, size);
+          return live ? view : Uint8Array.from(view);
+        }
+        if (typeof exports[surface.init_export || "vkf_init"] === "function") {
+          exports[surface.init_export || "vkf_init"]();
+        }
+        var arena = surface.retained_scene_arena;
+        var parameters = surface.render_parameter_arena;
+        var metadata = JSON.parse(new TextDecoder("utf-8").decode(
+          bytes(arena, "metadata_ptr_export", "metadata_len_export")
+        ));
+        var wasm = {
+          manifest: wasmManifest,
+          exports: exports,
+          init: function() { return exports[surface.init_export || "vkf_init"](); },
+          update: function() { return exports[surface.update_export || "vkf_update"](); },
+          cameraControl: function() {
+            if (typeof exports.vkf_camera_control !== "function") {
+              throw new Error("compiled camera control export is unavailable");
+            }
+            return exports.vkf_camera_control.apply(null, arguments);
+          }
+        };
+        var artifacts = {
+          wasm: wasm,
+          scene: { metadata: metadata },
+          arena: { bytes: bytes(arena, "arena_ptr_export", "arena_len_export") },
+          parameters: {
+            bytes: bytes(parameters, "ptr_export", "len_export", true),
+            descriptor: parameters
+          },
+          render: { kind: "retained_scene_render", manifest: renderManifest, wgsl: parts[2] }
+        };
+        state.compiledArtifacts = artifacts;
+        return artifacts;
+        });
+      });
+    }
+
+    function bindCompiledScene(config) {
+      if (!config || !config.scene_ir || !config.scene_ir.frame) {
+        throw new Error("compiled scene frame config is missing");
+      }
+      return config;
+    }
+
+    function bootCompiledScene(config) {
+      var frameId = String(config.scene_ir.frame.frame_id || "");
+      var frame = document.querySelector('.vf-frame[data-vf-frame-id="' + selectorEscape(frameId) + '"]');
+      var canvas = frame && frame.querySelector(".vf-frame__draw-canvas");
+      if (!canvas || !global.VfCompiledWebGpuAdapter) {
+        throw new Error("compiled scene frame or WebGPU adapter is unavailable");
+      }
+      var rect = canvas.getBoundingClientRect();
+      var capture = global.__vfNativeFrameMediaCapture;
+      var captureScale = capture && capture.mode === "time" ? 2 : 1;
+      canvas.width = Math.max(1, Math.round((rect.width || frame.clientWidth) * captureScale));
+      canvas.height = Math.max(1, Math.round((rect.height || frame.clientHeight) * captureScale));
+      return global.VfCompiledWebGpuAdapter.mount({
+        canvas: canvas,
+        config: config,
+        artifacts: state.compiledArtifacts,
+        onSubmitted: function() {
+          if (global.VfStartupGate) {
+            global.VfStartupGate.markInteractive(frameId, frame);
+            global.VfStartupGate.markGpuSubmitted(frameId);
+          }
+        },
+        onPresented: function() {
+          if (global.VfStartupGate) {
+            global.VfStartupGate.markPresented(frameId);
+          }
+        }
+      });
     }
 
     function ensureLaunchFrameDependencies() {
@@ -1073,6 +1211,10 @@
       autoBootIfSceneDocument: autoBootIfSceneDocument,
       autoBootDisabled: autoBootDisabled,
       ensureSceneDependencies: ensureSceneDependencies,
+      ensureCompiledDependencies: ensureCompiledDependencies,
+      loadCompiledArtifacts: loadCompiledArtifacts,
+      bindCompiledScene: bindCompiledScene,
+      bootCompiledScene: bootCompiledScene,
       ensureLaunchFrameDependencies: ensureLaunchFrameDependencies,
       ensureStylesheetLoaded: ensureStylesheetLoaded,
       ensureScriptLoaded: ensureScriptLoaded,

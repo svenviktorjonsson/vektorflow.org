@@ -7496,7 +7496,7 @@
     body.addEventListener("pointerdown", function (e) {
       if (e.pointerType === "touch") { return; }
       var button = Number(e.button || 0);
-      var action = e.ctrlKey && button === 0 ? "rotate" : e.ctrlKey && button === 2 ? "scale" : button === 0 ? "pan" : button === 2 ? "select" : "";
+      var action = button === 0 ? (e.shiftKey ? "pan" : "rotate") : e.ctrlKey && button === 2 ? "scale" : button === 2 ? "select" : "";
       if (!action) { return; }
       var x = Number(e.clientX) || 0;
       var y = Number(e.clientY) || 0;
@@ -13018,6 +13018,99 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       : new Uint32Array(arena.buffer, absoluteOffset, length);
   }
 
+  function applyRetainedScene3DDefaults(scene) {
+    if (!scene || !Array.isArray(scene.meshes) || scene.axis3d_runtime) { return scene; }
+    var meshes3d = scene.meshes.filter(function (mesh) {
+      return mesh && mesh.mode3d === true && mesh.axis_ticks && mesh.axis_ticks.enabled !== false;
+    });
+    if (!meshes3d.length) { return scene; }
+    var first = meshes3d[0].axis_ticks;
+    var ranges = {};
+    ["x", "y", "z"].forEach(function (axis) {
+      var lows = [];
+      var highs = [];
+      meshes3d.forEach(function (mesh) {
+        var cfg = mesh.axis_ticks || {};
+        var lo = Number(cfg[axis + "_min"]);
+        var hi = Number(cfg[axis + "_max"]);
+        if (Number.isFinite(lo) && Number.isFinite(hi) && hi > lo) {
+          lows.push(lo);
+          highs.push(hi);
+        }
+      });
+      ranges[axis + "_min"] = Math.min.apply(Math, lows);
+      ranges[axis + "_max"] = Math.max.apply(Math, highs);
+    });
+    var cfg = {
+      mode: "crosshair",
+      x_min: ranges.x_min, x_max: ranges.x_max,
+      y_min: ranges.y_min, y_max: ranges.y_max,
+      z_min: ranges.z_min, z_max: ranges.z_max,
+      x_label: String(first.x_label || "x"),
+      y_label: String(first.y_label || "y"),
+      z_label: String(first.z_label || "z"),
+      ticks: true,
+      grid: true,
+      grid_alpha: 0.12,
+      grid_width: 1,
+      tick_len_px: 7,
+      tick_label_font_size: 11,
+      label_font_size: 13
+    };
+    ["axis_color", "tick_color", "ticklabel_color", "label_color"].forEach(function (name) {
+      if (first[name] != null) { cfg[name] = first[name]; }
+    });
+    var helper = {
+      id: String(scene.frame || "frame") + "__axis3d",
+      type: "field_mesh",
+      vertices: [
+        -1,0,0,0,0,1,1,1,1,1, 1,0,0,0,0,1,1,1,1,1,
+        0,-1,0,0,0,1,1,1,1,1, 0,1,0,0,0,1,1,1,1,1,
+        0,0,-1,0,0,1,1,1,1,1, 0,0,1,0,0,1,1,1,1,1
+      ],
+      indices: [0,1,2,3,4,5],
+      topology: "line-list",
+      render_mode: "line",
+      marker_space: "pixel",
+      edge_width: 1.2,
+      color: "white",
+      axis3d_helper_lines: true,
+      axis_box: false,
+      axis_screen_extend: false,
+      axis_grid: true,
+      axis_grid_alpha: cfg.grid_alpha,
+      mode3d: true,
+      manifold_dim_count: 1,
+      depth_write: true,
+      receives_lighting: false,
+      no_lighting: true,
+      pickable: false
+    };
+    scene.meshes.unshift(helper);
+    scene.axis3d_controls = true;
+    scene.axis3d_runtime = cfg;
+    if (!scene.camera) {
+      var center = [
+        (cfg.x_min + cfg.x_max) * 0.5,
+        (cfg.y_min + cfg.y_max) * 0.5,
+        (cfg.z_min + cfg.z_max) * 0.5
+      ];
+      var span = Math.max(
+        cfg.x_max - cfg.x_min,
+        cfg.y_max - cfg.y_min,
+        cfg.z_max - cfg.z_min
+      );
+      scene.camera = {
+        pos: [center[0] + span * 1.4, center[1] - span * 1.8, center[2] + span * 1.2],
+        position: [center[0] + span * 1.4, center[1] - span * 1.8, center[2] + span * 1.2],
+        target: center,
+        up: [0, 0, 1],
+        fov: 42
+      };
+    }
+    return scene;
+  }
+
   // Arena references are compiler-owned. This seam only creates zero-copy typed
   // views; topology, material, axes, labels and interaction stay in VfDisplay.
   function materializeRetainedSceneArena(packet) {
@@ -13061,6 +13154,7 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
     if (!Object.prototype.hasOwnProperty.call(scene, "background")) {
       scene.background = null;
     }
+    applyRetainedScene3DDefaults(scene);
     var geom = {};
     geom[frameId] = scene;
     return { geom: geom };
@@ -13582,6 +13676,7 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       createAxisVisualStateApplier: createAxisVisualStateApplier,
       createAxisTickModeStateApplier: createAxisTickModeStateApplier,
       materializeRetainedSceneArena: materializeRetainedSceneArena,
+      applyRetainedScene3DDefaults: applyRetainedScene3DDefaults,
       isSimple2DMarkerLineMesh: isSimple2DMarkerLineMesh,
       axisMathText: axisMathText,
       collectAxisTickLabelSpecs: collectAxisTickLabelSpecs,

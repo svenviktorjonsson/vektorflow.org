@@ -1,5 +1,6 @@
 // Transport only. Parsing, typing, lowering and execution are owned by WASM.
-export function createSharedCompiler({instance}) {
+import {createBrowserConcurrentImport} from './vkf-concurrent-host.mjs';
+export function createSharedCompiler({instance, WorkerType}) {
   const api = instance.exports;
   let clockSequence = 0;
   let documentSequence = 0;
@@ -31,6 +32,12 @@ export function createSharedCompiler({instance}) {
   function compile(source) {
     if (/(?:^|[^\p{L}\p{N}_])command\s*\./iu.test(source)) {
       throw new Error('browser runtime does not expose command capability');
+    }
+    if (typeof WorkerType !== 'function'
+        && /(?:^|\n)\s*(?:[\p{L}_][\p{L}\p{N}_]*\s*:\s*|:\s*)\.concurrent(?:\s|$)/iu.test(source)) {
+      const error = new Error('browser runtime does not expose concurrent Worker capability');
+      error.phase = 'lowering';
+      throw error;
     }
     return withSource(source, (pointer, length) => checkedResponse(api.vkf_compile_source(pointer, length), 'frontend'));
   }
@@ -211,11 +218,18 @@ export function createSharedCompiler({instance}) {
       const result = checkedResponse(status, 'lowering');
       const module = new WebAssembly.Module(new Uint8Array(api.memory.buffer,
         api.vkf_program_pointer(), api.vkf_program_length()));
-      if (WebAssembly.Module.imports(module).length !== 0) {
-        throw new Error('compiled browser program must not import host capabilities');
+      const imports = WebAssembly.Module.imports(module);
+      const concurrent = imports.length === 1 &&
+        imports[0].module === 'vkf.concurrent' && imports[0].name === 'invoke' &&
+        imports[0].kind === 'function';
+      if (imports.length !== 0 && !concurrent) {
+        throw new Error('compiled browser program requested an unknown host capability');
       }
-      const programInstance = new WebAssembly.Instance(module);
-      const programApi = programInstance.exports;
+      let programApi;
+      const hostImports = concurrent
+        ? createBrowserConcurrentImport(module, () => programApi, WorkerType) : {};
+      try {
+      programApi = new WebAssembly.Instance(module, hostImports).exports;
       const compileMs = now() - compileStarted;
       installClockSnapshot(programApi, clockSnapshot ?? captureClockSnapshot());
       const installedDocuments = installDocumentSnapshot(programApi, documentSnapshot);
@@ -239,6 +253,7 @@ export function createSharedCompiler({instance}) {
       if (invocationStatus !== 0) {
         throw new Error(`VKF invocation "$vkf_main" failed with status ${invocationStatus}`);
       }
+      hostImports.materializeOutput?.();
       const executeMs = now() - executeStarted;
       documentState = Uint8Array.from(new Uint8Array(programApi.memory.buffer,
         installedDocuments.pointer, installedDocuments.length));
@@ -277,6 +292,7 @@ export function createSharedCompiler({instance}) {
         };
         return output;
       } finally { api.free(pointer); }
+      } finally { hostImports.close?.(); }
     },
   });
 }
