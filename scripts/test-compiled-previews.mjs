@@ -41,5 +41,5 @@ for(const {id,files} of applications){
   console.log(`${id}: executable source, finite initial data and artifact hashes verified`);
 }
 for(const [name,digest] of Object.entries(bundle.runtime)){const source=await readFile(new URL(`previews/0.6.0/compiled/${runtimeDirectory}/${name}`,root));assert.equal(hash(source),digest);for(const match of source.toString().matchAll(/(?:from\s*|import\s*)['"]\.\/([^'"]+)['"]/g))assert.ok(bundle.runtime[match[1]],`Missing transitive module ${match[1]}`);}
-const page=await readFile(new URL('coming-soon.html',root),'utf8');assert.equal((page.match(/<iframe /g)||[]).length,3);assert.doesNotMatch(page,/not yet the compiled source|Intended VKF|simulation-tabs/);
-console.log('Three independent sections and complete module closure verified');
+const page=await readFile(new URL('coming-soon.html',root),'utf8');assert.equal((page.match(/<iframe /g)||[]).length,4);assert.match(page,/id="hourglass"/);assert.doesNotMatch(page,/not yet the compiled source|Intended VKF|simulation-tabs/);
+console.log('Three compiled applications, experimental hourglass and complete module closure verified');

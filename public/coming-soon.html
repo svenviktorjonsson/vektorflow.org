@@ -59,8 +59,8 @@
   <main id="live-sessions" class="documentation">
     <article class="readme">
       <h1>Coming soon</h1>
-      <p class="live-intro">Three independent applications, each with its own World, controls and embedding. The filename tabs show the executable VKF source compiled into each live view. Physics updates the initial data added to its World; the embedding turns that state into the image.</p>
-      <nav class="application-links" aria-label="Applications"><a href="#contact-tests">New GPU tests</a><a href="#wheel">Wheel</a><a href="#stones">Stones</a><a href="#tree">Tree and wind</a></nav>
+      <p class="live-intro">Three compiled VKF applications and an experimental granular hourglass. Each has controls and a physical World whose Embedding turns material state into an image. Filename tabs identify the executable VKF sources of the three compiled views; the hourglass tests a reusable narrow-aperture Law before compiler integration.</p>
+      <nav class="application-links" aria-label="Applications"><a href="#contact-tests">New GPU tests</a><a href="#wheel">Wheel</a><a href="#hourglass">Hourglass</a><a href="#stones">Stones</a><a href="#tree">Tree and wind</a></nav>
       <section id="contact-tests" class="application-section" aria-labelledby="contact-tests-heading">
         <h2 id="contact-tests-heading">New contact algorithms · GPU test build</h2>
         <p class="application-description">Run the new compact rigid-body contact solver on your device, with 10,000 or 1,000,000 particles. The test checks actual rounded velocities and particle/floor separation, plus small rotational and failure cases. It reports results you can copy.</p>
@@ -78,6 +78,12 @@
           <div class="source-panel" id="wheel-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
           <p class="source-footer"><a data-source-download href="./sources/coming-soon/wheel/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
         </div>
+      </section>
+      <section id="hourglass" class="application-section" aria-labelledby="hourglass-heading">
+        <h2 id="hourglass-heading">Dry sand · spinning hourglass</h2>
+        <p class="application-description">Drag to rotate or flip the glass. Coarse material parcels release fractional area when the throat passes represented grains, even when the opening is smaller than a parcel. The same granular discharge Law drives the CPU reference and GPU World; a repose Law shapes the deposited layer, and a separate Embedding draws the compact and flowing sand without exposing simulation cells.</p>
+        <div class="session-shell"><iframe title="Spinning granular hourglass live session" src="./previews/0.6.0/live/hourglass/?v=granular-aperture-1" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Experimental GPU geometry adapter, not yet a compiler-emitted VKF application. Use Throat to test the one-grain limit, Pile angle to vary repose, and Check volume to audit the material ledger.</span><a href="./previews/0.6.0/live/hourglass/?v=granular-aperture-1">Open hourglass full page</a></p>
       </section>
       <section id="stones" class="application-section" aria-labelledby="stones-heading">
         <h2 id="stones-heading">Five stones · lift and drop</h2>
