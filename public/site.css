@@ -46,13 +46,15 @@ select:focus-visible, textarea:focus-visible {
   letter-spacing: -.03em;
 }
 .release-version {
+  flex: 0 0 auto;
   border: 1px solid var(--rule);
   border-radius: 999px;
   padding: 2px 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 .site-nav nav {
   display: flex;
@@ -259,10 +261,10 @@ select:focus-visible, textarea:focus-visible {
 }
 
 @media (max-width: 620px) {
-  .site-nav { align-items: stretch; flex-direction: column; gap: 8px; min-height: 0; padding-block: 12px; }
-  .site-nav .wordmark { align-self: flex-start; gap: 6px; font-size: 17px; }
-  .site-nav .release-version { padding: 1px 5px; font-size: 9px; }
-  .site-nav nav { justify-content: space-between; gap: 8px; width: 100%; font-size: 12px; }
+  .site-nav { display: grid; grid-template: "brand release" auto "nav nav" auto / minmax(0, 1fr) auto; gap: 8px 12px; min-height: 0; padding-block: 12px; }
+  .site-nav .wordmark { grid-area: brand; align-self: center; font-size: 17px; }
+  .site-nav .release-version { grid-area: release; align-self: center; justify-self: end; padding: 2px 6px; font-size: 11px; }
+  .site-nav nav { grid-area: nav; justify-content: space-between; gap: 8px; width: 100%; font-size: 12px; }
   .site-nav, .site-footer, .readme, .contents { width: calc(100% - 24px); }
   .landing .readme { padding: 36px 0 40px; font-size: 17px; }
   .landing .readme > p:first-of-type { font-size: 21px; }

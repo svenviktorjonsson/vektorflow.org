@@ -8,7 +8,7 @@ for (const name of pages) {
   assert.equal((html.match(/class="release-version"/gu) ?? []).length, 1,
     `${name}: one visible stable release`);
   assert.match(html,
-    /<span class="release-version" data-release-version="0\.4\.7" data-browser-wasm="https:\/\/vektorflow\.org\/runtimes\/v0\.4\.7\/vkf-shared-compiler\.wasm\?sha256=[a-f0-9]{64}" aria-label="Stable release 0\.4\.7">0\.4\.7<\/span>/u,
+    /<span class="release-version" data-release-version="0\.4\.7" data-browser-wasm="https:\/\/vektorflow\.org\/runtimes\/v0\.4\.7\/vkf-shared-compiler\.wasm\?sha256=[a-f0-9]{64}" aria-label="Stable release 0\.4\.7">Version 0\.4\.7<\/span>/u,
     `${name}: supported browser compiler`);
   assert.doesNotMatch(html, /<select|<option|vkf-release-version|release-selector/u,
     `${name}: no release toggle`);
