@@ -69,7 +69,7 @@
         "vf-world-mechanical-runtime.mjs": "5c5f38157cf105cf84dff879a093cc5207041e29d24692a728a0f2172601cdcc",
         "vf-world-mechanical-gpu.mjs": "9794baf360576219e4ede9d2f579d6e1eb889d0ad4310329230717e20a3039a2",
         "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
-        "vf-world-scene-embedding-gpu.mjs": "fdda6417a5c6c360af4f761a287c87f291de2d0d704889938b67eb62f022479a",
+        "vf-world-scene-embedding-gpu.mjs": "dd5f4e5a31f9602410ca66e5c7458f961f0777dbd4d0502cf2e3da6664d99e0d",
         "vf-world-physical-parameters.mjs": "c6373befa374ee03f0770e28d720e9bb981fcefd1d5bfb22d04971c2235b1974"
       },
       "wasm": "6a5535dfb0319d4d0500511e9f101a44e0b05817dda08eb2cb4ffa2a15b30699",

@@ -128,17 +128,17 @@ fn grass_pose(vertex:u32,id:u32)->Out {
     let stone=v.stone>=0.0;let seed=hash(u32(max(v.stone,0.0))+8187u);
     let footprint=max(length(dpdx(v.local)),length(dpdy(v.local)));
     let material=granite(v.local,albedo,seed,u32(max(v.stone,0.0)),footprint);albedo=select(albedo,material.rgb,stone);roughness=select(roughness,material.a,stone);
-    // Sub-pixel bump derivatives alias into rings on a curved mesh. Keep
-    // relief below a pixel's slope budget; finer grains are optical detail.
-    let relief=(mineral_noise(v.local*160.0,seed)*0.38+mineral_noise(v.local*360.0,seed+29u)*0.62)
-      *mix(0.00065,0.0011,unit(seed+131u))*(1.0-smoothstep(0.002,0.008,footprint));
+    // Resolved pits cast directional local shade; finer mineral dots remain
+    // optical detail. Fade the bump only once the pit falls below a pixel.
+    let pitVisibility=1.0-smoothstep(0.009,0.028,footprint);
+    let relief=(mineral_noise(v.local*105.0,seed)*0.55+mineral_noise(v.local*220.0,seed+29u)*0.45)
+      *mix(0.0013,0.0018,unit(seed+131u))*pitVisibility;
     let dx=dpdx(v.p);let dy=dpdy(v.p);let determinant=dot(dx,cross(dy,n));
     let gradient=(cross(dy,n)*dpdx(relief)+cross(n,dx)*dpdy(relief))/select(1.0,determinant,abs(determinant)>1.0e-10);
     n=select(n,normalize(n-clamp(gradient,vec3<f32>(-0.3),vec3<f32>(0.3))),stone);
     // Directional micro-shadow: local relief blocks only direct sunlight on
     // its lee side. It is fixed in stone space, so motion never repaints it.
-    let visible=1.0-smoothstep(0.002,0.008,footprint);
-    microOcclusion=select(1.0,1.0-0.58*visible*smoothstep(0.01,0.11,dot(gradient,l)),stone);
+    microOcclusion=select(1.0,1.0-0.64*pitVisibility*smoothstep(-0.015,0.075,dot(gradient,l)),stone);
   }
   let projected=scene.light_vp*vec4<f32>(v.p+n*0.002,1.0);
   let ndc=projected.xyz/projected.w;let uv=ndc.xy*vec2<f32>(0.5,-0.5)+0.5;
