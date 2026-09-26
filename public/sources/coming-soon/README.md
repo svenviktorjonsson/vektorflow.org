@@ -16,8 +16,11 @@ The wheel is also staged by that script with the `wheel` argument. Its four
 displayed files are recompiled, with the same source/executable build receipt.
 
 - `wheel`: `main.vkf`, `geometry.vkf`, `materials.vkf`, `particles.vkf`.
-  A one-metre wheel and seven baffles are added geometry. Water and sand have
-  independent retained Worlds and material/contact laws; the Display flips Views.
+  A one-metre wheel, seven baffles, water, and sand are physical layers of one
+  retained World. Their constitutive laws differ; the Display flips Views.
+  Status text is a nonphysical `View.add` annotation drawn in the same canvas.
+  `space:"pixel"` uses CSS pixels from the top-left, `space:"relative"` uses
+  top-left viewport fractions, and `space:"data"` uses View-projected coordinates.
 - `stones`: `main.vkf`, `geometry.vkf`, `materials.vkf`. Five irregular solids
   use an immutable initial-geometry asset, GPU support contacts and friction.
   Dragging prescribes a held position; releasing restores dynamic gravity.

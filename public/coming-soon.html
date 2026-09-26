@@ -69,11 +69,11 @@
       </section>
       <section id="wheel" class="application-section" aria-labelledby="wheel-heading">
         <h2 id="wheel-heading">Water and sand · rotating wheel</h2>
-        <p class="application-description">A one-metre circular drum with short disconnected baffles. Drag the rim to rotate it, switch between water and sand, and choose raw simulation particles or the material embedding. The two materials share the wheel geometry but keep separate constitutive laws and World state.</p>
-        <div class="session-shell"><iframe title="Water and sand rotating wheel live session" src="./previews/0.6.0/live/material-wheel/?v=sand-lane-density-1" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Starts paused: drag to position the frozen configuration, then press Play. Sand uses the granular particle-law World and a density-weighted lane embedding; Flow width changes the falling stream without changing its deposited area. The water-based Liquid-sand test remains available for comparison. These are evolving physics previews, not finished material models.</span><a href="./previews/0.6.0/live/material-wheel/?v=sand-lane-density-1">Open wheel full page</a></p>
+        <p class="application-description">A one-metre circular drum with short disconnected baffles. Drag the rim to rotate it, switch between water and sand, and choose raw simulation particles or the material embedding. Water and sand are physical layers in one World, with separate constitutive laws and material state.</p>
+        <div class="session-shell"><iframe title="Water and sand rotating wheel live session" src="./previews/0.6.0/live/material-wheel/?v=wheel-world-view-28" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
+        <p class="session-note"><span>Starts paused: drag to position the frozen configuration, then press Play. Sand uses a granular particle law and a density-weighted lane embedding; Flow width changes the falling stream without changing its deposited area. The water-based Liquid-sand test remains available for comparison. These are evolving physics previews, not finished material models.</span><a href="./previews/0.6.0/live/material-wheel/?v=wheel-world-view-28">Open wheel full page</a></p>
         <div class="source-browser" data-source-app="wheel">
-          <div class="source-heading"><h3>Executable VKF application</h3><p>These are the files compiled into this live view. Geometry and particles use the same add call; named properties select the material and the World supplies the laws.</p></div>
+          <div class="source-heading"><h3>Executable VKF application</h3><p>These files compile into the live view. World.add owns wheel geometry and material particles; View.add owns nonphysical status text. Relative and pixel positions start top-left; data positions follow the View projection.</p></div>
           <div class="source-tabs" role="tablist" aria-label="wheel VKF source files"></div>
           <div class="source-panel" id="wheel-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
           <p class="source-footer"><a data-source-download href="./sources/coming-soon/wheel/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
@@ -113,6 +113,6 @@
   </main>
   <footer class="site-footer">Experimental software · <a href="./origins.html">Origins</a></footer>
   <script type="module" src="./release-selector.mjs"></script>
-  <script type="module" src="./coming-soon.mjs?v=preview-release-23"></script>
+  <script type="module" src="./coming-soon.mjs?v=preview-release-28"></script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 {
   "artifact_content_sha256": "8f93cc483c638780",
   "artifact_kind": "wasm",
-  "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\.work\\layer-application-25992\\complete-wheel\\.vkfbuild\\complete-wheel\\complete-wheel.wasm",
+  "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-wheel\\.vkfbuild\\main\\main.wasm",
   "compiler_version": "vkf-wasm-artifact-smoke-0.2",
   "dependencies": [],
-  "manifest_hash": "f7857fa38bbd9d2b",
+  "manifest_hash": "fcceadc0725ae585",
   "runtime_hash": "8f93cc483c638780",
   "runtime_surface": {
     "bindings": [
@@ -243,8 +243,8 @@
     "update_export": "vkf_update",
     "update_mode": "builtin"
   },
-  "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\.work\\layer-application-25992\\complete-wheel\\complete-wheel.vkf",
-  "source_sha256": "a7135b1aa5ac2cbc",
-  "status": "compiled",
-  "typed_ir_sha256": "310d36a5842c772b"
+  "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow\\build\\branches\\pre-gen\\examples\\world-wheel\\main.vkf",
+  "source_sha256": "d13891733cbb1d53",
+  "status": "current",
+  "typed_ir_sha256": "6a774262f4d58eec"
 }

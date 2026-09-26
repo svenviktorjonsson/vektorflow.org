@@ -10,7 +10,9 @@ const compiler=path.resolve(process.argv[2]??'../vektor-flow/build/branches/pre-
 const root=path.join(site,'public'),compiled=path.join(root,'previews/0.6.0/compiled');
 const id=process.argv[3]??'stones';if(!['stones','tree','wheel'].includes(id))throw Error('Unknown application');
 const committedRuntime=process.argv.includes('--committed-runtime');
-const runtime_directory=id==='wheel'?'runtime-wheel-27':id==='stones'?'runtime-stones-12':'runtime-tree-11',directory=id==='wheel'?'wheel-performance-27':id==='stones'?'stones-mixed-12':'tree-air-11';
+const preserveRuntime=process.argv.includes('--preserve-runtime');
+if(preserveRuntime&&id!=='wheel')throw Error('Preserved runtime is only staged for the wheel');
+const runtime_directory=id==='wheel'?'runtime-wheel-28':id==='stones'?'runtime-stones-12':'runtime-tree-11',directory=id==='wheel'?'wheel-world-view-28':id==='stones'?'stones-mixed-12':'tree-air-11';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');
@@ -31,11 +33,13 @@ if(committedRuntime)build.runtime_revision=committedBytes(['rev-parse','HEAD']).
 await mkdir(path.join(compiled,runtime_directory),{recursive:true});
 async function copyRuntime(name){
   if(runtime[name])return;
-  if(!/^[A-Za-z0-9_.-]+\.(js|mjs)$/.test(name))throw Error('Runtime module outside flat adapter closure');
-  const original=committedRuntime?committedBytes(['show',`${build.runtime_revision}:web/vf-ui/${name}`]):await readFile(path.join(compiler,'web/vf-ui',name));
+  if(!/^[A-Za-z0-9_.-]+\.(js|mjs)$/.test(name))throw Error(`Runtime module outside flat adapter closure: ${name}`);
+  const original=preserveRuntime?await readFile(path.join(compiled,runtime_directory,name)):
+    committedRuntime?committedBytes(['show',`${build.runtime_revision}:web/vf-ui/${name}`]):await readFile(path.join(compiler,'web/vf-ui',name));
   const source=Buffer.from(original.toString('utf8').replaceAll('\r\n','\n'));
-  await writeFile(path.join(compiled,runtime_directory,name),source);runtime[name]=hash(source);
-  for(const match of source.toString().matchAll(/(?:from\s*|import\s*)['"]\.\/([^'"]+)['"]/g))await copyRuntime(match[1]);
+  if(!preserveRuntime)await writeFile(path.join(compiled,runtime_directory,name),source);
+  runtime[name]=hash(original);
+  for(const match of source.toString().matchAll(/(?:from\s*|import\s*)['"]\.\/([^'"]+)['"]/g))await copyRuntime(match[1].split('?')[0]);
 }
 for(const name of ['vf-world-layer-runtime.js','vf-compiled-runtime-bridge.js',id==='wheel'?'vf-world-material-runtime.mjs':'vf-world-mechanical-runtime.mjs'])await copyRuntime(name);
 const output=path.join(compiled,directory),sources=path.join(root,'sources/coming-soon',id);
