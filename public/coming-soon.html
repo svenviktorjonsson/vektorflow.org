@@ -12,11 +12,10 @@
   <style>
     .live-intro { max-width: 74ch; }
     .application-section { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border, #666); scroll-margin-top: 2rem; }
-    .application-links { display: flex; flex-wrap: wrap; gap: 1rem; margin-block: 1rem; }
     .application-description { max-width: 74ch; }
     .source-browser { margin-top: 1.5rem; min-width: 0; border: 1px solid var(--border, #666); border-radius: .6rem; overflow: hidden; }
     .source-heading { padding: .9rem 1rem; margin: 0; background: var(--surface, #152024); }
-    .source-heading h3 { margin: 0 0 .4rem; font-size: 1rem; }
+    .source-heading .source-label { margin: 0 0 .4rem; font-size: 1rem; font-weight: 700; }
     .source-heading p { margin: 0; font-size: .85rem; }
     .source-tabs { display: flex; overflow-x: auto; gap: .25rem; padding: .5rem; border-block: 1px solid var(--border, #666); }
     .source-tabs button { flex: 0 0 auto; min-height: 44px; padding: .5rem .8rem; border: 1px solid transparent; border-radius: .35rem; background: transparent; color: inherit; font: 13px ui-monospace, monospace; cursor: pointer; }
@@ -45,7 +44,7 @@
   <header class="site-nav">
     <a class="wordmark" href="./index.html">Vektor Flow</a>
     <nav aria-label="Main navigation">
-      <a href="./guide.html">Guide</a><a href="./reference.html">Syntax</a><a href="./standard-library.html">Std lib</a><a href="./performance.html">Performance</a><a href="./install.html">Download</a><a aria-current="page" href="./coming-soon.html">Coming soon</a>
+      <a href="./index.html">Home</a><a href="./guide.html">Guide</a><a href="./reference.html">Syntax</a><a href="./standard-library.html">Std lib</a><a href="./performance.html">Performance</a><a href="./install.html">Download</a><a href="./origins.html">Origins</a><a aria-current="page" href="./coming-soon.html">Coming soon</a>
     </nav>
     <label class="release-selector" for="vkf-release-version">Release
       <select id="vkf-release-version" data-latest="0.4.7" aria-label="VKF release version"><option value="0.4.7" data-browser-wasm="" selected>0.4.7 (limited release)</option>
@@ -59,51 +58,44 @@
   <main id="live-sessions" class="documentation">
     <article class="readme">
       <h1>Coming soon</h1>
-      <p class="live-intro">Three compiled VKF applications and an experimental granular hourglass. Each has controls and a physical World whose Embedding turns material state into an image. Filename tabs identify the executable VKF sources of the three compiled views; the hourglass tests a reusable narrow-aperture Law before compiler integration.</p>
-      <nav class="application-links" aria-label="Applications"><a href="#contact-tests">New GPU tests</a><a href="#wheel">Wheel</a><a href="#hourglass">Hourglass</a><a href="#stones">Stones</a><a href="#tree">Tree and wind</a></nav>
+      <p class="live-intro">The 0.6.0 work is in progress. These independent previews test physical Worlds, composable Laws, and visual Embeddings; they are experiments, not a stable release. The wheel, stones, and tree have compiled VKF source below each view. The hourglass is not yet compiler-emitted.</p>
       <section id="contact-tests" class="application-section" aria-labelledby="contact-tests-heading">
-        <h2 id="contact-tests-heading">New contact algorithms · GPU test build</h2>
-        <p class="application-description">Run the new compact rigid-body contact solver on your device, with 10,000 or 1,000,000 particles. The test checks actual rounded velocities and particle/floor separation, plus small rotational and failure cases. It reports results you can copy.</p>
-        <p><a href="./previews/0.6.0/contact-core-1/">Open new GPU test build</a></p>
-        <p class="application-description">This is an algorithm test, not an updated wheel. The demos below still use the older backend; the wheel's frozen-motion regression remains unresolved. Swept collision detection, sand friction and integration of the new core are unfinished.</p>
+        <h2 id="contact-tests-heading">Contact solver</h2>
+        <p class="application-description">Purpose: check GPU rigid-body contacts, separation, and rotational edge cases at 10,000 or 1,000,000 particles. State: isolated algorithm test, not yet the wheel backend. <a href="./previews/0.6.0/contact-core-1/">Open contact test</a>.</p>
       </section>
       <section id="wheel" class="application-section" aria-labelledby="wheel-heading">
-        <h2 id="wheel-heading">Water and sand · rotating wheel</h2>
-        <p class="application-description">A one-metre circular drum with short disconnected baffles. Drag the rim to rotate it, switch between water and sand, and choose raw simulation particles or the material embedding. Water and sand are physical layers in one World, with separate constitutive laws and material state.</p>
+        <h2 id="wheel-heading">Water and sand wheel</h2>
+        <p class="application-description">Purpose: compare two physical material layers against one rotating boundary. State: compiled VKF preview; water and sand have separate Laws and Embeddings, while status text is drawn inside the View. <a href="./previews/0.6.0/live/material-wheel/?v=wheel-world-view-28">Open wheel</a>.</p>
         <div class="session-shell"><iframe title="Water and sand rotating wheel live session" src="./previews/0.6.0/live/material-wheel/?v=wheel-world-view-28" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Starts paused: drag to position the frozen configuration, then press Play. Sand uses a granular particle law and a density-weighted lane embedding; Flow width changes the falling stream without changing its deposited area. The water-based Liquid-sand test remains available for comparison. These are evolving physics previews, not finished material models.</span><a href="./previews/0.6.0/live/material-wheel/?v=wheel-world-view-28">Open wheel full page</a></p>
         <div class="source-browser" data-source-app="wheel">
-          <div class="source-heading"><h3>Executable VKF application</h3><p>These files compile into the live view. World.add owns wheel geometry and material particles; View.add owns nonphysical status text. Relative and pixel positions start top-left; data positions follow the View projection.</p></div>
+          <div class="source-heading"><p class="source-label">Executable VKF source</p><p>World.add owns physical layers; View.add owns nonphysical text. Pixel and relative coordinates start top-left; data coordinates follow the View.</p></div>
           <div class="source-tabs" role="tablist" aria-label="wheel VKF source files"></div>
           <div class="source-panel" id="wheel-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
           <p class="source-footer"><a data-source-download href="./sources/coming-soon/wheel/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
         </div>
       </section>
       <section id="hourglass" class="application-section" aria-labelledby="hourglass-heading">
-        <h2 id="hourglass-heading">Dry sand · spinning hourglass</h2>
-        <p class="application-description">Drag to rotate or flip the glass. Coarse material parcels release fractional area when the throat passes represented grains, even when the opening is smaller than a parcel. The same granular discharge Law drives the CPU reference and GPU World; a repose Law shapes the deposited layer, and a separate Embedding draws the compact and flowing sand without exposing simulation cells.</p>
+        <h2 id="hourglass-heading">Spinning hourglass</h2>
+        <p class="application-description">Purpose: test sand discharge through a narrow opening while rotating the glass. State: experimental GPU geometry adapter, not yet a compiler-emitted VKF application. <a href="./previews/0.6.0/live/hourglass/?v=hourglass-stream-3">Open hourglass</a>.</p>
         <div class="session-shell"><iframe title="Spinning granular hourglass live session" src="./previews/0.6.0/live/hourglass/?v=hourglass-stream-3" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Experimental GPU geometry adapter, not yet a compiler-emitted VKF application. Use Throat to test the one-grain limit, Pile angle to vary repose, and Check volume to audit the material ledger.</span><a href="./previews/0.6.0/live/hourglass/?v=hourglass-stream-3">Open hourglass full page</a></p>
       </section>
       <section id="stones" class="application-section" aria-labelledby="stones-heading">
-        <h2 id="stones-heading">Five stones · lift and drop</h2>
-        <p class="application-description">Five independently generated fieldstones now represent gray granite, basalt, red granite, quartzite and banded gneiss. Each has its own proportion, irregular silhouette, density, inertia and seamless object-space mineral texture. Touch a stone, lift it vertically and release it into the pile.</p>
+        <h2 id="stones-heading">Stones</h2>
+        <p class="application-description">Purpose: test lift, drop, and frictional contact across five irregular stones. State: compiled VKF preview with material-specific geometry and mass. <a href="./previews/0.6.0/live/rocks/?v=stones-12">Open stones</a>.</p>
         <div class="session-shell"><iframe title="Five fieldstones lift collide and settle live session" src="./previews/0.6.0/live/rocks/?v=stones-12" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Contacts use irregular support geometry, lever-correct Coulomb friction, low stone restitution, bounded rolling/spin resistance, and contact-qualified GPU sleeping. Momentum and angular response pass through every collision.</span><a href="./previews/0.6.0/live/rocks/?v=stones-12">Open stones full page</a></p>
         <div class="source-browser" data-source-app="stones">
-          <div class="source-heading"><h3>Executable VKF application</h3><p>Added body positions and named stone properties define the initial condition. The immutable geometry asset contains seeded shape data, normals and collision supports—not an animation.</p></div>
+          <div class="source-heading"><p class="source-label">Executable VKF source</p><p>Initial positions and stone properties define the physical scene.</p></div>
           <div class="source-tabs" role="tablist" aria-label="stones VKF source files"></div>
           <div class="source-panel" id="stones-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
           <p class="source-footer"><a data-source-download href="./sources/coming-soon/stones/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
         </div>
       </section>
       <section id="tree" class="application-section" aria-labelledby="tree-heading">
-        <h2 id="tree-heading">Tree, lawn and wind · procedural generation</h2>
-        <p class="application-description">An eight-metre generated tree above a dense lawn. Swipe inside the view to orbit, choose a seeded branch-and-leaf distribution, and adjust air speed between 1 and 8 m/s. The particle switch reveals parcels exchanging momentum with the scene. Air interaction and elastic response remain separate from shape generation.</p>
+        <h2 id="tree-heading">Tree, lawn, and wind</h2>
+        <p class="application-description">Purpose: test air–foliage momentum exchange on a generated tree and lawn. State: compiled VKF preview with wind controls from 0 to 20 m/s. <a href="./previews/0.6.0/live/tree/?v=air-11">Open tree</a>.</p>
         <div class="session-shell"><iframe title="Procedural tree grass and air live session" src="./previews/0.6.0/live/tree/?v=air-11" loading="lazy" allow="fullscreen" scrolling="no"></iframe></div>
-        <p class="session-note"><span>Set coherent wind continuously from 0 to 20 m/s. 64,000 particles carry divergence-free gusts and boundary-layer shear; porous foliage drag transfers equal opposite impulse into material-aware branch and leaf modes.</span><a href="./previews/0.6.0/live/tree/?v=air-11">Open tree full page</a></p>
         <div class="source-browser" data-source-app="tree">
-          <div class="source-heading"><h3>Executable VKF application</h3><p>Tree, lawn, elastic nodes and inlet parcels are added layers of one World. GPU parcel impacts drive the local spring response; the embedding reads that state directly, without an animated wind wave.</p></div>
+          <div class="source-heading"><p class="source-label">Executable VKF source</p><p>Tree, lawn, elastic nodes, and air parcels are layers of one World.</p></div>
           <div class="source-tabs" role="tablist" aria-label="tree VKF source files"></div>
           <div class="source-panel" id="tree-source-panel" role="tabpanel" tabindex="0"><pre><code>Loading main.vkf…</code></pre></div>
           <p class="source-footer"><a data-source-download href="./sources/coming-soon/tree/main.vkf" download>Download main.vkf</a> · <a href="./sources/coming-soon/README.md">Source contract and file structure</a></p>
