@@ -3,12 +3,12 @@
   "runtime_directory": "runtime-feedback-6",
   "applications": {
     "wheel": {
-      "directory": "wheel-water-only-42",
-      "runtime_directory": "runtime-wheel-42",
+      "directory": "wheel-water-only-43",
+      "runtime_directory": "runtime-wheel-43",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "fe1b2a89f4735213b76c823d9fdce8f9cb68f21b3b4a78f485b4490fe3650c8b",
-        "vf-world-material-runtime.mjs": "ee0482bba488e8fb8d76856c58b2d6fb37ea404c1322502c0bab0d2a32ca8acf",
+        "vf-world-material-runtime.mjs": "7eff9d686ee4f91af4d4a1fe36af5c545b6356640c75909caca25c0252f2315f",
         "vf-liquid-contained-world-gpu.mjs": "83493a675153adbfc389df5212a978b4f719836545c003eb710e3ee85b88c5b9",
         "vf-gpu-pipeline-errors.mjs": "74f4cb1c62e433812cab8f9c39e69493814aba03388d2ec5fe3fe6f94a6ec84f",
         "vf-physics-liquid-local-particle-reference.mjs": "f8d351846e0cddf5bc5a0af5a2e9fbe9138b0355aae506062edcb36dc79c5587",
@@ -38,27 +38,27 @@
         "vf-retained-world-loader.mjs": "69a60830cd488766d123bcb2c8b6faf7418012220a92e58cec29e0a4bf164d66",
         "vf-granular-formation-seed.mjs": "f902708eb5b918674f18a3d74012ca1893adc929543e4cac169ffcbde5ce5325"
       },
-      "wasm": "f846e35a8a233668e9ed9988f0e8a69f5621b77893c0b446adfecc57f75acc9c",
-      "manifest": "ce96203281c6304650d3c9bc243045d27e120a8b562893b713b9e704afc63d39",
+      "wasm": "8d9fe53c41e038a87b1173cf1e0e3b4d5f878306ca87644b51d1c5d4ce6cb21b",
+      "manifest": "edb121b2a47c2db565876e99795f2e1f4ee04d0f8f5f9480553237a84a3252b0",
       "sources": {
         "main.vkf": "d139b111b4699714167b4bab1329489a78eefaeda962f0df6f0dd3989500dd61",
         "geometry.vkf": "71ae2b18f6a2b87832444163dbc4de7f0337c30c90081a30c2fb175932e56c6e",
-        "materials.vkf": "056f5d7ef3e7b4b13f94cf063a746d7fe65d0f32bb14ebba5ea23f00408bb810",
+        "materials.vkf": "7adf0a60dde22cefa6327e96857b85da9d576d8b261b3cd58bccf33f0be3a35e",
         "particles.vkf": "20dce50105b682bb9ac8758abd71f0ffaa3bb10ee98af92abf5979d5a53c9101"
       },
       "build": {
         "entry": "main.vkf",
         "compiler": "644b53b97d846e15a4e80e318e689f4a925215feaa030041c75424cb44594807",
-        "emitter": "3d1c3bf7df1a1b441c9b8a21b1f6fd351995a36d9087230d7f9c2bb63399c46a",
-        "typed_ir": "dd8a72b96535cee9f8f964be07405259e83931c906cd39abd9494c797a77f2ea",
-        "runtime_revision": "85e96a5f9d1bae4533d59d7b16450114de311181",
+        "emitter": "23511d3f670e0a4a6b9ff927822551f41298328db2cd27b3e0511c5d78b91e4d",
+        "typed_ir": "2d5c681add38a70c85bd20db0536308beba609add2e433c5abb6a5ad0f12ee5a",
+        "runtime_revision": "bbb26b0eaa427a847dfadbffc9015842d7c92a09",
         "sources": {
           "main.vkf": "d139b111b4699714167b4bab1329489a78eefaeda962f0df6f0dd3989500dd61",
           "geometry.vkf": "71ae2b18f6a2b87832444163dbc4de7f0337c30c90081a30c2fb175932e56c6e",
-          "materials.vkf": "056f5d7ef3e7b4b13f94cf063a746d7fe65d0f32bb14ebba5ea23f00408bb810",
+          "materials.vkf": "7adf0a60dde22cefa6327e96857b85da9d576d8b261b3cd58bccf33f0be3a35e",
           "particles.vkf": "20dce50105b682bb9ac8758abd71f0ffaa3bb10ee98af92abf5979d5a53c9101"
         },
-        "wasm": "f846e35a8a233668e9ed9988f0e8a69f5621b77893c0b446adfecc57f75acc9c"
+        "wasm": "8d9fe53c41e038a87b1173cf1e0e3b4d5f878306ca87644b51d1c5d4ce6cb21b"
       }
     },
     "stones": {
