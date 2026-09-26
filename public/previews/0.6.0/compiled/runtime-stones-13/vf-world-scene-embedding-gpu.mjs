@@ -103,7 +103,7 @@ fn grass_pose(vertex:u32,id:u32)->Out {
 @vertex fn grass_shadow(@builtin(vertex_index) v:u32,@builtin(instance_index) i:u32)->@builtin(position) vec4<f32>{return scene.light_vp*vec4<f32>(grass_pose(v,i).p,1.0);}
 @fragment fn material_fragment(v:Out)->@location(0) vec4<f32>{
   var n=normalize(v.n);var albedo=v.color.rgb;var roughness=0.90;
-  let l=normalize(scene.sun.xyz-v.p);var microOcclusion=1.0;
+  let l=normalize(scene.sun.xyz-v.p);var microOcclusion=1.0;var cavityAmbient=1.0;
   let vein_width=max(0.008,fwidth(v.uv.x));
   if(v.category>1.5){
     // One tree-space field spans the whole woody network. No primitive ID,
@@ -128,17 +128,23 @@ fn grass_pose(vertex:u32,id:u32)->Out {
     let stone=v.stone>=0.0;let seed=hash(u32(max(v.stone,0.0))+8187u);
     let footprint=max(length(dpdx(v.local)),length(dpdy(v.local)));
     let material=granite(v.local,albedo,seed,u32(max(v.stone,0.0)),footprint);albedo=select(albedo,material.rgb,stone);roughness=select(roughness,material.a,stone);
-    // Resolved pits cast directional local shade; finer mineral dots remain
-    // optical detail. Fade the bump only once the pit falls below a pixel.
-    let pitVisibility=1.0-smoothstep(0.009,0.028,footprint);
-    let relief=(mineral_noise(v.local*105.0,seed)*0.55+mineral_noise(v.local*220.0,seed+29u)*0.45)
-      *mix(0.0013,0.0018,unit(seed+131u))*pitVisibility;
+    // Fine, filtered indent relief; larger stone markings remain albedo only.
+    // The relief is object-space, so it follows the rock under the light.
+    let pitVisibility=1.0-smoothstep(0.004,0.016,footprint);
+    let fineVisibility=1.0-smoothstep(0.002,0.007,footprint);
+    let coarseRelief=mineral_noise(v.local*185.0,seed);
+    let reliefField=mix(coarseRelief,coarseRelief*0.72
+      +mineral_noise(v.local*370.0,seed+29u)*0.28,fineVisibility);
+    let pit=1.0-smoothstep(0.25,0.40,reliefField);
+    let relief=(reliefField-0.5)*mix(0.0018,0.0028,unit(seed+131u))*pitVisibility;
     let dx=dpdx(v.p);let dy=dpdy(v.p);let determinant=dot(dx,cross(dy,n));
     let gradient=(cross(dy,n)*dpdx(relief)+cross(n,dx)*dpdy(relief))/select(1.0,determinant,abs(determinant)>1.0e-10);
     n=select(n,normalize(n-clamp(gradient,vec3<f32>(-0.3),vec3<f32>(0.3))),stone);
-    // Directional micro-shadow: local relief blocks only direct sunlight on
-    // its lee side. It is fixed in stone space, so motion never repaints it.
-    microOcclusion=select(1.0,1.0-0.64*pitVisibility*smoothstep(-0.015,0.075,dot(gradient,l)),stone);
+    // Recesses have modest ambient occlusion; their light-facing rim casts
+    // the much stronger directional shade into the pit.
+    cavityAmbient=select(1.0,1.0-0.06*pit*pitVisibility,stone);
+    microOcclusion=select(1.0,1.0-0.62*pit*pitVisibility
+      *smoothstep(-0.02,0.04,dot(gradient,l)),stone);
   }
   let projected=scene.light_vp*vec4<f32>(v.p+n*0.002,1.0);
   let ndc=projected.xyz/projected.w;let uv=ndc.xy*vec2<f32>(0.5,-0.5)+0.5;
@@ -147,11 +153,24 @@ fn grass_pose(vertex:u32,id:u32)->Out {
     let texel=1.0/vec2<f32>(textureDimensions(shadow_texture));shadow=0.0;
     for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){shadow+=textureSampleCompareLevel(shadow_texture,shadow_sampler,uv+vec2<f32>(f32(x),f32(y))*texel,ndc.z-0.00008)/9.0;}}
   }
+  // The shadow map gives the light-cast shape. A short-range ground contact
+  // term anchors any rigid body whose collision envelope touches the floor.
+  var contactOcclusion=0.0;
+  if(scene.flags.x<0.5&&v.stone<0.0&&v.category<0.5&&v.n.z>0.9&&length(v.emission)<0.001){
+    for(var body=0u;body<arrayLength(&bodies);body++){
+      let b=bodies[body];let radius=max(b.info.z,0.01);
+      let planar=v.p.xy-b.p.xy;
+      let footprint=1.0-smoothstep(0.72,1.35,dot(planar,planar)/(radius*radius));
+      let gap=max(0.0,b.p.z-radius-v.p.z);
+      let grounded=1.0-smoothstep(0.015,0.22,gap/radius);
+      contactOcclusion=max(contactOcclusion,footprint*grounded);
+    }
+  }
   let leaf=v.category>0.5&&v.category<1.5;
   // A thin blade receives transmitted light on its back as well as reflection.
   let diffuse=select(max(0.0,dot(n,l)),max(0.0,dot(n,l))+max(0.0,-dot(n,l))*0.35,leaf);let view=normalize(scene.eye.xyz-v.p);let sheen=pow(max(0.0,dot(n,normalize(l+view))),mix(90.0,16.0,roughness))*mix(0.13,0.025,roughness);
   let irradiance=scene.sun.w/max(dot(scene.sun.xyz-v.p,scene.sun.xyz-v.p),0.01);
-  let linear=max(vec3<f32>(0.0),v.emission+albedo*(vec3<f32>(0.09)*(0.65+0.35*microOcclusion)+scene.flags.yzw*irradiance*diffuse*shadow*microOcclusion/3.141592654)+vec3<f32>(sheen*shadow));
+  let linear=max(vec3<f32>(0.0),(v.emission+albedo*(vec3<f32>(0.09)*cavityAmbient+scene.flags.yzw*irradiance*diffuse*shadow*microOcclusion/3.141592654)+vec3<f32>(sheen*shadow))*(1.0-0.58*contactOcclusion));
   let display=select(linear*12.92,1.055*pow(linear,vec3<f32>(1.0/2.4))-0.055,linear>vec3<f32>(0.0031308));
   return vec4<f32>(display,1.0);
 }
@@ -178,7 +197,7 @@ export async function createWorldSceneEmbeddingGpu(device,canvas,world,physics,m
   const format=navigator.gpu.getPreferredCanvasFormat(),context=canvas.getContext('webgpu');context.configure({device,format,alphaMode:'opaque'});
   const uniform=device.createBuffer({size:256,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const shadow=device.createTexture({size:{width:2048,height:2048,depthOrArrayLayers:1},format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
-  const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},...[1,2,3].map(binding=>({binding,visibility:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}})),{binding:4,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'depth'}},{binding:5,visibility:GPUShaderStage.FRAGMENT,sampler:{type:'comparison'}}]});
+  const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},...[1,2,3].map(binding=>({binding,visibility:binding===1?GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}})),{binding:4,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'depth'}},{binding:5,visibility:GPUShaderStage.FRAGMENT,sampler:{type:'comparison'}}]});
   const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},...[1,2,3].map(binding=>({binding,resource:{buffer:physics.buffers[binding-1]}})),{binding:4,resource:shadow.createView()},{binding:5,resource:device.createSampler({compare:'less-equal',magFilter:'linear',minFilter:'linear'})}]});
   // Shadow pipelines must not bind the texture being written as a sampled resource.
   const shadowLayout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX,buffer:{type:'uniform'}},...[1,2,3].map(binding=>({binding,visibility:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}}))]});

@@ -5,7 +5,7 @@ import {readFile,mkdir,mkdtemp,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../public');
-const isTree=process.argv.includes('--tree'),closeup=process.argv.includes('--closeup');
+const isTree=process.argv.includes('--tree'),closeup=process.argv.includes('--closeup'),hires=process.argv.includes('--hires');
 const parent=path.resolve(root,'../.w');await mkdir(parent,{recursive:true});const work=await mkdtemp(path.join(parent,'stones-gpu-'));
 let finish;const completed=new Promise(resolve=>finish=resolve);
 const html=String.raw`<!doctype html><canvas width="800" height="650" style="width:800px;height:650px"></canvas>
@@ -100,7 +100,7 @@ try{
   const frameTimings=[];
   for(let frame=0;frame<120;frame++){encoder=device.createCommandEncoder();for(let step=0;step<stepsPerFrame;step++)physics.step(encoder);embedding.render(encoder,camera,{grass:false,particles:false});const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();frameTimings.push(performance.now()-started);}
   frameTimings.sort((a,b)=>a-b);stoneDynamics.stepsPerDisplayFrame=stepsPerFrame;stoneDynamics.p95RenderOnlyMs=percentile(renderOnly,.95);stoneDynamics.p95ActivePhysicsOnlyMs=percentile(physicsOnly,.95);stoneDynamics.medianActiveRenderedFrameMs=frameTimings[Math.floor(frameTimings.length*.5)];stoneDynamics.p95ActiveRenderedFrameMs=frameTimings[Math.floor(frameTimings.length*.95)];stoneDynamics.maxActiveRenderedFrameMs=frameTimings.at(-1);
-  check(stoneDynamics.p95ActiveRenderedFrameMs<16.67,'Active collision rendered frame misses 60 Hz: '+JSON.stringify(stoneDynamics));
+  if(!location.search.includes('hires'))check(stoneDynamics.p95ActiveRenderedFrameMs<16.67,'Active collision rendered frame misses 60 Hz: '+JSON.stringify(stoneDynamics));
  }else{
   const ms=[];for(let frame=0;frame<60;frame++){encoder=device.createCommandEncoder();for(let step=0;step<Math.ceil((1/60)/world.time_step-1e-8);step++)physics.step(encoder);embedding.render(encoder,camera,{grass:true,particles:false});const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();ms.push(performance.now()-started);}
   ms.sort((a,b)=>a-b);treePerformance={medianMs:ms[30],p95Ms:ms[Math.floor(ms.length*.95)],maxMs:ms.at(-1)};
@@ -119,12 +119,12 @@ try{
 const server=createServer(async(req,res)=>{try{
  const route=new URL(req.url,'http://localhost').pathname;
  if(route==='/result'&&req.method==='POST'){let body='';for await(const data of req){body+=data;if(body.length>8_000_000)throw Error('Oversize result');}res.end('ok');finish(JSON.parse(body));return;}
- if(route==='/test'){res.setHeader('Content-Type','text/html');let page=isTree?html.replaceAll('runtime-stones-13','runtime-tree-12').replaceAll('stones-mixed-13','tree-air-12'):html;if(isTree&&process.argv.includes('--wind20'))page=page.replace('physics.setSpeed(8)','physics.setSpeed(20)');res.end(page);return;}
+ if(route==='/test'){res.setHeader('Content-Type','text/html');let page=isTree?html.replaceAll('runtime-stones-13','runtime-tree-12').replaceAll('stones-mixed-13','tree-air-12'):html;if(isTree&&process.argv.includes('--wind20'))page=page.replace('physics.setSpeed(8)','physics.setSpeed(20)');if(hires)page=page.replace('width="800" height="650" style="width:800px;height:650px"','width="1600" height="1300" style="width:1600px;height:1300px"');res.end(page);return;}
  const target=path.resolve(root,'.'+route),relative=path.relative(root,target);if(relative.startsWith('..')||path.isAbsolute(relative)){res.writeHead(404).end();return;}
  res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.json':'application/json','.wasm':'application/wasm'})[path.extname(target)]??'application/octet-stream');res.end(await readFile(target));
 }catch(e){res.writeHead(500).end(String(e));}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const args=['--headless=new','--enable-gpu','--no-first-run','--no-default-browser-check','--window-size=900,800','--user-data-dir='+path.join(work,'profile'),'http://127.0.0.1:'+server.address().port+'/test'+(closeup?'?closeup':'')];
+const args=['--headless=new','--enable-gpu','--no-first-run','--no-default-browser-check',hires?'--window-size=1700,1450':'--window-size=900,800','--user-data-dir='+path.join(work,'profile'),'http://127.0.0.1:'+server.address().port+'/test'+(closeup||hires?'?'+[closeup?'closeup':'',hires?'hires':''].filter(Boolean).join('&'):'')];
 const browser=process.env.VF_TEST_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const child=spawn(browser,args,{windowsHide:true});let stderr='';child.stderr.on('data',d=>stderr=(stderr+d).slice(-16000));child.stdout.resume();child.on('error',e=>finish({passed:false,error:String(e)}));child.on('exit',code=>finish({passed:false,error:'Browser exited '+code,stderr}));
 const timeout=setTimeout(()=>finish({passed:false,error:'GPU test timed out',stderr}),60000);

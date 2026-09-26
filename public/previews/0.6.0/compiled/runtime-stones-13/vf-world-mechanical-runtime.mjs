@@ -1,5 +1,5 @@
 import { createMechanicalWorldGpu } from './vf-world-mechanical-gpu.mjs';
-import { createWorldSceneEmbeddingGpu,projectPoint,sub,WORLD_SCENE_WGSL } from './vf-world-scene-embedding-gpu.mjs';
+import { createWorldSceneEmbeddingGpu,projectPoint,sub,WORLD_SCENE_WGSL } from './vf-world-scene-embedding-gpu.mjs?stone-relief-14';
 import {cantileverParameters,zoomCamera,emissiveSphere} from './vf-world-physical-parameters.mjs';
 
 export function mechanicalFrameSchedule(world,debt,elapsed){
