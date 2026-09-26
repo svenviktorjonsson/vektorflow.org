@@ -259,11 +259,12 @@ select:focus-visible, textarea:focus-visible {
 }
 
 @media (max-width: 620px) {
-  .site-nav { gap: 10px; min-height: 62px; padding-block: 10px; }
-  .site-nav .wordmark { gap: 5px; font-size: 15px; }
-  .site-nav .release-version { padding: 1px 5px; font-size: 9px; }
-  .site-nav nav { gap: clamp(5px, 1.7vw, 9px); font-size: clamp(10px, 3vw, 12px); }
-  .site-nav, .site-footer, .readme, .contents { width: calc(100% - 24px); }
+  .site-nav { gap: 6px; min-height: 62px; padding-block: 10px; }
+  .site-nav .wordmark { gap: 4px; font-size: 13px; }
+  .site-nav .release-version { padding: 1px 4px; font-size: 8px; }
+  .site-nav nav { gap: 5px; font-size: 10px; }
+  .site-nav { width: calc(100% - 16px); }
+  .site-footer, .readme, .contents { width: calc(100% - 24px); }
   .landing .readme { padding: 36px 0 40px; font-size: 17px; }
   .landing .readme > p:first-of-type { font-size: 21px; }
   .readme h1 { font-size: 30px; }
