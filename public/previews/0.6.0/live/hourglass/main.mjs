@@ -1,5 +1,5 @@
 import {createGranularApertureWorldGpu} from './vf-granular-aperture-world-gpu.mjs?v=hourglass-inertia-2';
-import {createGranularApertureEmbeddingGpu} from './vf-granular-aperture-embedding-gpu.mjs?v=hourglass-inertia-2';
+import {createGranularApertureEmbeddingGpu} from './vf-granular-aperture-embedding-gpu.mjs?v=hourglass-stream-3';
 
 const canvas = document.querySelector('#scene');
 const status = document.querySelector('#status');

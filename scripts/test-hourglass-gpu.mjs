@@ -13,8 +13,10 @@ let finish;
 const result = new Promise(resolve => finish = resolve);
 const probe = `<script>
 (() => {
+  const streamOnly = ${process.env.VKF_STREAM_CAPTURE_ONLY === '1'};
   const start = performance.now();
   let frames = 0, early, first, second, third, fourth, near, texture;
+  let streamContinuity;
   let beforeTurn, turned, afterTurn;
   let flipped = false, aperturePhase = 0;
   let done = false, lastProgress = start, started = false;
@@ -72,6 +74,25 @@ const probe = `<script>
     };
     return {left:variation(.40,.46),right:variation(.54,.60)};
   };
+  const measureStreamContinuity = async () => {
+    const source = document.querySelector('#scene');
+    const image = new Image();
+    image.src = source.toDataURL('image/png');
+    await image.decode();
+    const copy = document.createElement('canvas');
+    copy.width = source.width; copy.height = source.height;
+    const context = copy.getContext('2d', {willReadFrequently:true});
+    context.drawImage(image,0,0);
+    const data = context.getImageData(0,0,copy.width,copy.height).data;
+    const center = Math.floor(copy.width / 2);
+    const values = [];
+    for (let y = Math.floor(copy.height*.53); y <= Math.floor(copy.height*.79); y++)
+      values.push(data[(y*copy.width+center)*4]);
+    const jumps = values.slice(1).map((value,i) => Math.abs(value-values[i]));
+    return {maximumJump:Math.max(...jumps),
+      meanJump:jumps.reduce((sum,value)=>sum+value,0)/jumps.length,
+      darkPixels:values.filter(value=>value<14).length};
+  };
   const watch = async () => {
     frames++;
     const app = window.__hourglass;
@@ -90,7 +111,15 @@ const probe = `<script>
         wallSeconds:(lastProgress-start)/1000, simulated:app.world.simulatedSeconds,
         frames, status:message})});
     }
-    if (app.world.simulatedSeconds >= 1 && !early) early = await app.audit();
+    if (app.world.simulatedSeconds >= 1 && !early) {
+      early = await app.audit();
+      await fetch('/page-screenshot-stream', {method:'POST',
+        body:document.querySelector('#scene').toDataURL('image/png')});
+      streamContinuity = await measureStreamContinuity();
+      if (streamOnly) return send({passed:early.retainedFraction>=.9999,
+        time:early.simulatedSeconds,streamArea:early.streamArea,
+        retained:early.retainedFraction,streamContinuity});
+    }
     if (app.world.simulatedSeconds >= 30 && !first) {
       first = await app.audit();
       document.querySelector('#width').value = '2';
@@ -186,8 +215,12 @@ const probe = `<script>
         && beforeTurn.streamArea > 0 && inertial
         && Math.abs(turned.streamArea-beforeTurn.streamArea) < 1e-9
         && afterTurn.retainedFraction >= .9999
-        && afterTurn.retainedFraction <= 1.0001;
+        && afterTurn.retainedFraction <= 1.0001
+        && streamContinuity.maximumJump <= 10
+        && streamContinuity.meanJump <= 2.2
+        && streamContinuity.darkPixels === 0;
       return send({passed, fps, firstSlope, secondSlope,texture,
+        streamContinuity,
         inertial, survivorCount:survivors.length,
         turnedStreamArea:turned.streamArea, afterTurnStreamArea:afterTurn.streamArea,
         early:{time:early.simulatedSeconds,upper:early.upperArea,
@@ -221,17 +254,19 @@ const probe = `<script>
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
-    if (request.method === 'POST' && ['/page-result','/page-progress','/page-screenshot'].includes(url.pathname)) {
+    if (request.method === 'POST' && ['/page-result','/page-progress','/page-screenshot',
+      '/page-screenshot-stream'].includes(url.pathname)) {
       let body = '';
       for await (const chunk of request) {
         body += chunk;
-        if (body.length > (url.pathname === '/page-screenshot' ? 4000000 : 100000))
+        if (body.length > (url.pathname.startsWith('/page-screenshot') ? 4000000 : 100000))
           throw new Error('Oversize probe');
       }
       response.end('ok');
-      if (url.pathname === '/page-screenshot') {
+      if (url.pathname.startsWith('/page-screenshot')) {
         if (body.startsWith('data:image/png;base64,'))
-          await writeFile(path.join(work,'hourglass.png'),Buffer.from(body.slice(22),'base64'));
+          await writeFile(path.join(work,url.pathname === '/page-screenshot-stream'
+            ? 'hourglass-stream.png' : 'hourglass.png'),Buffer.from(body.slice(22),'base64'));
         return;
       }
       if (url.pathname === '/page-result') finish(JSON.parse(body));

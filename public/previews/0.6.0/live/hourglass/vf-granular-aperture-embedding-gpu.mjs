@@ -73,6 +73,7 @@ fn lower_wall(y: f32) -> f32 {
   let sparkle = pow(noise, 36.0) * 0.38;
   let sand = vec3<f32>(0.76, 0.62, 0.43) * (0.84 + 0.28 * noise)
     + vec3<f32>(sparkle);
+  var compact = false;
 
   // Fill from the throat upward. Integrating the wedge width from the throat
   // yields A = opening*h + slope*h²; this is the inverse for h.
@@ -81,8 +82,12 @@ fn lower_wall(y: f32) -> f32 {
     + 4.0 * slope * material.chamber_a) - view.opening) / (2.0 * slope);
   let b_height = (sqrt(view.opening * view.opening
     + 4.0 * slope * material.chamber_b) - view.opening) / (2.0 * slope);
-  if (material.direction > 0.0 && in_upper && y >= 0.47 - a_height) { color = sand; }
-  if (material.direction < 0.0 && in_lower && y <= 0.50 + b_height) { color = sand; }
+  if (material.direction > 0.0 && in_upper && y >= 0.47 - a_height) {
+    color = sand; compact = true;
+  }
+  if (material.direction < 0.0 && in_lower && y <= 0.50 + b_height) {
+    color = sand; compact = true;
+  }
 
   // The repose-limited height profile is computed by the GPU Law, never by
   // the Embedding; this pass only samples its conserved area bins.
@@ -93,12 +98,17 @@ fn lower_wall(y: f32) -> f32 {
     fract(pile_coordinate));
   let pile_top = select(0.06 + pile_height, 0.91 - pile_height,
     material.direction > 0.0);
-  if (material.direction > 0.0 && in_lower && y >= pile_top) { color = sand; }
-  if (material.direction < 0.0 && in_upper && y <= pile_top) { color = sand; }
+  if (material.direction > 0.0 && in_lower && y >= pile_top) {
+    color = sand; compact = true;
+  }
+  if (material.direction < 0.0 && in_upper && y <= pile_top) {
+    color = sand; compact = true;
+  }
 
-  if (in_upper || in_lower || (y >= 0.47 && y <= 0.50
-      && abs(x) <= view.opening * 0.5)) {
+  if (!compact && (in_upper || in_lower || (y >= 0.47 && y <= 0.50
+      && abs(x) <= view.opening * 0.5))) {
     let width_world = max(view.flow_width_pixels * px, px);
+    let sigma_cross = max(width_world * 0.42, px * 0.6);
     var coverage = 0.0;
     for (var i = 0u; i < 64u; i = i + 1u) {
       let area = material.stream[i];
@@ -111,16 +121,25 @@ fn lower_wall(y: f32) -> f32 {
       let speed = length(velocity);
       let axis = select(vec2<f32>(0.0, material.direction),
         velocity / max(speed, 1.0e-6), speed > 0.05);
-      let trail = clamp(speed * 0.025, 0.008, 0.07);
+      // Each physical parcel contributes area to a continuous density field.
+      // Kernel length follows inter-parcel travel (v*dt), so faster flow
+      // remains connected rather than exposing individual release events.
+      let step_distance = speed / 120.0;
+      let sigma_back = max(0.02, step_distance * 5.0);
+      let sigma_front = max(0.01, step_distance * 2.5);
       let offset = vec2<f32>(x, y) - origin;
       let longitudinal = dot(offset, axis);
       let transverse = abs(offset.x * axis.y - offset.y * axis.x);
-      let along = smoothstep(-trail, -trail * 0.7, longitudinal)
-        * (1.0 - smoothstep(0.0, max(py, px) * 2.0, longitudinal));
-      let across = exp(-4.0 * transverse * transverse
-        / (width_world * width_world));
-      coverage = coverage + area / max(width_world * trail, 1.0e-8)
-        * along * across;
+      let sigma_long = select(sigma_front, sigma_back, longitudinal < 0.0);
+      if (abs(longitudinal) > 3.0 * sigma_long
+          || transverse > 3.0 * sigma_cross) { continue; }
+      let along = longitudinal / sigma_long;
+      let across = transverse / sigma_cross;
+      // Integral over the unbounded plane equals parcel area. Brightness
+      // variation below is optical only; it cannot create physical material.
+      let normalization = 3.14159265 * (sigma_back + sigma_front) * sigma_cross;
+      coverage = coverage + area / normalization
+        * exp(-0.5 * (along * along + across * across));
     }
     let falling_noise = hash(floor(grain_pixel + vec2<f32>(0.0, material.time * 400.0)));
     let falling_sand = vec3<f32>(0.82, 0.69, 0.49)
