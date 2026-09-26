@@ -458,10 +458,11 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let field_velocity = field.yz / max(field.x, 1.0e-5);
   // The neighborhood closes interior lattice gaps, but the local sample
   // gates the exterior. Do not blur a settled pile outward into the vacuum.
-  let packed_coverage = clamp(min(density,
-    local_packed * 1.25), 0.0, 1.0);
-  var coverage = packed_coverage;
+  let packed_density = max(min(density, local_packed * 1.25), 0.0);
   let flowing_density = max(field.w, 0.0);
+  // Packed and airborne sand are one area-density field. Width changes move
+  // mass across pixels; they must not introduce a separate opacity curve.
+  var coverage = clamp(packed_density + flowing_density, 0.0, 1.0);
 
   let screen_uv = input.position.xy / params.canvas.xy;
   let world = vec2<f32>(
@@ -518,18 +519,7 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
         (1.0 - exp(-1.5 * support_density)) * near_bar);
     }
   }
-  // Flowing lanes add optical density to the same field. Beer-Lambert
-  // compositing has no abrupt packed/airborne surface boundary.
-  let visual_pixel_world = (params.view.z - params.view.x)
-    / max(params.canvas.x, 1.0);
-  let visual_seed = pixel_noise(floor((world
-    - field_velocity * params.floor_color.w) / visual_pixel_world),
-    0xa511e9b3u);
-  // Only overlapping moving neighborhoods gain extra optical depth. A lone
-  // trajectory remains fine; a falling group fills without a contour switch.
-  let flowing_alpha = clamp(flowing_density, 0.0, 1.0);
-  let visual_coverage = select(flowing_alpha, 0.0, solid_gap < 0.0);
-  coverage = clamp(coverage + visual_coverage, 0.0, 1.0);
+  if (solid_gap < 0.0) { coverage = 0.0; }
   let view_height = max(params.view.w - params.view.y, 1.0e-6);
   let vertical = clamp((world.y - params.view.y) / view_height, 0.0, 1.0);
   let background = params.air_color.rgb * mix(0.68, 1.16, vertical);
@@ -570,7 +560,7 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   // Reconstructed density has lattice-row variation even in a static pile;
   // using it as a lighting term prints those rows into the material surface.
   sand *= diffuse;
-  sand *= 0.96 + 0.08 * mix(fine, stream, motion);
+  sand *= 0.96 + 0.08 * fine;
   sand *= mix(1.0, 0.56, params.visual.w);
   // Contact shadow is tied to authored solid geometry, not clock noise.
   let contact_band = 1.0 - smoothstep(0.0,
@@ -580,8 +570,7 @@ fn material_composite_fragment(input: FullscreenOut) -> @location(0) vec4<f32> {
   let sparkle = smoothstep(0.982, 0.9995, fine);
   let motion_shimmer = abs(fine - fine_next) * motion;
   let glimmer = sparkle * params.material.w * 0.28
-    + motion * (sparkle * params.material.w * 0.08
-      + motion_shimmer * 0.06);
+    + motion * motion_shimmer * 0.06;
   sand += vec3<f32>(0.86, 0.84, 0.76) * glimmer * params.light.w;
   return vec4<f32>(mix(background, sand, coverage), 1.0);
 }
@@ -658,7 +647,6 @@ fn advance(@builtin(global_invocation_id) invocation: vec3<u32>) {
   let descent = smoothstep(0.02, 0.25, -grain.velocity.y);
   let support = smoothstep(1.0, 6.0, f32(grain.contact_count));
   let moving = descent * (1.0 - 0.38 * visual.y * support);
-  let free_fall = grain.velocity.y < -0.08;
   var transport = transports[index];
   if (moving > 0.04) {
     if (transport.state.w <= 0.0) {
@@ -674,11 +662,11 @@ fn advance(@builtin(global_invocation_id) invocation: vec3<u32>) {
   }
   // Source fades on physical simulation time, with exactly the same area
   // appearing in the packed destination via (1 - flowing).
-  // A dry detached guide is a whole parcel in flight, not a moving ball.
-  // Its source share shrinks smoothly over the first 80 ms of transport.
+  // Dry sand enters its lane immediately: no transient circular source blob.
+  // Wet bridges may retain a short packed share at the release point.
   let released = select(0.0,
-    select(moving, 1.0 - 0.38 * visual.y * support, free_fall)
-      * smoothstep(0.0, 0.08, transport.state.w),
+    select(1.0, moving * smoothstep(0.0, 0.08, transport.state.w),
+      visual.y > 0.001),
     moving > 0.04);
   transport.state.x = clamp(max(released,
     transport.state.x * exp(-max(visual.x, 0.0) / 0.18)), 0.0, 1.0);
@@ -1185,17 +1173,25 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
       if (exponent === 0) return sign * 2 ** -14 * mantissa / 1024;
       return sign * 2 ** (exponent - 15) * (1 + mantissa / 1024);
     };
-    let total = 0, flowing = 0;
+    let total = 0, flowing = 0, visibleAlpha = 0, saturatedPixels = 0;
+    let maximumDensity = 0;
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const offset = y * bytesPerRow + x * 8;
-      total += half(words.getUint16(offset, true));
+      const density = half(words.getUint16(offset, true));
+      total += density;
       flowing += half(words.getUint16(offset + 6, true));
+      visibleAlpha += Math.min(1, Math.max(0, density));
+      maximumDensity = Math.max(maximumDensity, density);
+      if (density > 1) saturatedPixels++;
     }
     staging.unmap();
     staging.destroy();
     const expected = particleCount * Math.PI * worldRuntime.policy.grainRadius ** 2;
     return { total: total * fieldPixelArea, flowing: flowing * fieldPixelArea,
       expected, retainedFraction: total * fieldPixelArea / expected,
+      visibleAlphaArea: visibleAlpha * fieldPixelArea,
+      visibleAlphaFraction: visibleAlpha * fieldPixelArea / expected,
+      saturatedPixels, maximumDensity,
       pixelArea: fieldPixelArea, width, height };
   };
 
