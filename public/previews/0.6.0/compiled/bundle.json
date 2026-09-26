@@ -64,12 +64,12 @@
       "directory": "stones-mixed-13",
       "runtime_directory": "runtime-stones-13",
       "runtime": {
-        "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
+        "vf-world-layer-runtime.js": "21f8b5711fbd44bed5214e55c4da4440f22f8b930f62f99aa314325bb53ed201",
         "vf-compiled-runtime-bridge.js": "7282c34cbfe4387a5472a3586168c8aa1ec5aad1e28ecf4083527263f26b8c3a",
-        "vf-world-mechanical-runtime.mjs": "5c5f38157cf105cf84dff879a093cc5207041e29d24692a728a0f2172601cdcc",
+        "vf-world-mechanical-runtime.mjs": "c50d7adb9b0720776c71538fc2658a3fcd167894866ada51e07e5237f40e5bc7",
         "vf-world-mechanical-gpu.mjs": "9794baf360576219e4ede9d2f579d6e1eb889d0ad4310329230717e20a3039a2",
         "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
-        "vf-world-scene-embedding-gpu.mjs": "dd5f4e5a31f9602410ca66e5c7458f961f0777dbd4d0502cf2e3da6664d99e0d",
+        "vf-world-scene-embedding-gpu.mjs": "15dbe84678761a5b4f40c0a3a07927c7b50a0d206dd0db5c95dd638482859d0a",
         "vf-world-physical-parameters.mjs": "c6373befa374ee03f0770e28d720e9bb981fcefd1d5bfb22d04971c2235b1974"
       },
       "wasm": "6a5535dfb0319d4d0500511e9f101a44e0b05817dda08eb2cb4ffa2a15b30699",
