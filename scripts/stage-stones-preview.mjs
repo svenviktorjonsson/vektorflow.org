@@ -12,7 +12,7 @@ const id=process.argv[3]??'stones';if(!['stones','tree','wheel'].includes(id))th
 const committedRuntime=process.argv.includes('--committed-runtime');
 const preserveRuntime=process.argv.includes('--preserve-runtime');
 if(preserveRuntime&&id!=='wheel')throw Error('Preserved runtime is only staged for the wheel');
-const runtime_directory=id==='wheel'?'runtime-wheel-28':id==='stones'?'runtime-stones-12':'runtime-tree-11',directory=id==='wheel'?'wheel-world-view-28':id==='stones'?'stones-mixed-12':'tree-air-11';
+const runtime_directory=id==='wheel'?'runtime-wheel-28':id==='stones'?'runtime-stones-14':'runtime-tree-11',directory=id==='wheel'?'wheel-world-view-28':id==='stones'?'stones-mixed-14':'tree-air-11';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');
@@ -38,7 +38,7 @@ async function copyRuntime(name){
     committedRuntime?committedBytes(['show',`${build.runtime_revision}:web/vf-ui/${name}`]):await readFile(path.join(compiler,'web/vf-ui',name));
   const source=Buffer.from(original.toString('utf8').replaceAll('\r\n','\n'));
   if(!preserveRuntime)await writeFile(path.join(compiled,runtime_directory,name),source);
-  runtime[name]=hash(original);
+  runtime[name]=hash(source);
   for(const match of source.toString().matchAll(/(?:from\s*|import\s*)['"]\.\/([^'"]+)['"]/g))await copyRuntime(match[1].split('?')[0]);
 }
 for(const name of ['vf-world-layer-runtime.js','vf-compiled-runtime-bridge.js',id==='wheel'?'vf-world-material-runtime.mjs':'vf-world-mechanical-runtime.mjs'])await copyRuntime(name);
@@ -48,7 +48,7 @@ const bytes=await readFile(path.join(input,'.vkfbuild/main/main.wasm'));
 if(!WebAssembly.validate(bytes))throw Error('Invalid application WASM');
 await writeFile(path.join(output,'main.wasm'),bytes);
 await copyFile(path.join(input,'.vkfbuild/main/wasm-manifest.json'),path.join(output,'manifest.json'));
-const hashes={};for(const [name,source] of snapshots){await writeFile(path.join(sources,name),source);hashes[name]=hash(source);}
+const hashes={};for(const [name,bytes] of snapshots){const source=Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n'));await writeFile(path.join(sources,name),source);hashes[name]=hash(source);}
 build.sources=hashes;build.wasm=hash(bytes);
 bundle.applications[id]={directory,runtime_directory,runtime,wasm:hash(bytes),manifest:hash(await readFile(path.join(output,'manifest.json'))),sources:hashes,build};
 const bridge=createRequire(import.meta.url)(path.join(compiler,'web/vf-ui/vf-compiled-runtime-bridge.js'));

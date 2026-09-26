@@ -1,2 +1,2 @@
-stone: (friction:0.72,restitution:0.10,rolling_friction:0.35,spin_friction:0.24,sleep:true,asset:"/previews/0.6.0/live/rocks/assets/rigid-stones-30kg-10.bin.gz")
+stone: (friction:0.72,restitution:0.10,rolling_friction:0.35,spin_friction:0.24,sleep:true,asset:"/previews/0.6.0/live/rocks/assets/rigid-stones-30kg-11.bin.gz")
 light: (fixed:true,shape:"sphere",radius:0.6,emissivity:1,emission:[1,0.96,0.88],color:[0.1,0.1,0.1,1],radiance:105,orbit_speed:0.35,orbit_target:[0,0,0.7])
