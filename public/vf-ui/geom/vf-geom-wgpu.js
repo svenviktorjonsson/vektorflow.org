@@ -3742,7 +3742,7 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
     return best;
   }
 
-  function frameCameraMatrices(camera, aspect, timeMs, mathApi, fallbackAutoSpin) {
+  function frameCameraMatrices(camera, aspect, mathApi) {
     var Mm = mathApi || Math3D;
     var cam = camera || {};
     var pos = cam.pos || [0, 0, 5];
@@ -3767,10 +3767,6 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
     }
     if (cam && Array.isArray(cam.view_matrix) && cam.view_matrix.length === 16) {
       viewMat = new Float32Array(cam.view_matrix);
-    } else if (fallbackAutoSpin === true) {
-      var ang = Number(timeMs || 0) * 0.0008;
-      viewMat = Mm.mat4Mul(Mm.mat4Translation(0, 0, -5), Mm.mat4RotationY(ang));
-      pos = [0, 0, 5];
     } else {
       viewMat = mat4LookAt(pos, target, up);
     }
@@ -6064,13 +6060,61 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
     return best;
   }
 
+  function defaultSceneLight(meshLike) {
+    var parts = Array.isArray(meshLike && meshLike.parts) ? meshLike.parts : [];
+    var bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    var found = false;
+    for (var partIndex = 0; partIndex < parts.length; partIndex += 1) {
+      var mesh = parts[partIndex];
+      if (!mesh || String(mesh.topology || "") !== "triangle-list" ||
+          mesh.visible === false || mesh.no_lighting === true || mesh.receives_lighting === false) {
+        continue;
+      }
+      var vertices = mesh.vertices;
+      if (!vertices || vertices.length < 3) { continue; }
+      var stride = vertices.length % 10 === 0 ? 10 : 3;
+      for (var vertexIndex = 0; vertexIndex + 2 < vertices.length; vertexIndex += stride) {
+        var x = Number(vertices[vertexIndex]);
+        var y = Number(vertices[vertexIndex + 1]);
+        var z = Number(vertices[vertexIndex + 2]);
+        if (![x, y, z].every(Number.isFinite)) { continue; }
+        bounds[0] = Math.min(bounds[0], x); bounds[3] = Math.max(bounds[3], x);
+        bounds[1] = Math.min(bounds[1], y); bounds[4] = Math.max(bounds[4], y);
+        bounds[2] = Math.min(bounds[2], z); bounds[5] = Math.max(bounds[5], z);
+        found = true;
+      }
+    }
+    if (!found) { return null; }
+    var center = [
+      (bounds[0] + bounds[3]) * 0.5,
+      (bounds[1] + bounds[4]) * 0.5,
+      (bounds[2] + bounds[5]) * 0.5
+    ];
+    var span = Math.max(bounds[3] - bounds[0], bounds[4] - bounds[1], bounds[5] - bounds[2], 1e-6);
+    return {
+      id: "__vf_default_key",
+      pos: [center[0] + span * 1.5, center[1] - span * 1.5, center[2] + span * 2.0],
+      target: center,
+      color: "white",
+      intensity: 24,
+      range: span * 8,
+      casts_shadow: false,
+      show_marker: false
+    };
+  }
+
   function resolveSceneLights(rawLights, meshLike, t) {
-    var baseLights = (rawLights || []).map(function (l) { return normalizeLight(l, t); });
+    var sourceLights = Array.isArray(rawLights) ? rawLights : [];
+    if (!sourceLights.length) {
+      var fallbackLight = defaultSceneLight(meshLike);
+      if (fallbackLight) { sourceLights = [fallbackLight]; }
+    }
+    var baseLights = sourceLights.map(function (l) { return normalizeLight(l, t); });
     var sourceLightsById = Object.create(null);
     for (var i = 0; i < baseLights.length; i += 1) {
       var sourceLight = baseLights[i];
-      if (sourceLight && rawLights[i] && rawLights[i].id) {
-        sourceLightsById[String(rawLights[i].id)] = sourceLight;
+      if (sourceLight && sourceLights[i] && sourceLights[i].id) {
+        sourceLightsById[String(sourceLights[i].id)] = sourceLight;
       }
     }
     var meshById = Object.create(null);
@@ -7578,11 +7622,6 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
       var view;
       if (Array.isArray(camera.view_matrix) && camera.view_matrix.length === 16) {
         view = new Float32Array(camera.view_matrix);
-      } else if (!sceneCamera) {
-        view = MmBatch.mat4Mul(
-          MmBatch.mat4Translation(0, 0, -5),
-          MmBatch.mat4RotationY(t * 0.0008)
-        );
       } else {
         view = mat4LookAt(camera.pos || [0, 0, 5], camera.target || [0, 0, 0], camera.up || [0, 1, 0]);
       }
@@ -7915,12 +7954,6 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
         }
         if (camPart && Array.isArray(camPart.view_matrix) && camPart.view_matrix.length === 16) {
           viewMatPart = new Float32Array(camPart.view_matrix);
-        } else if (!overrideCamera && !partMesh.camera && !sceneMesh.camera) {
-          var angPart = t * 0.0008;
-          var trPart = MmBatch.mat4Translation(0, 0, -5);
-          var rotPart = MmBatch.mat4RotationY(angPart);
-          viewMatPart = MmBatch.mat4Mul(trPart, rotPart);
-          posPart = [0, 0, 5];
         } else {
           viewMatPart = mat4LookAt(posPart, targetPart, upPart);
         }
@@ -9034,7 +9067,7 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
         );
         perfSample.final_pass = perfNowMs() - perfStageStart;
         var sceneCam = mesh.camera || {};
-        var frameCam = frameCameraMatrices(sceneCam, aspBatch, t, MmBatch, !mesh.camera);
+        var frameCam = frameCameraMatrices(sceneCam, aspBatch, MmBatch);
         var scenePos = frameCam.pos;
         var sceneMvp = frameCam.mvp;
         this._lastFrameViewProj = Array.prototype.slice.call(sceneMvp);
@@ -9211,16 +9244,7 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
         } else {
           projMat  = Mm.mat4PerspectiveZ01(fovRad, asp, 0.05, 500);
         }
-        // auto-spin if no camera is set on mesh
-        if (!mesh.camera) {
-          var ang  = t * 0.0008;
-          var tr   = Mm.mat4Translation(0, 0, -5);
-          var rot  = Mm.mat4RotationY(ang);
-          viewMat  = Mm.mat4Mul(tr, rot);
-          pos      = [0, 0, 5];
-        } else {
-          viewMat = mat4LookAt(pos, target, up);
-        }
+        viewMat = mat4LookAt(pos, target, up);
         mvp = Mm.mat4Mul(projMat, viewMat);
       }
 
@@ -9651,7 +9675,9 @@ fn fs_flare(i: FlareVOut) -> @location(0) vec4<f32> {
     createPlanarMirrorRuntime: createPlanarMirrorRuntime,
     resolvePlanarMirrorGeometry: resolvePlanarMirrorGeometry,
     surfaceLocalBounds: surfaceLocalBounds,
-    derivePlanarSurfaceWorldFrame: derivePlanarSurfaceWorldFrame
+    derivePlanarSurfaceWorldFrame: derivePlanarSurfaceWorldFrame,
+    defaultSceneLight: defaultSceneLight,
+    resolveSceneLights: resolveSceneLights
   };
 })(typeof window !== "undefined" ? window : this);
 

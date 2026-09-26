@@ -34,6 +34,9 @@ function validateManifest(manifest) {
   ) {
     throw new TypeError("invalid VKF symbolic kernel manifest");
   }
+  if (manifest.requiredHost?.importModule === 'vkf.concurrent') {
+    throw new TypeError('persistent symbolic kernels do not own concurrent Worker lifetimes; use the concurrent browser runner');
+  }
   return manifest;
 }
 
@@ -91,7 +94,7 @@ export function createSymbolicKernel({ instance, manifest }) {
   const rewind = requireFunction(exportsObject, "vkf_vm_rewind");
   const invokeWasm = requireFunction(exportsObject, "vkf_vm_invoke");
   const slotSize = requireFunction(exportsObject, "vkf_vm_value_slot_size")();
-  if (slotSize !== SLOT_SIZE) {
+  if (slotSize !== SLOT_SIZE && slotSize !== 24) {
     throw new RangeError(`unsupported VKF value slot size ${slotSize}`);
   }
 
@@ -117,15 +120,15 @@ export function createSymbolicKernel({ instance, manifest }) {
   }
 
   function writeValue(pointer, value) {
-    checkedRange(pointer, SLOT_SIZE, "VKF argument");
+    checkedRange(pointer, slotSize, "VKF argument");
     const view = dataView();
-    bytes().fill(0, pointer, pointer + SLOT_SIZE);
+    bytes().fill(0, pointer, pointer + slotSize);
     if (value instanceof SymbolicKernelHandle) {
       if (value.kernel !== kernel) {
         throw new TypeError("symbolic handles cannot cross kernel instances");
       }
-      checkedRange(value.pointer, SLOT_SIZE, "VKF handle");
-      bytes().copyWithin(pointer, value.pointer, value.pointer + SLOT_SIZE);
+      checkedRange(value.pointer, slotSize, "VKF handle");
+      bytes().copyWithin(pointer, value.pointer, value.pointer + slotSize);
       return;
     }
     if (value == null) {
@@ -159,7 +162,7 @@ export function createSymbolicKernel({ instance, manifest }) {
       current.setUint32(pointer + 4, value.length, true);
       current.setUint32(pointer + 8, entriesPointer, true);
       value.forEach((entry, index) => {
-        const entryPointer = allocateBytes(SLOT_SIZE);
+        const entryPointer = allocateBytes(slotSize);
         writeValue(entryPointer, entry);
         dataView().setUint32(entriesPointer + index * 4, entryPointer, true);
       });
@@ -173,8 +176,8 @@ export function createSymbolicKernel({ instance, manifest }) {
       current.setUint32(pointer + 4, entries.length, true);
       current.setUint32(pointer + 8, entriesPointer, true);
       entries.forEach(([key, entry], index) => {
-        const keyPointer = allocateBytes(SLOT_SIZE);
-        const valuePointer = allocateBytes(SLOT_SIZE);
+        const keyPointer = allocateBytes(slotSize);
+        const valuePointer = allocateBytes(slotSize);
         writeValue(keyPointer, key);
         writeValue(valuePointer, entry);
         const entryPointer = entriesPointer + index * 8;
@@ -189,7 +192,7 @@ export function createSymbolicKernel({ instance, manifest }) {
   }
 
   function decodeValue(pointer, active = new Set()) {
-    checkedRange(pointer, SLOT_SIZE, "VKF result");
+    checkedRange(pointer, slotSize, "VKF result");
     if (active.has(pointer)) {
       throw new TypeError("cyclic VKF values cannot cross the browser ABI");
     }
@@ -232,14 +235,14 @@ export function createSymbolicKernel({ instance, manifest }) {
   }
 
   function retain(pointer) {
-    const retained = allocateBytes(SLOT_SIZE);
-    checkedRange(pointer, SLOT_SIZE, "VKF retained result");
-    bytes().copyWithin(retained, pointer, pointer + SLOT_SIZE);
+    const retained = allocateBytes(slotSize);
+    checkedRange(pointer, slotSize, "VKF retained result");
+    bytes().copyWithin(retained, pointer, pointer + slotSize);
     return new SymbolicKernelHandle(kernel, retained);
   }
 
   function recordFieldPointer(pointer, field) {
-    checkedRange(pointer, SLOT_SIZE, "VKF record handle");
+    checkedRange(pointer, slotSize, "VKF record handle");
     const view = dataView();
     if (view.getUint32(pointer, true) !== TAG.record) {
       throw new TypeError("VKF handle does not contain a record");
@@ -276,7 +279,7 @@ export function createSymbolicKernel({ instance, manifest }) {
       throw new RangeError("VKF argument capacity exceeded");
     }
     const base = argumentPointer();
-    args.forEach((value, index) => writeValue(base + index * SLOT_SIZE, value));
+    args.forEach((value, index) => writeValue(base + index * slotSize, value));
     const status = invokeWasm(signature.index, args.length);
     if (status !== 0) {
       throw new Error(`VKF invocation "${name}" failed with status ${status}`);
