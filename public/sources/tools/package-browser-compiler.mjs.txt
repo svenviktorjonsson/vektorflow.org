@@ -2,8 +2,6 @@ import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { build } from "esbuild";
-
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputArgument = process.argv.find((argument) => argument.startsWith("--output="));
 const outputIndex = process.argv.indexOf("--output");
@@ -17,6 +15,18 @@ if (!outputValue) {
 const output = path.resolve(outputValue);
 const artifactsOutput = path.join(output, "artifacts");
 const artifactsSource = path.join(repositoryRoot, "web", "playground", "artifacts");
+const compilerModule = path.join(repositoryRoot, "web", "playground", "vkf-shared-compiler.mjs");
+const concurrentModules = [
+  "vkf-concurrent-broker-client.mjs",
+  "vkf-concurrent-broker.mjs",
+  "vkf-concurrent-host.mjs",
+  "vkf-concurrent-process.mjs",
+  "vkf-concurrent-shared-graph.mjs",
+  "vkf-concurrent-shared.mjs",
+  "vkf-concurrent-transport.mjs",
+  "vkf-concurrent-values.mjs",
+  "vkf-concurrent-worker.mjs",
+];
 
 await mkdir(artifactsOutput, { recursive: true });
 await Promise.all([
@@ -24,13 +34,9 @@ await Promise.all([
     path.join(artifactsSource, "vkf-shared-compiler.wasm"),
     path.join(artifactsOutput, "vkf-shared-compiler.wasm"),
   ),
-  build({
-    entryPoints: [path.join(repositoryRoot, "web", "playground", "vkf-shared-compiler.mjs")],
-    outfile: path.join(output, "vkf-shared-compiler.mjs"),
-    bundle: true,
-    format: "esm",
-    platform: "browser",
-    target: ["es2022"],
-    legalComments: "none",
-  }),
+  copyFile(compilerModule, path.join(output, "vkf-shared-compiler.mjs")),
+  ...concurrentModules.map((name) => copyFile(
+    path.join(repositoryRoot, "web", "playground", name),
+    path.join(output, name),
+  )),
 ]);

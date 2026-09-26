@@ -1,0 +1,55 @@
+{
+  "schema": "vektor-flow/public-release-assets-v1",
+  "version": "0.4.7",
+  "tag": "v0.4.7",
+  "assets": [
+    {
+      "kind": "download",
+      "name": "vektor-flow-windows-x64-setup.exe",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64-setup.exe?sha256=2e0c091f5ce343aebea386a4dba858086fdb574c20d4b387c4db68b6e74ea1ec",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64-setup.exe.sha256",
+      "sha256": "2e0c091f5ce343aebea386a4dba858086fdb574c20d4b387c4db68b6e74ea1ec",
+      "bytes": 5579823
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-windows-x64.zip",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64.zip?sha256=160abc068711d036aa669ceaf42aaa1d9da49e83f28efe1aee51d169caed16e7",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64.zip.sha256",
+      "sha256": "160abc068711d036aa669ceaf42aaa1d9da49e83f28efe1aee51d169caed16e7",
+      "bytes": 10002009
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-linux-x64.deb",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.deb?sha256=cb8a7371a7f8d21950e95a3df0cfedb652d14563da10be70ace1717499e707cf",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.deb.sha256",
+      "sha256": "cb8a7371a7f8d21950e95a3df0cfedb652d14563da10be70ace1717499e707cf",
+      "bytes": 2429660
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-linux-x64.tar.gz",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.tar.gz?sha256=4af4df6dd9543b9572c10d1afaf6b7d2a0f49f10098ccee3fbcfd968d95d808c",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.tar.gz.sha256",
+      "sha256": "4af4df6dd9543b9572c10d1afaf6b7d2a0f49f10098ccee3fbcfd968d95d808c",
+      "bytes": 3010602
+    },
+    {
+      "kind": "download",
+      "name": "vektor-flow-browser-wasm.zip",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-browser-wasm.zip?sha256=d981047906bdf53fe79f7d0ddddd424b8f0f36a3adca17ddca8aa0069cc72ce7",
+      "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-browser-wasm.zip.sha256",
+      "sha256": "d981047906bdf53fe79f7d0ddddd424b8f0f36a3adca17ddca8aa0069cc72ce7",
+      "bytes": 1728376
+    },
+    {
+      "kind": "runtime",
+      "name": "vkf-shared-compiler.wasm",
+      "url": "https://vektorflow.org/runtimes/v0.4.7/vkf-shared-compiler.wasm?sha256=42731514d3861908d0df15d5cc4a6ca0efea4c60f063ade86aeb0ccf55d92765",
+      "checksumUrl": "https://vektorflow.org/runtimes/v0.4.7/vkf-shared-compiler.wasm.sha256",
+      "sha256": "42731514d3861908d0df15d5cc4a6ca0efea4c60f063ade86aeb0ccf55d92765",
+      "bytes": 8987173
+    }
+  ]
+}

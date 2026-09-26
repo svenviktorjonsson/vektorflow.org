@@ -7,7 +7,7 @@ concurrent: .concurrent
 worker(events, state):
     (event:events.get())??>
         Stop => state
-        _ => worker(events, state)
+        worker(events, state)
 
 events: concurrent.queue()
 state: concurrent.shared((mode:"run", samples:[1,2,3]))
