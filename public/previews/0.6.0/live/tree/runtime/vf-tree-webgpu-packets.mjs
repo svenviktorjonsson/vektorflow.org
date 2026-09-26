@@ -10,6 +10,12 @@ const LEAVES_PER_CLUSTER = 2;
 const LEAF_PARAMETER_STRIDE = 9;
 const LEAF_VERTEX_COUNT = 12;
 const LEAF_INDEX_COUNT = 66;
+const LEAF_OUTLINES = Object.freeze({
+  ovate: Object.freeze([0.42, 0.76]),
+  oak: Object.freeze([0.14, 0.24, 0.34, 0.45, 0.55, 0.66, 0.77, 0.88]),
+  birch: Object.freeze([0.13, 0.23, 0.34, 0.45, 0.56, 0.67, 0.78, 0.89]),
+  beech: Object.freeze([0.14, 0.25, 0.36, 0.47, 0.58, 0.69, 0.80, 0.90]),
+});
 const LEAF_CONTACT_EPSILON = 1.0e-5;
 const LEAF_COLLISION_CELL_SIZE = 0.04;
 const WOOD_RING_SIDES = 12;
@@ -101,7 +107,7 @@ function boundedNormal(node, lane, mean, standardDeviation, minimum, maximum) {
   );
 }
 
-function requirePacket(packet) {
+function requirePacket(packet,allowSparse=false) {
   if (
     packet?.kind !== 'tree-render-packet:v1'
     || !Number.isSafeInteger(packet.primitiveCount)
@@ -137,8 +143,8 @@ function requirePacket(packet) {
   if (
     counts.trunks !== 1
     || counts.crowns !== 1
-    || ![30, 62, 124, 126, 252].includes(counts.branches)
-    || counts.twigs < 220
+    || (allowSparse ? counts.branches > 252 : ![30, 62, 124, 126, 252].includes(counts.branches))
+    || counts.twigs < (allowSparse ? 1 : 220)
     || counts.twigs > 1536
     || counts.foliageClusters < counts.twigs
     || counts.foliageClusters > counts.twigs * 9
@@ -469,7 +475,7 @@ function appendPartitionedFork(builder, ports, nodePoint, barkMaterialAt) {
   });
 }
 
-function appendWoodyNetwork(builder, packet, bark) {
+function appendWoodyNetwork(builder, packet, bark,allowSparse=false,barkDetail=null) {
   const woody = [];
   for (let primitive = 0; primitive < packet.primitiveCount; primitive += 1) {
     const kind = packet.primitiveKinds[primitive];
@@ -557,7 +563,7 @@ function appendWoodyNetwork(builder, packet, bark) {
   const trunkBaseRadius = woody.find(({ kind }) => kind === KIND_TRUNK).transform[7];
   const networkBaseColor = woody.find(({ kind }) => kind === KIND_TRUNK).color;
   const networkBaseRoughness = woody.find(({ kind }) => kind === KIND_TRUNK).roughness;
-  const detailedBark = builder.vertexBudget > 65_536;
+  const detailedBark = barkDetail ?? builder.vertexBudget > 65_536;
   const junctionRingSides = detailedBark
     ? DETAILED_JUNCTION_RING_SIDES : WOOD_RING_SIDES;
   const noiseSeed = bark.phase * 0.15915494309189535;
@@ -844,10 +850,17 @@ function appendWoodyNetwork(builder, packet, bark) {
         ringVertices: Object.freeze([...target.indices]),
       });
     });
-    if (portTargets.length !== 3) {
-      throw new RangeError('tree WebGPU junction must have three connected ports');
+    if (portTargets.length !== 3 && !(allowSparse && portTargets.length === 2)) {
+      throw new RangeError('tree WebGPU junction must have two or three connected ports');
     }
-    const forkSkin = appendPartitionedFork(
+    const forkSkin = portTargets.length === 2 ? (() => {
+      const before = builder.indices.length;
+      connectRings(portTargets[0], portTargets[1]);
+      return {triangleCount:(builder.indices.length-before)/3,
+        minimumRadialScale:Math.min(...portTargets.map(port=>port.radius)),
+        maximumRadialScale:Math.max(...portTargets.map(port=>port.radius)),
+        connectorComponents:1,lateralGraftReachRatio:0};
+    })() : appendPartitionedFork(
       builder,
       ports.map((port, index) => ({
         target: portTargets[index], record: port.record, role: port.role,
@@ -1156,7 +1169,7 @@ function resolveLeafPose(transform, parameters, leafIndex, physics) {
   return null;
 }
 
-function appendOvateLeaf(builder, color, roughness, parameters, pose) {
+function appendOvateLeaf(builder, color, roughness, parameters, pose, outline) {
   const { attachment, bladeBase, apex, longAxis, wideAxis, normal } = pose;
   const bladeLength = parameters[0];
   const bladeWidth = parameters[1];
@@ -1176,10 +1189,16 @@ function appendOvateLeaf(builder, color, roughness, parameters, pose) {
   builder.vertex(add(bladeBase, scale(wideAxis, -petioleHalfWidth)), normal, veinColor, roughness - 0.04, [0.48, 0.16]);
   builder.vertex(add(bladeBase, scale(wideAxis, petioleHalfWidth)), normal, veinColor, roughness - 0.04, [0.52, 0.16]);
   builder.vertex(bladeBase, normal, veinColor, roughness - 0.08, [0.5, 0.16]);
-  const stations = [0.42, 0.76];
+  const stations = LEAF_OUTLINES[outline];
   stations.forEach((station, stationIndex) => {
-    const profile = Math.pow(Math.sin(Math.PI * station), baseRoundness)
-      * (1 - station * 0.12);
+    const oval = Math.pow(Math.sin(Math.PI * station), baseRoundness) * (1 - station * 0.12);
+    const profile = outline === 'oak'
+      ? oval * (0.72 + 0.28 * Math.cos(8 * Math.PI * station) ** 2)
+      : outline === 'birch'
+        ? Math.max(0.03, (1 - station) ** 0.56) * (0.93 + 0.07 * Math.cos(13 * Math.PI * station))
+        : outline === 'beech'
+          ? oval * (0.97 + 0.03 * Math.cos(12 * Math.PI * station))
+          : oval;
     const halfWidth = bladeWidth * 0.5 * profile;
     const center = add(
       add(bladeBase, scale(longAxis, bladeLength * station)),
@@ -1209,7 +1228,7 @@ function appendOvateLeaf(builder, color, roughness, parameters, pose) {
     addDoubleSidedQuad(builder.indices, first + 1, next + 1, next + 2, first + 2);
   }
   const lastPair = base + 5 + (stations.length - 1) * 3;
-  const apexIndex = base + LEAF_VERTEX_COUNT - 1;
+  const apexIndex = base + 5 + stations.length * 3;
   addDoubleSidedTriangle(builder.indices, lastPair, apexIndex, lastPair + 1);
   addDoubleSidedTriangle(builder.indices, lastPair + 1, apexIndex, lastPair + 2);
 }
@@ -1228,9 +1247,10 @@ function appendLeaves(builder, transform, color, roughness, clusterNode, paramet
     if (!pose) continue;
     // Rejected hard-contact candidates emit no geometry and must consume no
     // retained-mesh budget. Reserve each accepted leaf exactly when emitted.
-    builder.reserve(LEAF_VERTEX_COUNT, LEAF_INDEX_COUNT);
+    const stationCount=LEAF_OUTLINES[physics.outline].length;
+    builder.reserve(6+stationCount*3,42+24*(stationCount-1));
     parameterBuffer.push(...parameters);
-    appendOvateLeaf(builder, color, roughness, parameters, pose);
+    appendOvateLeaf(builder, color, roughness, parameters, pose, physics.outline);
   }
 }
 
@@ -1258,11 +1278,12 @@ function finishMesh(packet, suffix, objectId, builder) {
 
 export function adaptTreeRenderPacketToWebGpuMeshesReference(
   packet,
-  { vertexBudget, indexBudget, leafContact = false, leafShape = {} },
+  { vertexBudget, indexBudget, leafContact = false, leafShape = {},allowSparse=false,barkDetail=null,leafOutline='ovate' },
 ) {
-  const sourceCounts = requirePacket(packet);
+  const sourceCounts = requirePacket(packet,allowSparse);
   requireBudgets(vertexBudget, indexBudget);
   if (!leafShape || typeof leafShape !== 'object' || Array.isArray(leafShape)) throw new Error('invalid leaf shape controls');
+  if(!Object.hasOwn(LEAF_OUTLINES,leafOutline))throw new RangeError('unknown leaf outline');
   const shape = Object.freeze(Object.fromEntries(Object.entries(leafShape).map(([name, pdf]) => {
     if (!['lengthRatio', 'widthRatio', 'roundness', 'asymmetry', 'petioleRatio', 'camberRatio'].includes(name)) {
       throw new Error(`unknown leaf shape control ${name}`);
@@ -1317,10 +1338,11 @@ export function adaptTreeRenderPacketToWebGpuMeshesReference(
       microRidgeAxialFrequency: barkProfile.microRidgeAxialFrequency,
     }),
   });
-  const woodNetwork = appendWoodyNetwork(wood, packet, bark);
+  const woodNetwork = appendWoodyNetwork(wood, packet, bark,allowSparse,barkDetail);
   const leafParameterValues = [];
   const leafPhysics = {
     shape,
+    outline:leafOutline,
     solver: 'petiole-torsion-hard-contact:v1',
     enabled: leafContact === true,
     bodies: [], cells: new Map(), candidateTests: 0, bentLeaves: 0,
@@ -1359,7 +1381,8 @@ export function adaptTreeRenderPacketToWebGpuMeshesReference(
     source: packet,
     meshes: Object.freeze([
       finishMesh(packet, 'wood', packet.treeIndex * 2 + 1, wood),
-      finishMesh(packet, 'foliage', packet.treeIndex * 2 + 2, foliage),
+      Object.freeze({...finishMesh(packet, 'foliage', packet.treeIndex * 2 + 2, foliage),
+        leaf_vertex_count:6+LEAF_OUTLINES[leafOutline].length*3}),
     ]),
     counts: Object.freeze({
       trunks: sourceCounts.trunks,

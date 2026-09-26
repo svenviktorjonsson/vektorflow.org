@@ -268,8 +268,9 @@ function insideEnvelope(tree, point, radius) {
 function curvedPath(tree, node, origin, direction, maximumArcLength, radius, kind) {
   const profile = tree.profile.curvature;
   const relativeRadius = clamp(radius / tree.growth[0], 0, 1);
-  const turnDeviation = profile.trunkDeviation
-    + profile.radiusDeviationRise * Math.pow(1 - relativeRadius, profile.radiusExponent);
+  const turnDeviation = (profile.trunkDeviation
+    + profile.radiusDeviationRise * Math.pow(1 - relativeRadius, profile.radiusExponent))
+    * (tree.turnFactor ?? 1);
   const stepKey = kind === KIND_TRUNK ? 'trunk' : kind === KIND_TWIG ? 'twig' : 'branch';
   const stepCount = profile.steps[stepKey];
   const [first, second] = directionBasis(direction);
@@ -502,6 +503,8 @@ function treeRealization(state, forest, treeIndex) {
     trunkShoots: state.trunkShoots,
     scaffoldBranches: state.scaffoldBranches,
     branching: state.branching,
+    splitFactor: state.splitFactor,
+    turnFactor: state.turnFactor,
   };
   state.treeCache.set(cacheKey, tree);
   if (state.treeCache.size > MAX_CACHED_TREES) {
@@ -575,10 +578,10 @@ function splitChildren(tree, parent, path, generation) {
     tree, 'areaLoss', node, 4, profile.split.areaLossMean, profile.split.areaLossDeviation,
     ...profile.split.areaLossBounds,
   );
-  const mainShare = branchSample(
+  const mainShare = tree.splitFactor == null ? branchSample(
     tree, 'mainAreaShare', node, 5, profile.split.mainAreaShareMean, profile.split.mainAreaShareDeviation,
     ...profile.split.mainAreaShareBounds,
-  );
+  ) : 1 - tree.splitFactor * 0.5;
   const parentRadius = parent.transform[7];
   const origin = primitiveEndpoint(parent);
   const childKind = generation >= tree.splitDepth - 1 ? KIND_TWIG : KIND_BRANCH;
@@ -587,7 +590,7 @@ function splitChildren(tree, parent, path, generation) {
     ['main', mainAngle, azimuth, mainShare, profile.split.mainBudgetRatio, 6],
     ['lateral', lateralAngle, azimuth + Math.PI, 1 - mainShare,
       profile.split.lateralBudgetRatio, 7],
-  ];
+  ].filter(([role]) => role === 'main' || tree.splitFactor == null || tree.splitFactor > 0);
   return Object.freeze(roles.map(([role, angle, childAzimuth, share, budgetBounds, lane]) => {
     const pathBefore = parent.pathRemainingAfter * sample(node, 0, lane, ...budgetBounds);
     const terminal = generation === tree.splitDepth;
@@ -857,6 +860,8 @@ export function createTreeGeometryPlannerReference(
     foliageDensity = 1,
     scaffoldBranches = 0,
     branching = {},
+    splitFactor = null,
+    turnFactor = null,
   } = {},
 ) {
   if (!Number.isSafeInteger(splitDepth) || splitDepth < 6 || splitDepth > 8) {
@@ -873,6 +878,12 @@ export function createTreeGeometryPlannerReference(
   }
   if (!Number.isSafeInteger(scaffoldBranches) || scaffoldBranches < 0 || scaffoldBranches > 4) {
     throw new RangeError('tree scaffoldBranches must be an integer in [0, 4]');
+  }
+  if (splitFactor != null && (!Number.isFinite(splitFactor) || splitFactor < 0 || splitFactor > 1)) {
+    throw new RangeError('tree splitFactor must be in [0, 1]');
+  }
+  if (turnFactor != null && (!Number.isFinite(turnFactor) || turnFactor < 0 || turnFactor > 1)) {
+    throw new RangeError('tree turnFactor must be in [0, 1]');
   }
   const root = createConditionedRoot(identity);
   if (!branching || typeof branching !== 'object' || Array.isArray(branching)) throw new Error('invalid branching controls');
@@ -897,6 +908,8 @@ export function createTreeGeometryPlannerReference(
     foliageDensity,
     scaffoldBranches,
     branching: branchingControls,
+    splitFactor,
+    turnFactor,
   });
   return planner;
 }

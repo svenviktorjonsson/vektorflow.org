@@ -61,69 +61,67 @@
       }
     },
     "stones": {
-      "directory": "stones-mixed-12",
-      "runtime_directory": "runtime-stones-12",
+      "directory": "stones-mixed-13",
+      "runtime_directory": "runtime-stones-13",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "7282c34cbfe4387a5472a3586168c8aa1ec5aad1e28ecf4083527263f26b8c3a",
-        "vf-world-mechanical-runtime.mjs": "36eefc9c827daa683a1931d15e6c567b23fc34ed7ea29a24284229fb3d7916c3",
+        "vf-world-mechanical-runtime.mjs": "5c5f38157cf105cf84dff879a093cc5207041e29d24692a728a0f2172601cdcc",
         "vf-world-mechanical-gpu.mjs": "9794baf360576219e4ede9d2f579d6e1eb889d0ad4310329230717e20a3039a2",
         "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
-        "vf-world-scene-embedding-gpu.mjs": "89b7ea89dbf3fdebe07202cb0d7cc53474708edc9f4e07ddcb8aca33ec08695d",
-        "vf-world-physical-parameters.mjs": "f5b3bdbf8e299f4caa6bdac398e2a14f575c4a2b59594f0955567a13d29e4f11"
+        "vf-world-scene-embedding-gpu.mjs": "fdda6417a5c6c360af4f761a287c87f291de2d0d704889938b67eb62f022479a",
+        "vf-world-physical-parameters.mjs": "c6373befa374ee03f0770e28d720e9bb981fcefd1d5bfb22d04971c2235b1974"
       },
-      "wasm": "8042c6acd99bbe1cf296709c09fbf4b8fb00e996b6f390fe8586869d35d0bfc8",
-      "manifest": "bba312b71ea6303a9db0638062e69a9a3d8fa00dda1e1a1bba14aa9632cd7b63",
+      "wasm": "6a5535dfb0319d4d0500511e9f101a44e0b05817dda08eb2cb4ffa2a15b30699",
+      "manifest": "9598bcc4cb7b3175db6d6e935ec72d1e0ca7ae89918307f85ec66c3d4e867515",
       "sources": {
-        "main.vkf": "0a0e3da68b7bbe79b18a8d29c27422e5fd0e63711ab730a9c84997ce0195832f",
+        "main.vkf": "555d7f5c6bab6fee4a46ff883bf5cedf608fd8dd4d3393fe0402026df48f59d1",
         "geometry.vkf": "85e59f37de201d079da7734f662173251ca372b6e78fec3a09bc38928c535679",
-        "materials.vkf": "a6be2f6e60cfc6222370489eb7d25151b024cd01ecb4d2cbbc5c43787ca32359"
+        "materials.vkf": "7af7cb624be5b394d4ad2d47613d1f0a4109e5aaf4c5a645a36698949e3ad220"
       },
       "build": {
         "entry": "main.vkf",
-        "compiler": "905b761107f56a51c1dda7e3a7bf4d25263b933753c491fc88c052ba6e07d17b",
-        "emitter": "9e0f646d1ef33a18a0a17c2766c3227e53c2c7e8db07f8dfd5014bdac7d8e9f6",
-        "typed_ir": "b8bed8ca62a3046550846496b2b8b7f72bc4a40aae03cc6f8fab59df5ab4e11b",
-        "runtime_revision": "ba401dfe29c6ce58584efcdd8b7e34de7df9049b",
+        "compiler": "644b53b97d846e15a4e80e318e689f4a925215feaa030041c75424cb44594807",
+        "emitter": "870b28767671c25042af3f4f75db828748f5f39bf7d7bcb3aaa985e70e498d18",
+        "typed_ir": "f6f62d753d1ac8df9712be14899700c6b6e43c2a46e5c9e1d1e4bea5ea7049b4",
         "sources": {
-          "main.vkf": "0a0e3da68b7bbe79b18a8d29c27422e5fd0e63711ab730a9c84997ce0195832f",
+          "main.vkf": "555d7f5c6bab6fee4a46ff883bf5cedf608fd8dd4d3393fe0402026df48f59d1",
           "geometry.vkf": "85e59f37de201d079da7734f662173251ca372b6e78fec3a09bc38928c535679",
-          "materials.vkf": "a6be2f6e60cfc6222370489eb7d25151b024cd01ecb4d2cbbc5c43787ca32359"
+          "materials.vkf": "7af7cb624be5b394d4ad2d47613d1f0a4109e5aaf4c5a645a36698949e3ad220"
         },
-        "wasm": "8042c6acd99bbe1cf296709c09fbf4b8fb00e996b6f390fe8586869d35d0bfc8"
+        "wasm": "6a5535dfb0319d4d0500511e9f101a44e0b05817dda08eb2cb4ffa2a15b30699"
       }
     },
     "tree": {
-      "directory": "tree-air-11",
-      "runtime_directory": "runtime-tree-11",
+      "directory": "tree-air-12",
+      "runtime_directory": "runtime-tree-12",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "7282c34cbfe4387a5472a3586168c8aa1ec5aad1e28ecf4083527263f26b8c3a",
-        "vf-world-mechanical-runtime.mjs": "36eefc9c827daa683a1931d15e6c567b23fc34ed7ea29a24284229fb3d7916c3",
+        "vf-world-mechanical-runtime.mjs": "6fd1f8efbae802aa4685d2ca244434a12274f59c70f8cca2f39a2bd56bb621b5",
         "vf-world-mechanical-gpu.mjs": "9794baf360576219e4ede9d2f579d6e1eb889d0ad4310329230717e20a3039a2",
         "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
         "vf-world-scene-embedding-gpu.mjs": "89b7ea89dbf3fdebe07202cb0d7cc53474708edc9f4e07ddcb8aca33ec08695d",
         "vf-world-physical-parameters.mjs": "f5b3bdbf8e299f4caa6bdac398e2a14f575c4a2b59594f0955567a13d29e4f11"
       },
-      "wasm": "add907030ef802de0027c8588fed581f8e9c79a0f97626c67ff18124bce23940",
-      "manifest": "75d4e890922b80b680fb99fa75ad8ac64709e35e3ff37c2b0ebaec868dfd1eaf",
+      "wasm": "dd21c65cd489415334fd90e7365652f91829d102c3a539c9a0d17803a5a51c57",
+      "manifest": "72a6da336e5408c0fc4ba176cac1f92060d33e19201d3dbda7cb59e02874f412",
       "sources": {
-        "main.vkf": "0c925430ee550237ad000fa39d4720ac5d8418085c33c410f6d330cefee508b3",
+        "main.vkf": "1711c9b904e8a7d1ab52eddc204b5f1e1d3f5685b43d38a69bff5f9eb48cf9e7",
         "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
         "materials.vkf": "bbf19699636e065073c9745cfb5ad00ed4428515a5037cccb3e16c136d9221e3"
       },
       "build": {
         "entry": "main.vkf",
-        "compiler": "905b761107f56a51c1dda7e3a7bf4d25263b933753c491fc88c052ba6e07d17b",
-        "emitter": "9e0f646d1ef33a18a0a17c2766c3227e53c2c7e8db07f8dfd5014bdac7d8e9f6",
-        "typed_ir": "745bdb15f879de626f4f78260c541608218fd9d7fcb40ba962713212da90e591",
-        "runtime_revision": "ba401dfe29c6ce58584efcdd8b7e34de7df9049b",
+        "compiler": "644b53b97d846e15a4e80e318e689f4a925215feaa030041c75424cb44594807",
+        "emitter": "870b28767671c25042af3f4f75db828748f5f39bf7d7bcb3aaa985e70e498d18",
+        "typed_ir": "d0850ea6e55b23350710459ad555a84696f122e338fee789ef8fb421deec40b6",
         "sources": {
-          "main.vkf": "0c925430ee550237ad000fa39d4720ac5d8418085c33c410f6d330cefee508b3",
+          "main.vkf": "1711c9b904e8a7d1ab52eddc204b5f1e1d3f5685b43d38a69bff5f9eb48cf9e7",
           "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
           "materials.vkf": "bbf19699636e065073c9745cfb5ad00ed4428515a5037cccb3e16c136d9221e3"
         },
-        "wasm": "add907030ef802de0027c8588fed581f8e9c79a0f97626c67ff18124bce23940"
+        "wasm": "dd21c65cd489415334fd90e7365652f91829d102c3a539c9a0d17803a5a51c57"
       }
     }
   },

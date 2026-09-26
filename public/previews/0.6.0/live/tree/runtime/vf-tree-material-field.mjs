@@ -84,7 +84,7 @@ function speciesMaterial(state, forest, speciesIndex) {
     channel: 'species-material',
   });
   const record = Object.freeze({
-    barkColor: Object.freeze([
+    barkColor: Object.freeze(species.barkColor?.slice()??[
       0.14 + sampleUnit(node, 0) * 0.15,
       0.055 + sampleUnit(node, 1) * 0.11,
       0.022 + sampleUnit(node, 2) * 0.055,
