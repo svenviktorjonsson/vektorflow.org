@@ -38,10 +38,10 @@
     <label>Speed <input id="speed" type="range" min="1" max="8" step="1" value="4"><output id="speed-value">4×</output></label>
     <button id="audit" type="button">Check volume</button>
   </div>
-  <canvas id="scene" aria-label="GPU sand hourglass with a narrow opening, falling density stream, and repose-limited bottom pile"></canvas>
+  <canvas id="scene" aria-label="GPU sand hourglass with a narrow opening, moving sand parcels, and repose-limited bottom pile"></canvas>
   <p id="status" role="status">Starting GPU granular World…</p>
-  <p id="note">Drag to rotate or tap Flip. Even an opening smaller than a 15 mm coarse parcel can pass 1.5 mm represented grains; at one grain diameter the flow stops. A shared Law releases fractional material area; the Embedding draws a continuous stream and pile. The 32° default is a calibration target, not a universal sand angle.</p>
+  <p id="note">Drag to rotate or tap Flip. Even an opening smaller than a 15 mm coarse parcel can pass 1.5 mm represented grains; at one grain diameter the flow stops. GPU stream parcels carry area, position, and velocity; the Embedding only draws them. The compact chambers still use an aggregate pile model. The 32° default is a calibration target, not a universal sand angle.</p>
 </main>
-<script type="module" src="./main.mjs?v=hourglass-gpu-1"></script>
+<script type="module" src="./main.mjs?v=hourglass-inertia-2"></script>
 </body>
 </html>

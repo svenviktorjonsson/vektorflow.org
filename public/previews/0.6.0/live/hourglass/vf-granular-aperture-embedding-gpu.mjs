@@ -10,7 +10,9 @@ struct MaterialState {
   direction: f32,
   release_remainder: f32,
   flow_rate: f32,
+  pose_angle: f32,
   stream: array<f32, 64>,
+  motion: array<vec4<f32>, 64>,
   pile: array<f32, 128>,
 };
 struct View {
@@ -94,26 +96,36 @@ fn lower_wall(y: f32) -> f32 {
   if (material.direction > 0.0 && in_lower && y >= pile_top) { color = sand; }
   if (material.direction < 0.0 && in_upper && y <= pile_top) { color = sand; }
 
-  let stream_distance = select(0.50 - y, y - 0.47,
-    material.direction > 0.0);
-  let stream_visible = select(y > pile_top && y <= 0.50,
-    y < pile_top && y >= 0.47, material.direction > 0.0);
-  if (stream_visible && stream_distance >= 0.0 && stream_distance < 0.44) {
+  if (in_upper || in_lower || (y >= 0.47 && y <= 0.50
+      && abs(x) <= view.opening * 0.5)) {
     let width_world = max(view.flow_width_pixels * px, px);
-    let stream_index = min(63u, u32(stream_distance / 0.44 * 64.0));
-    let density = material.stream[stream_index]
-      / (width_world * (0.44 / 64.0));
-    // No circular guide silhouette. This is a continuous falling density lane.
-    let cross = 1.0 - smoothstep(width_world * 0.3,
-      width_world * 0.5, abs(x));
-    var coverage = clamp(0.7 * density * cross, 0.0, 1.0);
-    if (y >= 0.47 && y <= 0.50 && abs(x) > view.opening * 0.5) { coverage = 0.0; }
-    if (y > 0.50 && !in_lower) { coverage = 0.0; }
-    if (y < 0.47 && !in_upper) { coverage = 0.0; }
+    var coverage = 0.0;
+    for (var i = 0u; i < 64u; i = i + 1u) {
+      let area = material.stream[i];
+      if (area <= 0.0) { continue; }
+      let point = material.motion[i];
+      let origin = vec2<f32>(c * point.x + s * point.y,
+        -s * point.x + c * point.y + 0.485);
+      let velocity = vec2<f32>(c * point.z + s * point.w,
+        -s * point.z + c * point.w);
+      let speed = length(velocity);
+      let axis = select(vec2<f32>(0.0, material.direction),
+        velocity / max(speed, 1.0e-6), speed > 0.05);
+      let trail = clamp(speed * 0.025, 0.008, 0.07);
+      let offset = vec2<f32>(x, y) - origin;
+      let longitudinal = dot(offset, axis);
+      let transverse = abs(offset.x * axis.y - offset.y * axis.x);
+      let along = smoothstep(-trail, -trail * 0.7, longitudinal)
+        * (1.0 - smoothstep(0.0, max(py, px) * 2.0, longitudinal));
+      let across = exp(-4.0 * transverse * transverse
+        / (width_world * width_world));
+      coverage = coverage + area / max(width_world * trail, 1.0e-8)
+        * along * across;
+    }
     let falling_noise = hash(floor(grain_pixel + vec2<f32>(0.0, material.time * 400.0)));
     let falling_sand = vec3<f32>(0.82, 0.69, 0.49)
       * (0.88 + 0.2 * falling_noise);
-    color = mix(color, falling_sand, coverage);
+    color = mix(color, falling_sand, clamp(coverage * 0.7, 0.0, 1.0));
   }
 
   // Glass is a geometric boundary. The aperture stays genuinely open.

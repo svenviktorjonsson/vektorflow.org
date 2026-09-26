@@ -15,6 +15,7 @@ const probe = `<script>
 (() => {
   const start = performance.now();
   let frames = 0, early, first, second, third, fourth, near, texture;
+  let beforeTurn, turned, afterTurn;
   let flipped = false, aperturePhase = 0;
   let done = false, lastProgress = start, started = false;
   const send = report => { if (done) return; done = true;
@@ -33,10 +34,17 @@ const probe = `<script>
     return degrees.reduce((sum, angle) => sum+angle,0)/degrees.length;
   };
   const buriedStreamArea = state => {
-    const dy = .44/state.stream.length;
-    const impact = Math.min(state.stream.length,
-      Math.max(1,Math.ceil((.44-state.pile[64])/dy)));
-    return state.stream.slice(impact).reduce((sum,area)=>sum+area,0);
+    let buried = 0;
+    for (let i = 0; i < state.stream.length; i++) {
+      if (!state.stream[i]) continue;
+      const [x,y] = state.streamMotion[i];
+      const index = Math.max(0,Math.min(127,Math.floor((x+.25)/.5*128)));
+      if (state.direction > 0 && y+.485 >= .91-state.pile[index])
+        buried += state.stream[i];
+      if (state.direction < 0 && y+.485 <= .06+state.pile[index])
+        buried += state.stream[i];
+    }
+    return buried;
   };
   const compactTextureVariation = async () => {
     const source = document.querySelector('#scene');
@@ -119,6 +127,35 @@ const probe = `<script>
     }
     if (aperturePhase === 2 && app.world.simulatedSeconds >= 5) {
       const blocked = await app.audit();
+      document.querySelector('#throat').value = '8';
+      document.querySelector('#throat').dispatchEvent(new Event('input'));
+      document.querySelector('#reset').click();
+      aperturePhase = 3;
+      window.__hourglassBlocked = blocked;
+      return requestAnimationFrame(watch);
+    }
+    if (aperturePhase === 3 && app.world.simulatedSeconds >= 2) {
+      beforeTurn = await app.audit();
+      document.querySelector('#play').click();
+      app.world.setPoseAngle(.35);
+      turned = await app.audit();
+      document.querySelector('#play').click();
+      aperturePhase = 4;
+      return requestAnimationFrame(watch);
+    }
+    if (aperturePhase === 4 && app.world.simulatedSeconds >= 2.05) {
+      afterTurn = await app.audit();
+      const blocked = window.__hourglassBlocked;
+      const survivors = beforeTurn.stream.map((mass,i) => ({mass,i}))
+        .filter(({mass,i}) => mass > 0 && afterTurn.stream[i] > 0
+          && beforeTurn.streamMotion[i][1] > .08
+          && beforeTurn.streamMotion[i][1] < .22);
+      const inertial = survivors.some(({i}) => {
+        const [x,y,vx] = afterTurn.streamMotion[i];
+        const localX = Math.cos(.35)*x + Math.sin(.35)*y;
+        return Math.abs(x) < .003 && Math.abs(vx) < .003
+          && localX > .02 && y > beforeTurn.streamMotion[i][1];
+      });
       const firstSlope = slope(first), secondSlope = slope(second);
       const fps = frames / ((performance.now()-start)/1000);
       const passed = early.retainedFraction >= .9999
@@ -145,8 +182,14 @@ const probe = `<script>
         && near.retainedFraction >= .9999 && near.retainedFraction <= 1.0001
         && Math.abs(blocked.upperArea - .08) < 1e-7
         && blocked.streamArea === 0 && blocked.pileArea === 0
-        && blocked.retainedFraction >= .9999 && blocked.retainedFraction <= 1.0001;
+        && blocked.retainedFraction >= .9999 && blocked.retainedFraction <= 1.0001
+        && beforeTurn.streamArea > 0 && inertial
+        && Math.abs(turned.streamArea-beforeTurn.streamArea) < 1e-9
+        && afterTurn.retainedFraction >= .9999
+        && afterTurn.retainedFraction <= 1.0001;
       return send({passed, fps, firstSlope, secondSlope,texture,
+        inertial, survivorCount:survivors.length,
+        turnedStreamArea:turned.streamArea, afterTurnStreamArea:afterTurn.streamArea,
         early:{time:early.simulatedSeconds,upper:early.upperArea,
           stream:early.streamArea,retained:early.retainedFraction},
         first:{time:first.simulatedSeconds,upper:first.upperArea,

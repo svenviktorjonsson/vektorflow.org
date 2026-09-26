@@ -1,10 +1,9 @@
-// Granular World transport for a narrow aperture. Each bin is a finite-area
-// material parcel; the visible grains are an Embedding, not collision bodies.
-// The GPU owns the mass ledger and the repose-constrained deposited profile.
+// Granular World transport for a narrow aperture. Stream parcels carry finite
+// area, world position, and world velocity; the Embedding only reads them.
 import {GRANULAR_DISCHARGE_LAW_WGSL} from '../../compiled/runtime-wheel-27/vf-granular-discharge-law.mjs';
 export const STREAM_CELLS = 64;
 export const PILE_CELLS = 128;
-export const STATE_FLOATS = 7 + STREAM_CELLS + PILE_CELLS;
+export const STATE_FLOATS = 8 + STREAM_CELLS * 5 + PILE_CELLS;
 export const INITIAL_AREA = 0.08;
 export const CHAMBER_WIDTH = 0.5;
 export const FALL_HEIGHT = 0.44;
@@ -20,7 +19,9 @@ struct MaterialState {
   direction: f32,
   release_remainder: f32,
   flow_rate: f32,
+  pose_angle: f32,
   stream: array<f32, 64>,
+  motion: array<vec4<f32>, 64>,
   pile: array<f32, 128>,
 };
 struct LawParameters {
@@ -65,11 +66,27 @@ fn pile_wall_capacity(x: f32, opening: f32) -> f32 {
   return 0.41 * clamp((radius - abs(x)) / (radius - opening * 0.5),
     0.0, 1.0);
 }
+fn local_position(world: vec2<f32>, angle: f32) -> vec2<f32> {
+  let c = cos(angle);
+  let s = sin(angle);
+  return vec2<f32>(c * world.x + s * world.y,
+    -s * world.x + c * world.y + 0.485);
+}
+fn world_position(local: vec2<f32>, angle: f32) -> vec2<f32> {
+  let c = cos(angle);
+  let s = sin(angle);
+  let y = local.y - 0.485;
+  return vec2<f32>(c * local.x - s * y, s * local.x + c * y);
+}
+fn chamber_wall(y: f32, opening: f32) -> f32 {
+  if (y < 0.47) { return 0.004 + 0.246 * clamp((0.47 - y) / 0.41, 0.0, 1.0); }
+  if (y > 0.50) { return 0.004 + 0.246 * clamp((y - 0.50) / 0.41, 0.0, 1.0); }
+  return opening * 0.5;
+}
 
 @compute @workgroup_size(1)
 fn step(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x != 0u) { return; }
-  let dy = ${FALL_HEIGHT} / f32(STREAM_CELLS);
   let axial_gravity = cos(law.pose_angle);
   let direction = select(-1.0, 1.0, axial_gravity >= 0.0);
   let reversed = direction != previous.direction;
@@ -78,13 +95,10 @@ fn step(@builtin(global_invocation_id) id: vec3<u32>) {
     abs(axial_gravity));
   var chamber_a = previous.chamber_a;
   var chamber_b = previous.chamber_b;
-  var settling = previous.settling;
-  if (reversed) {
-    // Settling sand remains at the old destination when the glass turns over.
-    if (previous.direction > 0.0) { chamber_b = chamber_b + settling; }
-    else { chamber_a = chamber_a + settling; }
-    settling = 0.0;
-  }
+  // Settling is retained for ledger compatibility; airborne material is never
+  // reversed or relabelled when the vessel turns.
+  if (previous.direction > 0.0) { chamber_b = chamber_b + previous.settling; }
+  else { chamber_a = chamber_a + previous.settling; }
   let source_area = select(chamber_b, chamber_a, direction > 0.0);
   let prior_rate = select(previous.flow_rate, 0.0, reversed);
   let target_rate = select(0.0, discharge, source_area > 0.0);
@@ -98,55 +112,99 @@ fn step(@builtin(global_invocation_id) id: vec3<u32>) {
     select(previous.release_remainder, 0.0, reversed) + flow_rate * law.dt,
     source_area > 0.0);
   let quantum = ${INITIAL_AREA} * 2.0e-7;
+  var free_slot = STREAM_CELLS;
+  for (var i = 0u; i < STREAM_CELLS; i = i + 1u) {
+    if (previous.stream[i] <= 0.0 && free_slot == STREAM_CELLS) { free_slot = i; }
+  }
   let released = select(0.0, min(source_area, desired),
-    desired >= quantum || desired >= source_area);
+    free_slot < STREAM_CELLS && (desired >= quantum || desired >= source_area));
   next.release_remainder = desired - released;
   if (direction > 0.0) { chamber_a = chamber_a - released; }
   else { chamber_b = chamber_b - released; }
   next.time = previous.time + law.dt;
   next.direction = direction;
-  for (var i = 0u; i < STREAM_CELLS; i = i + 1u) {
-    next.stream[i] = select(previous.stream[i],
-      previous.stream[STREAM_CELLS - 1u - i], reversed);
-  }
-  next.stream[0] = next.stream[0] + released;
-  // The stream collides with the *current* pile surface. It must not travel
-  // invisibly through deposited sand to reach the old empty-chamber floor.
-  let target_area = select(chamber_a, chamber_b, direction > 0.0);
+  next.pose_angle = law.pose_angle;
+  next.settling = 0.0;
+  var deposited_a = 0.0;
+  var deposited_b = 0.0;
   let tangent = max(tan(law.repose_radians), 0.001);
-  let half_chamber = ${CHAMBER_WIDTH} * 0.5;
+  let target_area = select(chamber_a, chamber_b, direction > 0.0);
   let target_peak = pile_peak_for_area(target_area, tangent, law.opening);
-  let impact_distance = clamp(${FALL_HEIGHT} - target_peak,
-    dy, ${FALL_HEIGHT});
-  let impact_index = min(STREAM_CELLS, max(1u, u32(ceil(impact_distance / dy))));
-  // One characteristic move per parcel, with conservative fractional scatter.
-  // It may cross several cells in one step; a one-cell cap would make the
-  // visible fall time depend on grid resolution rather than gravity.
-  for (var reverse = STREAM_CELLS; reverse > 0u; reverse = reverse - 1u) {
-    let i = reverse - 1u;
-    if (i >= impact_index) {
-      settling = settling + next.stream[i];
-      next.stream[i] = 0.0;
-      continue;
+  for (var i = 0u; i < STREAM_CELLS; i = i + 1u) {
+    let area = previous.stream[i];
+    next.stream[i] = area;
+    next.motion[i] = previous.motion[i];
+    if (area <= 0.0) { continue; }
+    let old = previous.motion[i];
+    let old_world = old.xy;
+    let velocity = vec2<f32>(old.z, old.w + law.gravity * law.dt);
+    let world = old_world + velocity * law.dt;
+    // World-space momentum survives arbitrary vessel rotation. Rotation only
+    // changes contact geometry; it never reverses an existing trajectory.
+    let before = local_position(old_world, law.pose_angle);
+    let after = local_position(world, law.pose_angle);
+    var hit = false;
+    var hit_a = after.y < 0.485;
+    // A rotating wall can cross a nearly stationary parcel between frames.
+    // Check the angular sweep, not only the final vessel orientation.
+    let angular_delta = atan2(sin(law.pose_angle - previous.pose_angle),
+      cos(law.pose_angle - previous.pose_angle));
+    let sweep_count = min(32u, max(1u, u32(ceil(abs(angular_delta) / 0.08))));
+    for (var sweep = 1u; sweep <= sweep_count; sweep = sweep + 1u) {
+      let angle = previous.pose_angle
+        + angular_delta * f32(sweep) / f32(sweep_count);
+      let sampled = local_position(old_world, angle);
+      if (sampled.y < 0.06 || sampled.y > 0.91
+          || abs(sampled.x) > chamber_wall(sampled.y, law.opening)) {
+        hit = true;
+        hit_a = sampled.y < 0.485;
+        break;
+      }
     }
-    let speed = sqrt(2.0 * law.gravity * abs(axial_gravity)
-      * (f32(i) + 0.5) * dy);
-    let travel = speed * law.dt / dy;
-    let whole = u32(floor(travel));
-    let fraction = fract(travel);
-    let parcel = next.stream[i];
-    next.stream[i] = 0.0;
-    let near = parcel * (1.0 - fraction);
-    let far = parcel - near;
-    let near_index = i + whole;
-    let far_index = near_index + 1u;
-    if (near_index >= impact_index) { settling = settling + near; }
-    else { next.stream[near_index] = next.stream[near_index] + near; }
-    if (far_index >= impact_index) { settling = settling + far; }
-    else { next.stream[far_index] = next.stream[far_index] + far; }
+    if (!hit && (before.y - 0.485) * (after.y - 0.485) <= 0.0
+        && abs(after.y - before.y) > 1.0e-7) {
+      let fraction = clamp((0.485 - before.y) / (after.y - before.y), 0.0, 1.0);
+      let crossing_x = mix(before.x, after.x, fraction);
+      if (abs(crossing_x) > law.opening * 0.5) {
+        hit = true;
+        hit_a = before.y < 0.485;
+      }
+    }
+    if (!hit && (after.y < 0.06 || after.y > 0.91
+        || abs(after.x) > chamber_wall(after.y, law.opening))) {
+      hit = true;
+      hit_a = after.y < 0.485;
+    }
+    if (!hit) {
+      let pile_height = min(max(0.0, target_peak - tangent * abs(after.x)),
+        pile_wall_capacity(after.x, law.opening));
+      if ((direction > 0.0 && after.y >= 0.50
+          && after.y >= 0.91 - pile_height)
+          || (direction < 0.0 && after.y <= 0.47
+          && after.y <= 0.06 + pile_height)) {
+        hit = true;
+        hit_a = direction < 0.0;
+      }
+    }
+    if (hit) {
+      if (hit_a) { deposited_a = deposited_a + area; }
+      else { deposited_b = deposited_b + area; }
+      next.stream[i] = 0.0;
+      next.motion[i] = vec4<f32>(0.0);
+    } else {
+      next.motion[i] = vec4<f32>(world, velocity);
+    }
   }
-  let deposited = settling * (1.0 - exp(-law.dt / law.settling_seconds));
-  next.settling = settling - deposited;
+  chamber_a = chamber_a + deposited_a;
+  chamber_b = chamber_b + deposited_b;
+  if (released > 0.0) {
+    // Aperture center is a local source, not a permanent stream anchor.
+    // It emits one finite-area parcel per step with world-space velocity.
+    next.stream[free_slot] = released;
+    let nozzle = world_position(vec2<f32>(0.0, 0.485), law.pose_angle);
+    next.motion[free_slot] = vec4<f32>(nozzle, 0.0, 0.0);
+  }
+  let half_chamber = ${CHAMBER_WIDTH} * 0.5;
   // Finite-volume ledger: the deposited reservoir owns exactly the material
   // absent from the upper, airborne, and settling reservoirs. This avoids
   // accumulating an independent f32 rounding error in every transfer.
@@ -157,11 +215,11 @@ fn step(@builtin(global_invocation_id) id: vec3<u32>) {
   if (direction > 0.0) {
     next.chamber_a = chamber_a;
     next.chamber_b = max(0.0,
-      ${INITIAL_AREA} - next.chamber_a - next.settling - stream_area);
+      ${INITIAL_AREA} - next.chamber_a - stream_area);
   } else {
     next.chamber_b = chamber_b;
     next.chamber_a = max(0.0,
-      ${INITIAL_AREA} - next.chamber_b - next.settling - stream_area);
+      ${INITIAL_AREA} - next.chamber_b - stream_area);
   }
   let next_target = select(next.chamber_a, next.chamber_b, direction > 0.0);
   let peak_height = pile_peak_for_area(next_target, tangent, law.opening);
@@ -183,16 +241,6 @@ fn step(@builtin(global_invocation_id) id: vec3<u32>) {
   let area_scale = next_target / max(discretized_area, 1.0e-20);
   for (var i = 0u; i < PILE_CELLS; i = i + 1u) {
     next.pile[i] = next.pile[i] * area_scale;
-  }
-  // The pile may rise across a cell during this very step. Sweep those newly
-  // buried stream cells into contact before publishing the physical state.
-  let final_impact_distance = clamp(${FALL_HEIGHT} - next.pile[PILE_CELLS / 2u],
-    dy, ${FALL_HEIGHT});
-  let final_impact_index = min(STREAM_CELLS,
-    max(1u, u32(ceil(final_impact_distance / dy))));
-  for (var i = final_impact_index; i < STREAM_CELLS; i = i + 1u) {
-    next.settling = next.settling + next.stream[i];
-    next.stream[i] = 0.0;
   }
 }
 `;
@@ -306,9 +354,9 @@ export async function createGranularApertureWorldGpu(device, {
       const floats = new Float32Array(staging.getMappedRange().slice(0));
       staging.unmap();
       staging.destroy();
-      const streamArea = floats.slice(7, 7 + STREAM_CELLS)
+      const streamArea = floats.slice(8, 8 + STREAM_CELLS)
         .reduce((sum, area) => sum + area, 0);
-      const pileProfileArea = floats.slice(7 + STREAM_CELLS)
+      const pileProfileArea = floats.slice(8 + STREAM_CELLS * 5)
         .reduce((sum, height) => sum + height * CHAMBER_WIDTH / PILE_CELLS, 0);
       const totalArea = floats[0] + floats[1] + floats[2] + streamArea;
       return {upperArea: floats[0], settlingArea: floats[1],
@@ -316,8 +364,11 @@ export async function createGranularApertureWorldGpu(device, {
         direction: floats[4], pileProfileArea, streamArea, totalArea,
         releaseRemainder: floats[5], flowRate: floats[6],
         retainedFraction: totalArea / INITIAL_AREA, simulatedSeconds: floats[3],
-        stream: [...floats.slice(7, 7 + STREAM_CELLS)],
-        pile: [...floats.slice(7 + STREAM_CELLS)]};
+        stream: [...floats.slice(8, 8 + STREAM_CELLS)],
+        streamMotion: Array.from({length: STREAM_CELLS}, (_, index) =>
+          [...floats.slice(8 + STREAM_CELLS + index * 4,
+            8 + STREAM_CELLS + (index + 1) * 4)]),
+        pile: [...floats.slice(8 + STREAM_CELLS * 5)]};
     },
     destroy() { for (const buffer of buffers) buffer.destroy(); uniforms.destroy(); },
   });
