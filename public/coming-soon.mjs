@@ -26,7 +26,7 @@ function mountSourceTabs({ id, files }) {
   const run=document.createElement('button');run.type='button';run.textContent='Run compiled application';run.className='source-run';
   host.querySelector('.source-footer').append(' · ',run,' · ',state);
   const cache = new Map(); let request = 0;
-  const sourceUrl=name=>`./sources/coming-soon/${id}/${name}?v=${id==='stones'?'stones-13':id==='tree'?'air-12':'wheel-world-view-28'}`;
+  const sourceUrl=name=>`./sources/coming-soon/${id}/${name}?v=${id==='stones'?'stones-15':id==='tree'?'air-12':'wheel-water-only-29'}`;
   async function source(name){
     if(!cache.has(name))cache.set(name,(async()=>{
       const record=(await previewBundle()).applications[id],response=await fetch(sourceUrl(name));

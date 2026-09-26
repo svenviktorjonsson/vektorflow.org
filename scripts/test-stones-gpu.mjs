@@ -9,11 +9,11 @@ const isTree=process.argv.includes('--tree'),closeup=process.argv.includes('--cl
 const parent=path.resolve(root,'../.w');await mkdir(parent,{recursive:true});const work=await mkdtemp(path.join(parent,'stones-gpu-'));
 let finish;const completed=new Promise(resolve=>finish=resolve);
 const html=String.raw`<!doctype html><canvas width="800" height="650" style="width:800px;height:650px"></canvas>
-<script src="/previews/0.6.0/compiled/runtime-stones-14/vf-compiled-runtime-bridge.js"></script>
+<script src="/previews/0.6.0/compiled/runtime-stones-15/vf-compiled-runtime-bridge.js"></script>
 <script type="module">
-import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-14/vf-world-mechanical-runtime.mjs';
-import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-14/vf-world-mechanical-gpu.mjs';
-import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/runtime-stones-14/vf-world-scene-embedding-gpu.mjs';
+import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-15/vf-world-mechanical-runtime.mjs';
+import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-15/vf-world-mechanical-gpu.mjs';
+import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/runtime-stones-15/vf-world-scene-embedding-gpu.mjs';
 const check=(x,m)=>{if(!x)throw Error(m)};let device;
 function countEmbeddedStoneVertices(state,initial,meshes){
  const rotate=(q,p)=>{const t=[2*(q[1]*p[2]-q[2]*p[1]),2*(q[2]*p[0]-q[0]*p[2]),2*(q[0]*p[1]-q[1]*p[0])];return p.map((v,a)=>v+q[3]*t[a]+[q[1]*t[2]-q[2]*t[1],q[2]*t[0]-q[0]*t[2],q[0]*t[1]-q[1]*t[0]][a]);};
@@ -31,7 +31,7 @@ function countEmbeddedStoneVertices(state,initial,meshes){
  return {count,worstDepth,pairs};
 }
 try{
- const base='/previews/0.6.0/compiled/stones-mixed-14/';
+ const base='/previews/0.6.0/compiled/stones-mixed-15/';
  const inputs={bytes:new Uint8Array(await(await fetch(base+'main.wasm')).arrayBuffer()),manifest:await(await fetch(base+'manifest.json')).json()};
  const runtime=await (VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync?VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync(inputs):VfCompiledRuntimeBridge.instantiateWasmRuntime(inputs));runtime.init();
  const world=runtime.worldProgram().gpu_worlds[0],asset=world.kind==='wind'?await new Promise((resolve,reject)=>{
@@ -107,6 +107,28 @@ try{
   const ms=[];for(let frame=0;frame<60;frame++){encoder=device.createCommandEncoder();for(let step=0;step<Math.ceil((1/60)/world.time_step-1e-8);step++)physics.step(encoder);embedding.render(encoder,camera,{grass:true,particles:false});const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();ms.push(performance.now()-started);}
   ms.sort((a,b)=>a-b);treePerformance={medianMs:ms[30],p95Ms:ms[Math.floor(ms.length*.95)],maxMs:ms.at(-1)};
  }
+ if(!isTree&&!location.search.includes('hires')){
+  // Settled bodies stay fixed while the authored light orbits. Measure frame
+  // changes on the ground shadow rather than mistaking geometry motion for
+  // shadow shimmer.
+  let previousLuma=null;const histogram=new Uint32Array(256);let compared=0;
+  const traceRow=Math.ceil(canvas.width*4/256)*256;
+  for(let frame=0;frame<16;frame++){
+   const trace=device.createBuffer({size:traceRow*canvas.height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   encoder=device.createCommandEncoder();for(let step=0;step<60;step++)physics.step(encoder);embedding.render(encoder,camera,{grass:false,particles:false});
+   encoder.copyTextureToBuffer({texture:context.getCurrentTexture()},{buffer:trace,bytesPerRow:traceRow},{width:canvas.width,height:canvas.height,depthOrArrayLayers:1});
+   device.queue.submit([encoder.finish()]);await trace.mapAsync(GPUMapMode.READ);
+   const data=new Uint8Array(trace.getMappedRange()),values=[];
+   for(let y=Math.floor(canvas.height*.55);y<Math.floor(canvas.height*.75);y+=2)for(let x=Math.floor(canvas.width*.55);x<Math.floor(canvas.width*.95);x+=2){
+    const at=y*traceRow+x*4,luma=Math.round((data[at]+data[at+1]+data[at+2])/3);values.push(luma);
+   }
+   if(previousLuma)for(let i=0;i<values.length;i++){histogram[Math.abs(values[i]-previousLuma[i])]++;compared++;}
+   previousLuma=values;trace.unmap();trace.destroy();
+  }
+  let cumulative=0,p95=0,p99=0,large=0,max=0;
+  for(let delta=0;delta<histogram.length;delta++){cumulative+=histogram[delta];if(cumulative<=compared*.95)p95=delta;if(cumulative<=compared*.99)p99=delta;if(delta>32)large+=histogram[delta];if(histogram[delta])max=delta;}
+  stoneDynamics.shadowTemporal={frames:16,p95LumaDelta:p95,p99LumaDelta:p99,largeChangeFraction:large/compared,maxLumaDelta:max};
+ }
  encoder=device.createCommandEncoder();embedding.render(encoder,camera,{grass:isTree,particles:false});
  const row=Math.ceil(canvas.width*4/256)*256,readback=device.createBuffer({size:row*canvas.height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
  encoder.copyTextureToBuffer({texture:context.getCurrentTexture()},{buffer:readback,bytesPerRow:row},{width:canvas.width,height:canvas.height,depthOrArrayLayers:1});device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);
@@ -121,7 +143,7 @@ try{
 const server=createServer(async(req,res)=>{try{
  const route=new URL(req.url,'http://localhost').pathname;
  if(route==='/result'&&req.method==='POST'){let body='';for await(const data of req){body+=data;if(body.length>8_000_000)throw Error('Oversize result');}res.end('ok');finish(JSON.parse(body));return;}
- if(route==='/test'){res.setHeader('Content-Type','text/html');let page=isTree?html.replaceAll('runtime-stones-14','runtime-tree-12').replaceAll('stones-mixed-14','tree-air-12'):html;if(isTree&&process.argv.includes('--wind20'))page=page.replace('physics.setSpeed(8)','physics.setSpeed(20)');if(hires)page=page.replace('width="800" height="650" style="width:800px;height:650px"','width="1600" height="1300" style="width:1600px;height:1300px"');res.end(page);return;}
+ if(route==='/test'){res.setHeader('Content-Type','text/html');let page=isTree?html.replaceAll('runtime-stones-15','runtime-tree-12').replaceAll('stones-mixed-15','tree-air-12'):html;if(isTree&&process.argv.includes('--wind20'))page=page.replace('physics.setSpeed(8)','physics.setSpeed(20)');if(hires)page=page.replace('width="800" height="650" style="width:800px;height:650px"','width="1600" height="1300" style="width:1600px;height:1300px"');res.end(page);return;}
  const target=path.resolve(root,'.'+route),relative=path.relative(root,target);if(relative.startsWith('..')||path.isAbsolute(relative)){res.writeHead(404).end();return;}
  res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.json':'application/json','.wasm':'application/wasm'})[path.extname(target)]??'application/octet-stream');res.end(await readFile(target));
 }catch(e){res.writeHead(500).end(String(e));}});

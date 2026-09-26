@@ -180,6 +180,7 @@ async function inspect(){
  const signature=JSON.stringify([state.ready,state.worlds,state.status,state.error,checkDrag?state.angle:null,faults]);
  if(signature!==last){last=signature;await fetch('/page-progress',{method:'POST',body:JSON.stringify(state)});}
  if(document.querySelector('#vf-material-stage')&&!state.status)state.error='Startup replaced its loading message with a blank frame';
+ if(state.ready==='true'&&[...document.querySelectorAll('#vf-material-controls button:not([hidden])')].some(button=>/sand/i.test(button.textContent)))state.error='Coming Soon wheel still exposes a sand mode';
  if(!sandStarted&&state.worlds?.includes('granular'))state.error='Inactive sand initialized before the selected water View';
  if(state.error||faults.length||state.elapsedMs>((waterRelax||steadySpin)?220000:60000)){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,...state})});return;}
  if(fluidSandPrototype){
