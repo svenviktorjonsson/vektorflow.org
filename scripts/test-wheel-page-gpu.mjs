@@ -171,6 +171,24 @@ function countBrowserRaf(){browserRafFrames++;requestAnimationFrame(countBrowser
 requestAnimationFrame(countBrowserRaf);
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
+function observeInputPresentation(canvas,current,target,presentedBefore,startedAt,state,label){
+ let acceptedMs=null,requiredPresented=null,finished=false;
+ const observer=new MutationObserver(sample);
+ const finish=(result)=>{if(finished)return;finished=true;observer.disconnect();clearTimeout(timeout);
+  fetch('/page-result',{method:'POST',body:JSON.stringify({...result,...state})});};
+ const timeout=setTimeout(()=>finish({passed:false,error:label+' input did not present',acceptedMs}),2000);
+ function sample(){
+  if(acceptedMs===null&&Math.abs(current.logicalAngle-target)<.005){
+   acceptedMs=performance.now()-startedAt;
+   requiredPresented=Number(canvas.dataset.renderedFrames||0);
+  }
+  if(acceptedMs!==null&&Number(canvas.dataset.presentedFrames||0)>=Math.max(presentedBefore+1,requiredPresented)){
+   const presentedMs=performance.now()-startedAt;
+   finish({passed:true,acceptedMs,presentedMs,measurement:'GPU queue completion, not screen scanout'});
+  }
+ }
+ observer.observe(canvas,{attributes:true,attributeFilter:['data-rendered-frames','data-presented-frames']});sample();
+}
 async function inspect(){
  const app=globalThis.__vfWorldLayerApplication;
  const selectedView=app?.program.views[app.program.active_view];
@@ -260,12 +278,7 @@ async function inspect(){
   if(checkDrag||pausedInputLatency){
    if(dragTarget===undefined){const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
     dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
-    if(pausedInputLatency){let acceptedMs=null;const probe=async()=>{
-      if(acceptedMs===null&&Math.abs(current.logicalAngle-dragTarget)<.005)acceptedMs=performance.now()-dragStarted;
-      if(acceptedMs!==null&&Number(app.canvas.dataset.presentedFrames||0)>presentedBefore){const presentedMs=performance.now()-dragStarted;
-        await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:acceptedMs<1000&&presentedMs<1000,acceptedMs,presentedMs,...state})});return;}
-      if(performance.now()-dragStarted>2000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused wheel input did not present',acceptedMs,...state})});return;}
-      requestAnimationFrame(probe);};requestAnimationFrame(probe);return;}}
+    if(pausedInputLatency){observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,'Paused wheel');return;}}
    if(Math.abs(current.logicalAngle-dragTarget)<.005){const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current);await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.time===0,pausedReceipt,dragMs,exclusion,...state})});return;}
    if(performance.now()-dragStarted>3000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused 1.2-radian wheel drag not accepted within 3 seconds',dragMs:performance.now()-dragStarted,...state})});return;}
    setTimeout(inspect,100);return;
@@ -329,17 +342,7 @@ async function inspect(){
  if(played&&inputLatency&&state.time>=.5&&dragTarget===undefined){
   const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
   dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
-  let acceptedMs=null;
-  const probe=async()=>{
-   if(acceptedMs===null&&Math.abs(current.logicalAngle-dragTarget)<.005)acceptedMs=performance.now()-dragStarted;
-   if(acceptedMs!==null&&Number(app.canvas.dataset.presentedFrames||0)>presentedBefore){
-    const presentedMs=performance.now()-dragStarted;
-    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:acceptedMs<1000&&presentedMs<1000,acceptedMs,presentedMs,...state})});return;
-   }
-   if(performance.now()-dragStarted>2000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Wheel input did not present within two seconds',acceptedMs,...state})});return;}
-   requestAnimationFrame(probe);
-  };
-  requestAnimationFrame(probe);return;
+  observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,'Running wheel');return;
  }
  if(played&&profileFps&&state.elapsedMs-pausedReceipt.elapsedMs>=(sustained?15000:5000)){
   const wallSeconds=(state.elapsedMs-pausedReceipt.elapsedMs)/1000;
