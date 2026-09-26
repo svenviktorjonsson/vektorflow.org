@@ -25,38 +25,46 @@ select:focus-visible, textarea:focus-visible {
 .site-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  justify-content: flex-start;
+  gap: clamp(14px, 3vw, 32px);
   min-height: 78px;
   border-bottom: 1px solid var(--rule);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.site-nav::-webkit-scrollbar { display: none; }
 .site-nav a { text-decoration: none; }
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
   color: inherit;
   font-weight: 750;
   font-size: 19px;
   white-space: nowrap;
   letter-spacing: -.03em;
 }
-.site-nav nav { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14px; }
-.site-nav nav a { color: var(--muted); }
-.site-nav a[aria-current] { color: var(--accent); font-weight: 650; }
-.release-selector {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+.release-version {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 2px 6px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.site-nav nav {
+  display: flex;
+  flex: 1 0 auto;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: clamp(10px, 2.2vw, 22px);
+  font-size: 14px;
   white-space: nowrap;
 }
-.release-selector select {
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 5px 24px 5px 8px;
-  color: inherit;
-  background: inherit;
-  font: inherit;
-}
+.site-nav nav a { color: var(--muted); }
+.site-nav a[aria-current] { color: var(--accent); font-weight: 650; }
 .release-panel[hidden] { display: none !important; }
 .release-panel > :first-child { margin-top: 0; }
 .release-unavailable { color: var(--muted); }
@@ -170,6 +178,7 @@ select:focus-visible, textarea:focus-visible {
 .readme-example-result { min-height: 220px; border-left: 1px solid var(--rule); padding: 16px; background: transparent; }
 .readme-example-view-shell { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); gap: 12px; }
 .readme-example-view-selector { display: flex; flex-direction: column; gap: 6px; padding-right: 10px; border-right: 1px solid var(--rule); }
+.readme-example-view-selector__label { padding: 2px 10px 4px; color: var(--muted); font-size: 0.78rem; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
 .readme-example-view-selector button { min-height: 36px; border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; color: inherit; background: transparent; text-align: left; cursor: pointer; }
 .readme-example-view-selector button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .readme-example-retained-layer { position: relative; width: 100%; min-height: 328px; overflow: hidden; }
@@ -213,6 +222,14 @@ select:focus-visible, textarea:focus-visible {
 .vf-token.keyword, .vf-token.operator { color: #ff7b72; }
 .vf-token.binding, .vf-token.function { color: #d2a8ff; }
 .vf-token.builtin, .vf-token.type { color: #ffa657; }
+.vf-token.dimension { font-weight: 650; }
+.vf-token.dimension-i, .vf-token.dimension-j, .vf-token.dimension-k { color: #7ee787; }
+.vf-token.dimension-u, .vf-token.dimension-v, .vf-token.dimension-w { color: #56d4dd; }
+.vf-token.dimension-t { color: #d2a8ff; }
+.vf-token.dimension-c, .vf-token.dimension-m { color: #ffa657; }
+.vf-token.dimension-a, .vf-token.dimension-b, .vf-token.dimension-d,
+.vf-token.dimension-n, .vf-token.dimension-p, .vf-token.dimension-q { color: #79c0ff; }
+.vf-token.anonymous-dimension { color: #8b949e; font-style: italic; }
 .vf-token.punctuation { color: #c9d1d9; }
 
 .landing .readme { max-width: 720px; padding: 66px 0 62px; font-size: 18px; }
@@ -242,9 +259,11 @@ select:focus-visible, textarea:focus-visible {
 }
 
 @media (max-width: 620px) {
-  .site-nav { align-items: flex-start; flex-direction: column; justify-content: center; gap: 12px; padding-block: 18px; }
-  .site-nav nav { gap: 10px 18px; }
-  .site-nav, .site-footer, .readme, .contents { width: calc(100% - 32px); }
+  .site-nav { gap: 10px; min-height: 62px; padding-block: 10px; }
+  .site-nav .wordmark { gap: 5px; font-size: 15px; }
+  .site-nav .release-version { padding: 1px 5px; font-size: 9px; }
+  .site-nav nav { gap: clamp(5px, 1.7vw, 9px); font-size: clamp(10px, 3vw, 12px); }
+  .site-nav, .site-footer, .readme, .contents { width: calc(100% - 24px); }
   .landing .readme { padding: 36px 0 40px; font-size: 17px; }
   .landing .readme > p:first-of-type { font-size: 21px; }
   .readme h1 { font-size: 30px; }

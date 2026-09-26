@@ -9,8 +9,7 @@ import {
 function createReleaseRunner() {
   let active;
   const load = async () => {
-    const selector = globalThis.document.querySelector("#vkf-release-version");
-    const selection = releaseRuntimeFor(selector, selector.value);
+    const selection = releaseRuntimeFor(globalThis.document.querySelector(".release-version"));
     if (!selection.wasmUrl) {
       throw new Error(`VKF ${selection.version} has no published browser compiler`);
     }
@@ -109,9 +108,7 @@ function prepareExample(example, runner) {
       controller.run(source.value);
     }
   });
-  globalThis.addEventListener("vf-release-version-change", ({ detail }) => applyRuntime(detail));
-  const selector = globalThis.document.querySelector("#vkf-release-version");
-  applyRuntime(releaseRuntimeFor(selector, selector.value));
+  applyRuntime(releaseRuntimeFor(globalThis.document.querySelector(".release-version")));
 }
 
 export function renderDocumentation(document, readmeElement, runner) {

@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
-      - name: Verify release selector and versioned pages
+      - name: Verify visible stable release
         run: node scripts/test-current-release-selector.mjs
       - name: Verify live preview invariants
         run: node scripts/test-live-preview-invariants.mjs
