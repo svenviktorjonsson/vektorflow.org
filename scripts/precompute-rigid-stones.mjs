@@ -29,26 +29,33 @@ for(let i=0;i<5;i++){
     data.set([...p,...n.map(v=>v/length),...colors[i],1],j*10);
   }
   const source={indices:new Uint32Array(triangles)};
-  // Place the initial pile on its actual surface, not a spherical height proxy.
-  // This is an offline initial-condition calculation, never an animation.
+  // Initial packing uses the same convex support data as the rigid solver.
+  // Find the first non-penetrating height; no per-stone hover offset.
   if(surfaceContacts)center[2]=-Math.min(...positions.map(p=>p[2]));
-  if(surfaceContacts&&i>=3)for(const p of positions){const x=p[0]+center[0],y=p[1]+center[1];for(const base of supports){for(let t=0;t<base.indices.length;t+=3){
-    const a=base.positions[base.indices[t]],b=base.positions[base.indices[t+1]],c=base.positions[base.indices[t+2]],px=x-base.center[0],py=y-base.center[1];
-    if(px<Math.min(a[0],b[0],c[0])||px>Math.max(a[0],b[0],c[0])||py<Math.min(a[1],b[1],c[1])||py>Math.max(a[1],b[1],c[1]))continue;
-    const denominator=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);if(Math.abs(denominator)<1e-12)continue;
-    const u=((b[1]-c[1])*(px-c[0])+(c[0]-b[0])*(py-c[1]))/denominator,v=((c[1]-a[1])*(px-c[0])+(a[0]-c[0])*(py-c[1]))/denominator;
-    if(u>=0&&v>=0&&u+v<=1)center[2]=Math.max(center[2],base.center[2]+u*a[2]+v*b[2]+(1-u-v)*c[2]-p[2]);
-  }}}
-  if(surfaceContacts&&i>=3)center[2]+=.008;
-  supports.push({positions,indices:source.indices,center});
   const hull=[];let radius=0;for(let j=0;j<data.length;j+=10)radius=Math.max(radius,Math.hypot(data[j],data[j+1],data[j+2]));
   // Contact support must cover the visible mineral surface in many directions;
   // an overly sparse hull lets rendered protrusions enter a neighbour.
-  const supportCount=96;
+  const supportCount=96,normals=[];
   for(let k=0;k<supportCount;k++){const z=1-2*k/(supportCount-1),theta=k*2.399963229728653,r=Math.sqrt(1-z*z),n=[r*Math.cos(theta),r*Math.sin(theta),z];let best=-Infinity,at=0;
+    normals.push(n);
     for(let j=0;j<data.length;j+=10){const d=data[j]*n[0]+data[j+1]*n[1]+data[j+2]*n[2];if(d>best){best=d;at=j;}}
     hull.push(data[at],data[at+1],data[at+2],0);
   }
+  if(surfaceContacts&&supports.length){
+    const penetrating=height=>positions.some(point=>supports.some(base=>{
+      const relative=[point[0]+center[0]-base.center[0],point[1]+center[1]-base.center[1],point[2]+height-base.center[2]];
+      if(Math.hypot(...relative)>base.radius)return false;
+      return base.normals.every((normal,k)=>normal.reduce((sum,value,axis)=>sum+value*(base.hull[k*4+axis]-relative[axis]),0)>1e-6);
+    }));
+    const floorHeight=center[2];
+    if(penetrating(floorHeight)){
+      let low=floorHeight,high=floorHeight+0.01;
+      while(penetrating(high))high+=Math.max(0.01,high-floorHeight);
+      for(let iteration=0;iteration<24;iteration++){const middle=(low+high)/2;if(penetrating(middle))low=middle;else high=middle;}
+      center[2]=high;
+    }
+  }
+  supports.push({center:center.slice(),hull,normals,radius:radius*2});
   let volume=0;for(let j=0;j<source.indices.length;j+=3){const a=source.indices[j]*10,b=source.indices[j+1]*10,c=source.indices[j+2]*10;
     volume+=(data[a]*(data[b+1]*data[c+2]-data[b+2]*data[c+1])+data[a+1]*(data[b+2]*data[c]-data[b]*data[c+2])+data[a+2]*(data[b]*data[c+1]-data[b+1]*data[c]))/6;
   }
@@ -62,6 +69,6 @@ for(let i=0;i<5;i++){
 }
 const header=Buffer.alloc(20);header.write('VFTREE02');header.writeUInt32LE(5,8);header.writeUInt32LE(vertices,12);header.writeUInt32LE(indices,16);
 await mkdir(new URL('../public/previews/0.6.0/live/rocks/assets/',import.meta.url),{recursive:true});
-const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-30kg-11.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
+const output=gzipSync(Buffer.concat([header,...chunks]),{level:9});await writeFile(new URL('../public/previews/0.6.0/live/rocks/assets/'+(surfaceContacts?'rigid-stones-30kg-12.bin.gz':'rigid-stones.bin.gz'),import.meta.url),output);
 if(Math.abs(Math.max(...runtimeMasses)-targetLargestMassKg)>1e-6)throw Error('Largest stone mass drifted from target: '+JSON.stringify(runtimeMasses));
 console.log(JSON.stringify({centers,sizes,runtimeMasses,physicalScale,vertices,indices,compressedBytes:output.length}));

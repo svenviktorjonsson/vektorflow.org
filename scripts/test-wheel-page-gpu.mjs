@@ -161,6 +161,8 @@ if(rejectCaches){const create=GPUDevice.prototype.createComputePipelineAsync;
 const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.argv.includes('--water-wall-spin')},realtimeSpinLong=${process.argv.includes('--water-realtime-spin-long')},realtimeSpin=${process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadySpin=${process.argv.includes('--water-steady-spin')||process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')},steadyOmega=${process.argv.includes('--water-wall-spin')||process.argv.includes('--water-realtime-spin')||process.argv.includes('--water-realtime-spin-long')?6:2},waterRelax=${process.argv.includes('--water-relax')||process.argv.includes('--water-relax-long')||process.argv.includes('--water-fast-spin')},waterTurnGoal=${process.argv.includes('--water-relax-long')?32:8},waterTurnIncrement=fastSpin?1.6:.4,sandSteps=${process.argv.includes('--sand-step-diagnose')},sandMotion=${process.argv.includes('--sand-motion')},sandEquilibrium=${process.argv.includes('--sand-equilibrium')},sandDropcastle=${process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')},sandVisualLong=${process.argv.includes('--sand-visual-long')},sandVisual=${process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')},sandStaticImageSettled=${process.argv.includes('--sand-static-image-settled')},sandStaticImage=${process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')},sandDropcastleWet=${process.argv.includes('--sand-dropcastle-wet')},sandGpuProfile=${process.argv.includes('--sand-gpu-profile')},sandGpuProfileFalling=${process.argv.includes('--sand-gpu-profile-falling')},sandLaneControls=${process.argv.includes('--sand-lane-controls')},sandGrainRange=${process.argv.includes('--sand-grain-range')},checkSand=${process.argv.includes('--sand-paused')||process.argv.includes('--sand-motion')||process.argv.includes('--sand-equilibrium')||process.argv.includes('--sand-dropcastle-dry')||process.argv.includes('--sand-dropcastle-wet')||process.argv.includes('--sand-visual')||process.argv.includes('--sand-visual-long')||process.argv.includes('--sand-static-image')||process.argv.includes('--sand-static-image-settled')||process.argv.includes('--sand-step-diagnose')||process.argv.includes('--sand-gpu-profile')||process.argv.includes('--sand-gpu-profile-falling')||process.argv.includes('--sand-lane-controls')||process.argv.includes('--sand-grain-range')},checkDrag=${process.argv.includes('--paused-drag')},checkVolume=${process.argv.includes('--water-volume')},profileFps=${process.argv.includes('--fps-profile')},gpuProfile=${process.argv.includes('--gpu-profile')},sustained=${process.argv.includes('--sustained')},runningDrag=${process.argv.includes('--running-drag')},started=performance.now(), faults=[];let last='',played=false,pausedReceipt,sandStarted=false,sandPlayed=false,sandSample=0,sandPlayFrame,sandPlayElapsed,waterReceipt,sandFrame,dragTarget,dragStarted,dragReachedMs,sandReleaseStart,sandImmediate,pausedProfileStart,waterTurnCount=0,lastWaterTurnSample=0,waterReleaseTime,waterSnapshots=[],steadySpinSamples=[],sandEquilibriumSamples=[],sandFormationRequested=false,sandFormationInitial,sandVisualInitialIds,sandLaneControlAudit;
   const waterTurnSamples=[],sandAreaSamples=[];let steadySpinStartTime,steadySpinStartAngle,steadySpinStartMs;
 const fluidSandGrainRange=${process.argv.includes('--fluid-sand-grain-range')};
+const inputLatency=${process.argv.includes('--input-latency')};
+const pausedInputLatency=${process.argv.includes('--input-latency-paused')};
 const fluidSandPrototype=${process.argv.includes('--fluid-sand-prototype')||process.argv.includes('--fluid-sand-grain-range')};
 const fluidSandSpin=${process.argv.includes('--fluid-sand-spin')};
 let fluidSandStage=0;
@@ -255,8 +257,15 @@ async function inspect(){
     browserRafFps:profileFps?(browserRafFrames-pausedProfileStart.rafFrames)*1000/(state.elapsedMs-pausedProfileStart.elapsedMs):undefined,
     browserRafFrames:profileFps?browserRafFrames:undefined};
   if(pausedTelemetry.nonFinite){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused water initialized with non-finite state',pausedReceipt,...state})});return;}
-  if(checkDrag){
-   if(dragTarget===undefined){dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
+  if(checkDrag||pausedInputLatency){
+   if(dragTarget===undefined){const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
+    dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
+    if(pausedInputLatency){let acceptedMs=null;const probe=async()=>{
+      if(acceptedMs===null&&Math.abs(current.logicalAngle-dragTarget)<.005)acceptedMs=performance.now()-dragStarted;
+      if(acceptedMs!==null&&Number(app.canvas.dataset.presentedFrames||0)>presentedBefore){const presentedMs=performance.now()-dragStarted;
+        await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:acceptedMs<1000&&presentedMs<1000,acceptedMs,presentedMs,...state})});return;}
+      if(performance.now()-dragStarted>2000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused wheel input did not present',acceptedMs,...state})});return;}
+      requestAnimationFrame(probe);};requestAnimationFrame(probe);return;}}
    if(Math.abs(current.logicalAngle-dragTarget)<.005){const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current);await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.time===0,pausedReceipt,dragMs,exclusion,...state})});return;}
    if(performance.now()-dragStarted>3000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused 1.2-radian wheel drag not accepted within 3 seconds',dragMs:performance.now()-dragStarted,...state})});return;}
    setTimeout(inspect,100);return;
@@ -317,11 +326,26 @@ async function inspect(){
   if(dragTarget!==undefined&&Math.abs(current.logicalAngle-dragTarget)<.005){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,dragMs:performance.now()-dragStarted,...state})});return;}
   if(dragTarget!==undefined&&performance.now()-dragStarted>7000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Running wheel drag not accepted within 7 seconds',pausedReceipt,...state})});return;}
  }
+ if(played&&inputLatency&&state.time>=.5&&dragTarget===undefined){
+  const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
+  dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
+  let acceptedMs=null;
+  const probe=async()=>{
+   if(acceptedMs===null&&Math.abs(current.logicalAngle-dragTarget)<.005)acceptedMs=performance.now()-dragStarted;
+   if(acceptedMs!==null&&Number(app.canvas.dataset.presentedFrames||0)>presentedBefore){
+    const presentedMs=performance.now()-dragStarted;
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:acceptedMs<1000&&presentedMs<1000,acceptedMs,presentedMs,...state})});return;
+   }
+   if(performance.now()-dragStarted>2000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Wheel input did not present within two seconds',acceptedMs,...state})});return;}
+   requestAnimationFrame(probe);
+  };
+  requestAnimationFrame(probe);return;
+ }
  if(played&&profileFps&&state.elapsedMs-pausedReceipt.elapsedMs>=(sustained?15000:5000)){
   const wallSeconds=(state.elapsedMs-pausedReceipt.elapsedMs)/1000;
   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,playing:{fps:(state.frames-pausedReceipt.frames)/wallSeconds,browserRafFps:(browserRafFrames-pausedReceipt.browserRafFrames)/wallSeconds,realtimeFactor:(state.time-pausedReceipt.time)/wallSeconds},...state})});return;
  }
- if(played&&!checkVolume&&!profileFps&&!gpuProfile&&!waterRelax&&!runningDrag&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
+ if(played&&!checkVolume&&!profileFps&&!gpuProfile&&!waterRelax&&!runningDrag&&!inputLatency&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
   if(!checkSand){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
  waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
   const particles=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Particles');

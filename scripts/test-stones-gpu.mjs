@@ -9,11 +9,11 @@ const isTree=process.argv.includes('--tree'),closeup=process.argv.includes('--cl
 const parent=path.resolve(root,'../.w');await mkdir(parent,{recursive:true});const work=await mkdtemp(path.join(parent,'stones-gpu-'));
 let finish;const completed=new Promise(resolve=>finish=resolve);
 const html=String.raw`<!doctype html><canvas width="800" height="650" style="width:800px;height:650px"></canvas>
-<script src="/previews/0.6.0/compiled/runtime-stones-15/vf-compiled-runtime-bridge.js"></script>
+<script src="/previews/0.6.0/compiled/runtime-stones-16/vf-compiled-runtime-bridge.js"></script>
 <script type="module">
-import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-15/vf-world-mechanical-runtime.mjs';
-import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-15/vf-world-mechanical-gpu.mjs';
-import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/runtime-stones-15/vf-world-scene-embedding-gpu.mjs';
+import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-16/vf-world-mechanical-runtime.mjs';
+import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-16/vf-world-mechanical-gpu.mjs';
+import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/runtime-stones-16/vf-world-scene-embedding-gpu.mjs';
 const check=(x,m)=>{if(!x)throw Error(m)};let device;
 function countEmbeddedStoneVertices(state,initial,meshes){
  const rotate=(q,p)=>{const t=[2*(q[1]*p[2]-q[2]*p[1]),2*(q[2]*p[0]-q[0]*p[2]),2*(q[0]*p[1]-q[1]*p[0])];return p.map((v,a)=>v+q[3]*t[a]+[q[1]*t[2]-q[2]*t[1],q[2]*t[0]-q[0]*t[2],q[0]*t[1]-q[1]*t[0]][a]);};
@@ -31,7 +31,7 @@ function countEmbeddedStoneVertices(state,initial,meshes){
  return {count,worstDepth,pairs};
 }
 try{
- const base='/previews/0.6.0/compiled/stones-mixed-15/';
+ const base='/previews/0.6.0/compiled/stones-mixed-16/';
  const inputs={bytes:new Uint8Array(await(await fetch(base+'main.wasm')).arrayBuffer()),manifest:await(await fetch(base+'manifest.json')).json()};
  const runtime=await (VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync?VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync(inputs):VfCompiledRuntimeBridge.instantiateWasmRuntime(inputs));runtime.init();
  const world=runtime.worldProgram().gpu_worlds[0],asset=world.kind==='wind'?await new Promise((resolve,reject)=>{
@@ -67,12 +67,12 @@ try{
    coupling.push({applied:expectedImpulse,momentum,branchVelocity,leafVelocity});output.unmap();output.destroy();buffers.forEach(b=>b.destroy());
   }
  }
- if(!isTree){const droppedBody=4,dropHeight=initial.sceneFrame.liftCeiling,masses=Array.from({length:initial.bodyCount},(_,body)=>initial.bodies[body*20+16]);check(initial.bodies[droppedBody*20+16]===Math.min(...masses),'Regression requires the smallest stone');check(Math.abs(Math.max(...masses)-30)<1e-4,'Largest stone must be 30 kg: '+JSON.stringify(masses));physics.setHeld(droppedBody,dropHeight);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.releaseHeld([1.2,-0.4,0]);
+ if(!isTree){const droppedBody=4,dropHeight=initial.sceneFrame.liftCeiling,masses=Array.from({length:initial.bodyCount},(_,body)=>initial.bodies[body*20+16]);check(initial.bodies[droppedBody*20+16]===Math.min(...masses),'Regression requires the smallest stone');check(Math.abs(Math.max(...masses)-30)<1e-4,'Largest stone must be 30 kg: '+JSON.stringify(masses));physics.setHeld(droppedBody,dropHeight);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.releaseHeld();
  const dropSteps=20;encoder=device.createCommandEncoder();for(let i=0;i<dropSteps;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
  const state=await physics.readBodies();z=state[droppedBody*20+2];expected=dropHeight+world.gravity[2]*world.time_step**2*dropSteps*(dropSteps+1)/2;
  check(state.every(Number.isFinite),'Nonfinite rigid state');check(Math.abs(z-expected)<0.002,'Drop differs from gravity: '+z+' / '+expected);check(Math.abs(physics.time-world.time_step*dropSteps)<1e-6,'Physical clock differs');
- check(Math.hypot(...state.subarray(droppedBody*20+12,droppedBody*20+15))>1.1,'Off-centre release lost angular velocity before impact');
- check(Math.abs(state[droppedBody*20+8])+Math.abs(state[droppedBody*20+9])>0.05,'Angular velocity did not change stone orientation during flight');physics.reset();
+ check(Math.hypot(...state.subarray(droppedBody*20+12,droppedBody*20+15))<1e-4,'Release created rotation before contact');
+ check(Math.abs(state[droppedBody*20+8])+Math.abs(state[droppedBody*20+9])<1e-4,'Stone orientation changed without a collision');physics.reset();
  physics.setHeld(droppedBody,dropHeight);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.setHeld(-1,0);
  let minimumVerticalSpeed=0,maximumUpwardSpeed=0,maximumAngularSpeed=0,maximumTransferredSpeed=0,maximumBaseSpeed=0,maximumBaseDisplacement=0;
  for(let batch=0;batch<150;batch++){encoder=device.createCommandEncoder();for(let i=0;i<8;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();const bodies=await physics.readBodies();minimumVerticalSpeed=Math.min(minimumVerticalSpeed,bodies[droppedBody*20+6]);maximumUpwardSpeed=Math.max(maximumUpwardSpeed,bodies[droppedBody*20+6]);maximumAngularSpeed=Math.max(maximumAngularSpeed,Math.hypot(...bodies.subarray(droppedBody*20+12,droppedBody*20+15)));for(let body=0;body<initial.bodyCount;body++){if(body!==droppedBody)maximumTransferredSpeed=Math.max(maximumTransferredSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));if(body<3){maximumBaseSpeed=Math.max(maximumBaseSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));maximumBaseDisplacement=Math.max(maximumBaseDisplacement,Math.hypot(...[0,1,2].map(axis=>bodies[body*20+axis]-initial.bodies[body*20+axis])));}}}
