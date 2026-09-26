@@ -176,19 +176,33 @@ requestAnimationFrame(countBrowserRaf);
 addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
 function observeInputPresentation(canvas,current,target,presentedBefore,startedAt,state,label){
+ const initialAngle=current.logicalAngle;
+ const maximumAngularSpeed=current.world.geometry.maximum_angular_speed;
+ const minimumFullTurnMs=maximumAngularSpeed>0
+  ?Math.abs(target-initialAngle)/maximumAngularSpeed*1000:null;
+ let firstChangeMs=null,firstPresentedMs=null,firstRequiredPresented=null;
  let acceptedMs=null,requiredPresented=null,finished=false;
  const observer=new MutationObserver(sample);
  const finish=(result)=>{if(finished)return;finished=true;observer.disconnect();clearTimeout(timeout);
   fetch('/page-result',{method:'POST',body:JSON.stringify({...result,...state})});};
  const timeout=setTimeout(()=>finish({passed:false,error:label+' input did not present',acceptedMs}),2000);
  function sample(){
+  if(firstChangeMs===null&&Math.abs(current.logicalAngle-initialAngle)>1e-4){
+   firstChangeMs=performance.now()-startedAt;
+   firstRequiredPresented=Number(canvas.dataset.renderedFrames||0);
+  }
+  if(firstChangeMs!==null&&firstPresentedMs===null&&
+     Number(canvas.dataset.presentedFrames||0)>=Math.max(presentedBefore+1,firstRequiredPresented))
+   firstPresentedMs=performance.now()-startedAt;
   if(acceptedMs===null&&Math.abs(current.logicalAngle-target)<.005){
    acceptedMs=performance.now()-startedAt;
    requiredPresented=Number(canvas.dataset.renderedFrames||0);
   }
   if(acceptedMs!==null&&Number(canvas.dataset.presentedFrames||0)>=Math.max(presentedBefore+1,requiredPresented)){
    const presentedMs=performance.now()-startedAt;
-   finish({passed:true,acceptedMs,presentedMs,measurement:'GPU queue completion, not screen scanout'});
+   finish({passed:true,firstChangeMs,firstPresentedMs,acceptedMs,presentedMs,
+    minimumFullTurnMs,firstFrameTargetMet:firstPresentedMs<15,
+    measurement:'GPU queue completion, not screen scanout'});
   }
  }
  observer.observe(canvas,{attributes:true,attributeFilter:['data-rendered-frames','data-presented-frames']});sample();
