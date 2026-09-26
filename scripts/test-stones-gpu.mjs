@@ -6,14 +6,18 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../public');
 const isTree=process.argv.includes('--tree'),closeup=process.argv.includes('--closeup'),hires=process.argv.includes('--hires');
+const bundle=JSON.parse(await readFile(path.join(root,'previews/0.6.0/compiled/bundle.json'),'utf8'));
+const published=bundle.applications[isTree?'tree':'stones'];
+if(!published?.directory||!published?.runtime_directory)throw Error('Published mechanical artifact missing from bundle');
 const parent=path.resolve(root,'../.w');await mkdir(parent,{recursive:true});const work=await mkdtemp(path.join(parent,'stones-gpu-'));
 let finish;const completed=new Promise(resolve=>finish=resolve);
 const html=String.raw`<!doctype html><canvas width="800" height="650" style="width:800px;height:650px"></canvas>
-<script src="/previews/0.6.0/compiled/runtime-stones-16/vf-compiled-runtime-bridge.js"></script>
+<script src="/previews/0.6.0/compiled/${published.runtime_directory}/vf-compiled-runtime-bridge.js"></script>
 <script type="module">
-import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/runtime-stones-16/vf-world-mechanical-runtime.mjs';
-import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/runtime-stones-16/vf-world-mechanical-gpu.mjs';
-import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/runtime-stones-16/vf-world-scene-embedding-gpu.mjs';
+const expectedTree=${isTree};
+import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/${published.runtime_directory}/vf-world-mechanical-runtime.mjs';
+import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/${published.runtime_directory}/vf-world-mechanical-gpu.mjs';
+import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/${published.runtime_directory}/vf-world-scene-embedding-gpu.mjs';
 const check=(x,m)=>{if(!x)throw Error(m)};let device;
 function countEmbeddedStoneVertices(state,initial,meshes){
  const rotate=(q,p)=>{const t=[2*(q[1]*p[2]-q[2]*p[1]),2*(q[2]*p[0]-q[0]*p[2]),2*(q[0]*p[1]-q[1]*p[0])];return p.map((v,a)=>v+q[3]*t[a]+[q[1]*t[2]-q[2]*t[1],q[2]*t[0]-q[0]*t[2],q[0]*t[1]-q[1]*t[0]][a]);};
@@ -31,7 +35,7 @@ function countEmbeddedStoneVertices(state,initial,meshes){
  return {count,worstDepth,pairs};
 }
 try{
- const base='/previews/0.6.0/compiled/stones-mixed-16/';
+ const base='/previews/0.6.0/compiled/${published.directory}/';
  const inputs={bytes:new Uint8Array(await(await fetch(base+'main.wasm')).arrayBuffer()),manifest:await(await fetch(base+'manifest.json')).json()};
  const runtime=await (VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync?VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync(inputs):VfCompiledRuntimeBridge.instantiateWasmRuntime(inputs));runtime.init();
  const world=runtime.worldProgram().gpu_worlds[0],asset=world.kind==='wind'?await new Promise((resolve,reject)=>{
@@ -39,7 +43,7 @@ try{
   worker.onmessage=event=>{worker.terminate();event.data.error?reject(Error(event.data.error)):resolve(event.data.meshes)};
   worker.onerror=event=>{worker.terminate();reject(Error(event.message))};worker.postMessage({species:'oak',distribution:'normal',height:8,splitFactor:.65,turnFactor:.5});
  }):await readMechanicalAsset(world.properties.asset);
- const isTree=world.kind==='wind';check(isTree||asset.length===5,'Expected five stones');
+ const isTree=world.kind==='wind';check(isTree===expectedTree,'GPU test loaded the wrong published artifact');check(isTree||asset.length===5,'Expected five stones');
  const adapter=await navigator.gpu.requestAdapter();check(adapter&&!adapter.isFallbackAdapter,'Requires physical GPU');device=await adapter.requestDevice();
  const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
  const {initial,meshes}=prepareMechanicalInitialState(world,runtime.worldLayerViews(),asset),prefix='$world$gpu$'+world.world_id;
@@ -143,7 +147,7 @@ try{
 const server=createServer(async(req,res)=>{try{
  const route=new URL(req.url,'http://localhost').pathname;
  if(route==='/result'&&req.method==='POST'){let body='';for await(const data of req){body+=data;if(body.length>8_000_000)throw Error('Oversize result');}res.end('ok');finish(JSON.parse(body));return;}
- if(route==='/test'){res.setHeader('Content-Type','text/html');let page=isTree?html.replaceAll('runtime-stones-15','runtime-tree-12').replaceAll('stones-mixed-15','tree-air-12'):html;if(isTree&&process.argv.includes('--wind20'))page=page.replace('physics.setSpeed(8)','physics.setSpeed(20)');if(hires)page=page.replace('width="800" height="650" style="width:800px;height:650px"','width="1600" height="1300" style="width:1600px;height:1300px"');res.end(page);return;}
+ if(route==='/test'){res.setHeader('Content-Type','text/html');let page=html;if(isTree&&process.argv.includes('--wind20'))page=page.replace('physics.setSpeed(8)','physics.setSpeed(20)');if(hires)page=page.replace('width="800" height="650" style="width:800px;height:650px"','width="1600" height="1300" style="width:1600px;height:1300px"');res.end(page);return;}
  const target=path.resolve(root,'.'+route),relative=path.relative(root,target);if(relative.startsWith('..')||path.isAbsolute(relative)){res.writeHead(404).end();return;}
  res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.json':'application/json','.wasm':'application/wasm'})[path.extname(target)]??'application/octet-stream');res.end(await readFile(target));
 }catch(e){res.writeHead(500).end(String(e));}});
