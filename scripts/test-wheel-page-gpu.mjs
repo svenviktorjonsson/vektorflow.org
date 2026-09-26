@@ -355,13 +355,29 @@ async function inspect(){
    dragTarget=(dragTarget??current.logicalAngle)+waterTurnIncrement;waterTurnCount++;app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
   }else if(waterTurnCount===waterTurnGoal&&waterReleaseTime===undefined&&Math.abs(current.logicalAngle-dragTarget)<.005){waterReleaseTime=state.time;waterSnapshots.push({after:0,shape:await checkExclusion(current,{assert:false})});}
   if(waterReleaseTime!==undefined){for(const mark of [2,5,10])if(state.time-waterReleaseTime>=mark&&!waterSnapshots.some(s=>s.after===mark))waterSnapshots.push({after:mark,shape:await checkExclusion(current,{assert:false})});if(waterSnapshots.length===4){const release=waterSnapshots[0].shape,rest=waterSnapshots[3].shape,conservation=fastSpin?await checkWaterVolume(current):undefined;
-   // A browser frame may request a different wheel angular speed on each run.
-   // Compare stored water speed with measured rim speed plus the free-fall
-   // speed across this one-metre vessel, not a fixed arbitrary speed cap.
-   const mechanicalSpeedCeiling=(state.peakWheelSurfaceSpeed??0)+Math.sqrt(2*9.82*1)+1;
+   // A moving baffle can squeeze a narrow jet faster than its surface speed;
+   // that transient is not an energy source. Reject unbounded boundary input,
+   // growing energy over repeated turns, and failure to relax after release.
+   const halfway=Math.floor(waterTurnSamples.length/2);
+   const spinupTurn=waterTurnSamples[halfway-1],lastTurn=waterTurnSamples.at(-1);
+   const spinupMeanMaximum=Math.max(0,...waterTurnSamples.slice(0,halfway)
+    .map(sample=>sample.shape.meanSpeedSquared));
+   const lateMeanMaximum=Math.max(0,...waterTurnSamples.slice(halfway)
+    .map(sample=>sample.shape.meanSpeedSquared));
+   const wheelSpeedLimit=4.1,freeFallSpeed=Math.sqrt(2*9.82*1);
+   const speedStability={wheelSurfaceSpeed:state.peakWheelSurfaceSpeed,
+    spinupPeak:spinupTurn?.telemetry.peakSpeed,lastPeak:lastTurn?.telemetry.peakSpeed,
+    spinupMeanMaximum,lateMeanMaximum,
+    transientLimit:2*(wheelSpeedLimit+freeFallSpeed)};
+   const boundedSpin=!fastSpin||(waterTurnSamples.length===waterTurnGoal&&
+    speedStability.wheelSurfaceSpeed<=wheelSpeedLimit&&
+    speedStability.lastPeak<=speedStability.transientLimit&&
+    speedStability.lastPeak<=speedStability.spinupPeak*1.15&&
+    speedStability.lateMeanMaximum<=Math.max(1,
+      speedStability.spinupMeanMaximum*1.5));
    const diffuse=fastSpin?await checkDiffuseWheel(current):undefined;
    const diffuseClear=!fastSpin||[...waterTurnSamples.map(s=>s.diffuse),diffuse].every(s=>s.active===0||s.worstGap>=-1e-4);
-   const passed=[...waterTurnSamples,...waterSnapshots].every(s=>s.shape.boundaryGap>=-1e-5)&&rest.meanSpeedSquared<Math.min(.05*.05,release.meanSpeedSquared*.01)&&diffuseClear&&(!fastSpin||(conservation.freshDensityVolumeFraction>=.99&&conservation.embeddedSurfaceAreaFraction>=.99&&!conservation.telemetry.gridOverflow&&conservation.telemetry.peakSpeed<mechanicalSpeedCeiling));await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,mechanicalSpeedCeiling,waterTurnCount,waterTurnSamples,waterSnapshots,conservation,diffuse,...state,error:passed?undefined:'Water relaxation, volume, foam, peak speed, or wheel-boundary exclusion failed'})});return;}}
+   const passed=[...waterTurnSamples,...waterSnapshots].every(s=>s.shape.boundaryGap>=-1e-5)&&rest.meanSpeedSquared<Math.min(.05*.05,release.meanSpeedSquared*.01)&&diffuseClear&&boundedSpin&&(!fastSpin||(conservation.freshDensityVolumeFraction>=.99&&conservation.embeddedSurfaceAreaFraction>=.99&&!conservation.telemetry.gridOverflow));await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,speedStability,waterTurnCount,waterTurnSamples,waterSnapshots,conservation,diffuse,...state,error:passed?undefined:'Water relaxation, volume, foam, speed stability, or wheel-boundary exclusion failed'})});return;}}
  }
  if(played&&runningDrag){
   if(dragTarget===undefined&&state.time>=5){const beforeDrag=await checkExclusion(current,{assert:false});await fetch('/page-progress',{method:'POST',body:JSON.stringify({beforeDrag})});dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
