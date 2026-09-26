@@ -97,18 +97,19 @@ async function checkWaterVolume(current){
 async function measurePhysicsSteps(current){
  if(!auditDevice.features.has('timestamp-query'))throw Error('GPU timestamp query unavailable');
  current.paused=true;await auditDevice.queue.onSubmittedWorkDone();
+ const steps=Math.max(1,Math.round(1/(60*current.physics.policy.timeStep)));
  const query=auditDevice.createQuerySet({type:'timestamp',count:2});
  const resolved=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
  const read=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
  const encoder=auditDevice.createCommandEncoder();
  const start=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:0}});start.end();
- current.physics.stepMany(encoder,4);
+ current.physics.stepMany(encoder,steps);
  const end=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:1}});end.end();
  encoder.resolveQuerySet(query,0,2,resolved,0);encoder.copyBufferToBuffer(resolved,0,read,0,16);
  const wallStart=performance.now();auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
  const values=new BigUint64Array(read.getMappedRange().slice(0));read.unmap();
  const gpuMs=Number(values[1]-values[0])/1e6,wallMs=performance.now()-wallStart;
- query.destroy();resolved.destroy();read.destroy();return {gpuMs,wallMs,steps:4};
+ query.destroy();resolved.destroy();read.destroy();return {gpuMs,wallMs,steps,simulatedMs:steps*current.physics.policy.timeStep*1000};
 }
 async function measureEmbedding(current,app){
  const query=auditDevice.createQuerySet({type:'timestamp',count:3});
