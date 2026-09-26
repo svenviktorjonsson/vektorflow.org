@@ -163,6 +163,8 @@ const fastSpin=${process.argv.includes('--water-fast-spin')},wallSpin=${process.
 const fluidSandGrainRange=${process.argv.includes('--fluid-sand-grain-range')};
 const inputLatency=${process.argv.includes('--input-latency')};
 const pausedInputLatency=${process.argv.includes('--input-latency-paused')};
+const pointerWasm=${process.argv.includes('--pointer-wasm')};
+const pointerWasmLatency=${process.argv.includes('--pointer-wasm-latency')};
 const fluidSandPrototype=${process.argv.includes('--fluid-sand-prototype')||process.argv.includes('--fluid-sand-grain-range')};
 const fluidSandSpin=${process.argv.includes('--fluid-sand-spin')};
 let fluidSandStage=0;
@@ -261,7 +263,8 @@ async function inspect(){
   }
   setTimeout(inspect,250);return;
  }
- if(!played&&state.ready==='true'&&state.frames>=3){
+ if(!played&&state.ready==='true'&&state.frames>=1
+    &&Number(app.canvas.dataset.presentedFrames||0)>=1){
   const play=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Play');
   if(!current.paused||state.time!==0||!play){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Selected World did not start visibly paused with Play',...state})});return;}
   if(profileFps){
@@ -275,6 +278,30 @@ async function inspect(){
     browserRafFps:profileFps?(browserRafFrames-pausedProfileStart.rafFrames)*1000/(state.elapsedMs-pausedProfileStart.elapsedMs):undefined,
     browserRafFrames:profileFps?browserRafFrames:undefined};
   if(pausedTelemetry.nonFinite){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused water initialized with non-finite state',pausedReceipt,...state})});return;}
+  if(pointerWasm||pointerWasmLatency){
+   if(dragTarget===undefined){
+    const rect=app.canvas.getBoundingClientRect(),center=current.world.geometry.center;
+    const screen=point=>{const p=current.boundary.worldToScreen(point,current.physics.policy);
+     return {clientX:rect.left+p[0]*rect.width/app.canvas.width,
+      clientY:rect.top+p[1]*rect.height/app.canvas.height};};
+    const start=screen([center[0]+.35,center[1]]),end=screen([center[0],center[1]+.35]);
+    app.canvas.setPointerCapture=()=>{};app.canvas.hasPointerCapture=()=>true;
+    app.canvas.releasePointerCapture=()=>{};
+    const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
+    dragTarget=current.angle+Math.PI/2;dragStarted=performance.now();
+    app.canvas.dispatchEvent(new PointerEvent('pointerdown',{pointerId:19,bubbles:true,...start}));
+    app.canvas.dispatchEvent(new PointerEvent('pointermove',{pointerId:19,bubbles:true,...end}));
+    if(pointerWasmLatency){observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,
+     dragStarted,state,'Compiled pointer wheel');return;}
+    app.canvas.dispatchEvent(new PointerEvent('pointerup',{pointerId:19,bubbles:true,...end}));
+   }
+   if(Math.abs(current.logicalAngle-dragTarget)<.005){const exclusion=await checkExclusion(current);
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.time===0,
+     compiledPointerDragMs:performance.now()-dragStarted,angleError:current.logicalAngle-dragTarget,
+     exclusion,pausedReceipt,...state})});return;}
+   if(performance.now()-dragStarted>3000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Compiled pointer event did not turn the wheel',...state})});return;}
+   setTimeout(inspect,100);return;
+  }
   if(checkDrag||pausedInputLatency){
    if(dragTarget===undefined){const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
     dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
