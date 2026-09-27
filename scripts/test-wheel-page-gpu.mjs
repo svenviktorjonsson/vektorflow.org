@@ -101,29 +101,37 @@ async function measurePhysicsSteps(current){
  const query=auditDevice.createQuerySet({type:'timestamp',count:2});
  const resolved=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
  const read=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const encodeStart=performance.now();
  const encoder=auditDevice.createCommandEncoder();
  const start=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:0}});start.end();
  current.physics.stepMany(encoder,steps);
  const end=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:1}});end.end();
  encoder.resolveQuerySet(query,0,2,resolved,0);encoder.copyBufferToBuffer(resolved,0,read,0,16);
- const wallStart=performance.now();auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+ const encodeMs=performance.now()-encodeStart;
+ const wallStart=performance.now();const commands=encoder.finish();const finishMs=performance.now()-wallStart;
+ const submitStart=performance.now();auditDevice.queue.submit([commands]);const submitMs=performance.now()-submitStart;
+ const waitStart=performance.now();await read.mapAsync(GPUMapMode.READ);const readbackWaitMs=performance.now()-waitStart;
  const values=new BigUint64Array(read.getMappedRange().slice(0));read.unmap();
  const gpuMs=Number(values[1]-values[0])/1e6,wallMs=performance.now()-wallStart;
- query.destroy();resolved.destroy();read.destroy();return {gpuMs,wallMs,steps,simulatedMs:steps*current.physics.policy.timeStep*1000};
+ query.destroy();resolved.destroy();read.destroy();return {gpuMs,encodeMs,finishMs,submitMs,readbackWaitMs,wallMs,steps,simulatedMs:steps*current.physics.policy.timeStep*1000};
 }
 async function measureEmbedding(current,app){
  const query=auditDevice.createQuerySet({type:'timestamp',count:3});
  const resolved=auditDevice.createBuffer({size:24,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
  const read=auditDevice.createBuffer({size:24,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const encodeStart=performance.now();
  const encoder=auditDevice.createCommandEncoder();
  const mark=i=>{const pass=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:i}});pass.end();};
  mark(0);current.embedding.render(encoder,{time:current.time,wheelAngle:current.angle,
   mode:current.visualMode??(current.world.kind==='granular'?'sand':'fluid')});mark(1);
  current.boundary.render(encoder,app.canvas.getContext('webgpu').getCurrentTexture().createView(),current.physics.policy,current.physics.wheel,current.angle);mark(2);
  encoder.resolveQuerySet(query,0,3,resolved,0);encoder.copyBufferToBuffer(resolved,0,read,0,24);
- const wallStart=performance.now();auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+ const encodeMs=performance.now()-encodeStart;
+ const wallStart=performance.now();const commands=encoder.finish();const finishMs=performance.now()-wallStart;
+ const submitStart=performance.now();auditDevice.queue.submit([commands]);const submitMs=performance.now()-submitStart;
+ const waitStart=performance.now();await read.mapAsync(GPUMapMode.READ);const readbackWaitMs=performance.now()-waitStart;
  const values=new BigUint64Array(read.getMappedRange().slice(0));read.unmap();
- const result={embeddingGpuMs:Number(values[1]-values[0])/1e6,boundaryGpuMs:Number(values[2]-values[1])/1e6,wallMs:performance.now()-wallStart};
+ const result={embeddingGpuMs:Number(values[1]-values[0])/1e6,boundaryGpuMs:Number(values[2]-values[1])/1e6,encodeMs,finishMs,submitMs,readbackWaitMs,wallMs:performance.now()-wallStart};
  query.destroy();resolved.destroy();read.destroy();return result;
 }
 async function checkSandVisualMotion(current){
