@@ -13,7 +13,7 @@ const committedRuntime=process.argv.includes('--committed-runtime');
 const preserveRuntime=process.argv.includes('--preserve-runtime');
 const packagedUi=process.argv.includes('--packaged-ui');
 if(preserveRuntime&&id!=='wheel')throw Error('Preserved runtime is only staged for the wheel');
-const runtime_directory=id==='wheel'?'runtime-wheel-44':id==='stones'?'runtime-stones-18':'runtime-tree-14',directory=id==='wheel'?'wheel-water-only-44':id==='stones'?'stones-mixed-18':'tree-air-14';
+const runtime_directory=id==='wheel'?'runtime-wheel-44':id==='stones'?'runtime-stones-19':'runtime-tree-14',directory=id==='wheel'?'wheel-water-only-44':id==='stones'?'stones-mixed-19':'tree-air-14';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');

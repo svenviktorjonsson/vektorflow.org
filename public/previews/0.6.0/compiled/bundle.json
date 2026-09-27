@@ -62,8 +62,8 @@
       }
     },
     "stones": {
-      "directory": "stones-mixed-18",
-      "runtime_directory": "runtime-stones-18",
+      "directory": "stones-mixed-19",
+      "runtime_directory": "runtime-stones-19",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "fe1b2a89f4735213b76c823d9fdce8f9cb68f21b3b4a78f485b4490fe3650c8b",
