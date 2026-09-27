@@ -1,4 +1,4 @@
-const KEYWORDS = new Set(["true", "false"]);
+const BOOLEANS = new Set(["true", "false"]);
 const BUILTINS = new Set(["any", "bit", "chr", "dig", "int", "num", "str", "type"]);
 const EMPTY_IDENTIFIERS = new Set();
 const STRUCTURAL_MEMBER_FUNCTIONS = new Set([
@@ -20,8 +20,21 @@ function token(kind, value) {
   return `<span class="vf-token ${kind}">${escapeHtml(value)}</span>`;
 }
 
+function dimensionColor(value) {
+  if (/^[a-z]$/u.test(value)) {
+    const index = value.codePointAt(0) - "a".codePointAt(0);
+    return `hsl(${Math.round((200 + index * 137.508) % 360)} 72% 72%)`;
+  }
+  let hash = 2166136261;
+  for (const character of value) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `hsl(${hash % 360} 72% 72%)`;
+}
+
 function dimensionToken(value) {
-  return token("dimension", value);
+  return `<span class="vf-token dimension" style="--vf-dimension-color:${dimensionColor(value)}">${escapeHtml(value)}</span>`;
 }
 
 function codeOnly(source) {
@@ -64,7 +77,7 @@ function functionDeclaration(line) {
 
 function declaredIdentifiers(source) {
   const declared = new Set();
-  for (const line of codeOnly(source).split("\n")) {
+  for (const line of codeOnly(source).split(/[\n;]/u)) {
     const functionDefinition = functionDeclaration(line);
     if (functionDefinition) {
       declared.add(functionDefinition.name);
@@ -102,11 +115,14 @@ function structuralIdentifier(value, { memberCall = false, declared = EMPTY_IDEN
 }
 
 function identifierKind(source, start, value, end) {
-  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const lineStart = Math.max(
+    source.lastIndexOf("\n", start - 1),
+    source.lastIndexOf(";", start - 1),
+  ) + 1;
   const before = source.slice(lineStart, start);
   const after = source.slice(end);
   if (/^\s*$/u.test(before) && /^\s*:(?!:)/u.test(after)) return "binding";
-  if (KEYWORDS.has(value)) return "keyword";
+  if (BOOLEANS.has(value)) return "boolean";
   if (BUILTINS.has(value)) return "builtin";
   if (/^\s*(?:\[[^\]\n]*\]\s*)?\(/u.test(after)) return "function";
   if (/^[A-Z]/u.test(value)) return "type";
@@ -172,7 +188,7 @@ export function highlightVkf(source) {
       cursor += anonymousDimensions[0].length;
       continue;
     }
-    const operator = /^(?:::|>>|==|~=|!=|<=|>=|=>|->|\/\/|\.\.|><|\/\\|\\\/|@::|@:|@>|@\||@!|[=<>+\-*/^%&~:$?.|])/u.exec(rest);
+    const operator = /^(?:::|>>|==|~=|!=|!\?|<=|>=|=>|->|\/\/|\.\.|><|\/\\|\\\/|@::|@:|@>|@\||@!|[=<>+\-*/^%&~:$?.|!])/u.exec(rest);
     if (operator) {
       html += token("operator", operator[0]);
       cursor += operator[0].length;

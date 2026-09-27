@@ -222,9 +222,10 @@ select:focus-visible, textarea:focus-visible {
 .vf-token.string { color: #a5d6ff; }
 .vf-token.number { color: #79c0ff; }
 .vf-token.keyword, .vf-token.operator { color: #ff7b72; }
+.vf-token.boolean { color: #7ee787; }
 .vf-token.binding, .vf-token.function { color: #d2a8ff; }
 .vf-token.builtin, .vf-token.type { color: #ffa657; }
-.vf-token.dimension { color: #56d4dd; font-weight: 650; }
+.vf-token.dimension { color: var(--vf-dimension-color, #56d4dd); font-weight: 650; }
 .vf-token.anonymous-dimension { color: #8b949e; font-style: italic; }
 .vf-token.punctuation { color: #c9d1d9; }
 
