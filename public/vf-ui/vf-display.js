@@ -13113,6 +13113,25 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
 
   // Arena references are compiler-owned. This seam only creates zero-copy typed
   // views; topology, material, axes, labels and interaction stay in VfDisplay.
+  function activeColorTheme() {
+    var root = global.document && global.document.documentElement;
+    var authored = root && root.getAttribute
+      ? String(root.getAttribute("data-theme") || "").toLowerCase()
+      : "";
+    if (authored === "dark" || authored === "light") { return authored; }
+    return global.matchMedia && global.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark" : "light";
+  }
+
+  function themeDefaultGeometryColor(cmap) {
+    if (String(cmap || "").toLowerCase() !== "viridis") {
+      throw new TypeError("unsupported theme-default colormap: " + String(cmap));
+    }
+    return activeColorTheme() === "dark"
+      ? [0.993, 0.906, 0.144, 1]
+      : [0.267, 0.005, 0.329, 1];
+  }
+
   function materializeRetainedSceneArena(packet) {
     if (!packet || String(packet.schema || "") !== "vektor-flow/retained-scene-arena" ||
         Number(packet.version) !== 1 || !packet.metadata ||
@@ -13148,6 +13167,12 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
           geometry.vertices, arena, "float32", collectionName + "[" + index + "].vertices");
         materialized.indices = retainedArenaView(
           geometry.indices, arena, "uint32", collectionName + "[" + index + "].indices");
+        if (geometry.theme_default_cmap) {
+          var defaultColor = themeDefaultGeometryColor(geometry.theme_default_cmap);
+          materialized.vertices = new Float32Array(materialized.vertices);
+          paintVertexBufferColor(materialized.vertices, defaultColor);
+          materialized.color = defaultColor.slice();
+        }
         return materialized;
       });
     });
@@ -13754,6 +13779,7 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       createAxisVisualStateApplier: createAxisVisualStateApplier,
       createAxisTickModeStateApplier: createAxisTickModeStateApplier,
       materializeRetainedSceneArena: materializeRetainedSceneArena,
+      themeDefaultGeometryColor: themeDefaultGeometryColor,
       applyRetainedScene3DDefaults: applyRetainedScene3DDefaults,
       isSimple2DMarkerLineMesh: isSimple2DMarkerLineMesh,
       axisMathText: axisMathText,
