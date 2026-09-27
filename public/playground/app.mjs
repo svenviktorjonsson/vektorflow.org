@@ -108,7 +108,8 @@ async function compileSource() {
     }
     status.value = `Compiled and ran in ${(performance.now() - started).toFixed(1)} ms`;
   } catch (error) {
-    output.textContent = error.cause?.message ?? error.message;
+    output.textContent = error.cause?.formatted ?? error.formatted
+      ?? error.cause?.message ?? error.message;
     showConsole();
     status.value = "Compile or runtime error";
   }

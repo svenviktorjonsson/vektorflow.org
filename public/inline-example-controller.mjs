@@ -26,7 +26,7 @@ export function createInlineExampleController({ runner, view }) {
         if (execution.packets) view.showResult(execution.packets, execution.timing);
       } catch (error) {
         if (currentGeneration !== generation) return;
-        view.showTerminal(`${error.message}. No fallback result was rendered.`);
+        view.showTerminal(error.formatted ?? `${error.message}. No fallback result was rendered.`);
         view.hideResult();
       } finally {
         if (currentGeneration === generation) view.finish();

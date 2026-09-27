@@ -60,6 +60,8 @@ export function createInlineWorkerRequestHandler() {
         id: data?.id,
         status: "error",
         message: error instanceof Error ? error.message : "VKF execution failed",
+        diagnostic: error instanceof Error ? error.diagnostic : undefined,
+        formatted: error instanceof Error ? error.formatted : undefined,
       };
     }
   };

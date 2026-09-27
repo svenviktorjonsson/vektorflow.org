@@ -68,7 +68,10 @@ export function createInlineRunner({
       worker.onmessage = ({ data }) => {
         if (data?.id !== message.id) return;
         if (data.status === "error") {
-          finish(() => reject(new Error(data.message)));
+          const error = new Error(data.message);
+          if (data.diagnostic) error.diagnostic = Object.freeze({...data.diagnostic});
+          if (data.formatted) error.formatted = data.formatted;
+          finish(() => reject(error));
           return;
         }
         finish(() => resolve(data));

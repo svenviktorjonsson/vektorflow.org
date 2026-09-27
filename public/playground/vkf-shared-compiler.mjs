@@ -25,6 +25,11 @@ export function createSharedCompiler({instance, WorkerType}) {
       if (status !== 0) {
         const error = new Error(result.message);
         error.phase = phase;
+        if (result.diagnostic) {
+          error.diagnostic = Object.freeze({...result.diagnostic});
+          const {file, line, column, sourceLine, caretLine} = result.diagnostic;
+          error.formatted = `${file}:${line}:${column}: ${result.message}\n${sourceLine}\n${caretLine}`;
+        }
         throw error;
       }
       return result;
