@@ -95,36 +95,36 @@
       }
     },
     "tree": {
-      "directory": "tree-air-13",
-      "runtime_directory": "runtime-tree-13",
+      "directory": "tree-air-14",
+      "runtime_directory": "runtime-tree-14",
       "runtime": {
         "vf-world-layer-runtime.js": "0451c4e40c7ab571269a9be86bc0097955444248f7f21d44a6581d4478095f58",
         "vf-compiled-runtime-bridge.js": "fe1b2a89f4735213b76c823d9fdce8f9cb68f21b3b4a78f485b4490fe3650c8b",
-        "vf-world-mechanical-runtime.mjs": "481c1e0402eec919c8c0187883e5fceaf71be71fc7bb13e9f3e9851587085b16",
-        "vf-world-mechanical-gpu.mjs": "6db1a34ec167d7ebea42feb4a1a9d5e2231c237b2a3ac3e8d46d5e118f006fa6",
+        "vf-world-mechanical-runtime.mjs": "4514123a8f8df9ce97c81f3d6de630c37f86eec87290dc271eba0b9b08bf3938",
+        "vf-world-mechanical-gpu.mjs": "260a63e4691a17dc38d90d2e0b281f1f6bcf1d1013eb5d618a1193af961c7fdb",
         "vf-elastic-blade-pose-wgsl.mjs": "7540d7008129c2502c6bd52119cbabd7a93d3e8ac63eb2edd5b58c01c566779b",
-        "vf-world-scene-embedding-gpu.mjs": "82591a0a9a1d76bf7e9b562337b93c4a2888d78205de8e2cc57a9dd0db9beb68",
+        "vf-world-scene-embedding-gpu.mjs": "7279f3bcd702a0e11432bec31b5dc973224a6aa9063077eb6ef5ca48fb33a22b",
         "vf-world-physical-parameters.mjs": "c6373befa374ee03f0770e28d720e9bb981fcefd1d5bfb22d04971c2235b1974"
       },
-      "wasm": "fbb87de51ca0d6205e767f1358a83c7d29b279f1bdf589e63967c2f1bd5645a6",
-      "manifest": "a6c98f3044eddafc502f14557fd716431f2b0e7e6deff118ddceaadcb71deb6f",
+      "wasm": "32954810a5322053b434aab5bbf96ac48ad7369a2e9d35427d3bd5b3b08ff086",
+      "manifest": "8b372f37159bfa550f8c0ae5e74543613b1640480f289c6c0e0e08ee39858a7e",
       "sources": {
         "main.vkf": "1aca0c3151df4ee35bc8db270acc4bc02ee95de36de90e689fe6cb43a5645eac",
         "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
-        "materials.vkf": "bbf19699636e065073c9745cfb5ad00ed4428515a5037cccb3e16c136d9221e3"
+        "materials.vkf": "761380ed7f9c3647df9466c59bc3b1e9945444fef5a5fb7fb6ae493fa45ee62a"
       },
       "build": {
         "entry": "main.vkf",
-        "compiler": "644b53b97d846e15a4e80e318e689f4a925215feaa030041c75424cb44594807",
-        "emitter": "47d6441db2525b8d79c1ddf88ad2c184adfd85eb2a158befb6b766faf99d8fee",
-        "typed_ir": "1b4882b63c42f3045e5713a8705a70e3b63b89d9a2a6189d761fe95660ee7023",
-        "runtime_revision": "cc204190d7bc3be80a19d12430686a01a413b4ba",
+        "compiler": "5062b23c5d660589e1afad27fc4c9b8a01dbf6d4605d53817174a60fa5d56bab",
+        "emitter": "6aca2052b48b0185bd8fc87238703bc760f80e8d18ae066e37aa2e858d66df4c",
+        "package": "9738c81e458bdc7da17b955d980ef52c53230b4da9b22defcce515d0ea0a3530",
+        "runtime_revision": "3b5a08aa2d9b9fc46c18741c03fe6500ef54fae9",
         "sources": {
           "main.vkf": "1aca0c3151df4ee35bc8db270acc4bc02ee95de36de90e689fe6cb43a5645eac",
           "geometry.vkf": "eda2e852788c64c00ed587cec9f578f5102bc32bea53fd721b74febdb9476c16",
-          "materials.vkf": "bbf19699636e065073c9745cfb5ad00ed4428515a5037cccb3e16c136d9221e3"
+          "materials.vkf": "761380ed7f9c3647df9466c59bc3b1e9945444fef5a5fb7fb6ae493fa45ee62a"
         },
-        "wasm": "fbb87de51ca0d6205e767f1358a83c7d29b279f1bdf589e63967c2f1bd5645a6"
+        "wasm": "32954810a5322053b434aab5bbf96ac48ad7369a2e9d35427d3bd5b3b08ff086"
       }
     }
   },
@@ -157,10 +157,10 @@
     "previews/0.6.0/live/tree/assets/tree-mesh-triangular.bin.gz": "b0b19f5dd5b9d50e354ef9a282983c5246978b0791590f3f5169d7869cf87e81",
     "previews/0.6.0/live/tree/assets/tree-mesh-uniform.bin.gz": "c53bc824fade2e7744939ec727d76fb8a37ce13a11733453c9bf8bf7bedd8dde",
     "previews/0.6.0/live/rocks/assets/rigid-stones-granite-7.bin.gz": "9a5ce51c2ad1a8d9aeaf02cb7cd8f763d8e0a764c10167a758a158ddb8c286c1",
-    "previews/0.6.0/live/tree/assets/tree-mesh-feedback-8.bin.gz": "ff7cc7f38f294d96685e856a5e25dd53a39eb28d0a05548aac49bed819e37dea",
-    "previews/0.6.0/live/tree/assets/tree-mesh-normal-feedback-8.bin.gz": "6faabb27285d6bd0b1e2be2a888947bd5db3af601cb2557ebb619b72a21a0167",
-    "previews/0.6.0/live/tree/assets/tree-mesh-triangular-feedback-8.bin.gz": "19338aabac632c4c94c6a85a759e9ea3729adda001e87f986f7142fc6c4386a3",
-    "previews/0.6.0/live/tree/assets/tree-mesh-uniform-feedback-8.bin.gz": "683aff3c732e10bd81e8d13335813d20d37ab8ee692db1f62a2c35c1e5663b1f",
+    "previews/0.6.0/live/tree/assets/tree-mesh-feedback-8.bin.gz": "a1105d142560503f9aa2bc5a342820bcd0cc524cc182f53d9818cf4736436aae",
+    "previews/0.6.0/live/tree/assets/tree-mesh-normal-feedback-8.bin.gz": "44497fbf522f8983cd1c8f6f6bcab8703b42e0257dadd6b758f3a1fc52874626",
+    "previews/0.6.0/live/tree/assets/tree-mesh-triangular-feedback-8.bin.gz": "e833f64c111145f3bf07df5c37a512cadb78433210e76a74d1e474b046d537da",
+    "previews/0.6.0/live/tree/assets/tree-mesh-uniform-feedback-8.bin.gz": "e8ca4ce354bfaf5580eb4de92180e3831ee8bf0e8252d6389ec8bbfba6126371",
     "previews/0.6.0/live/rocks/assets/rigid-stones-mixed-8.bin.gz": "3d9ab5d3b9ee3d8ae3bda9bbd126ddefcdec69a0408e2269e97a037dcbdb27d1",
     "previews/0.6.0/live/rocks/assets/rigid-stones-mixed-9.bin.gz": "b44f43f38f319f3ed0499c12442734ba37b70a21ebec632669f61e31682b5d5b",
     "previews/0.6.0/live/rocks/assets/rigid-stones-30kg-10.bin.gz": "e87c2180ef84643c7bbd728c3ed208ad149a31326466867b59448193c7b81c1a",

@@ -18,6 +18,7 @@ const expectedTree=${isTree};
 import {readMechanicalAsset,prepareMechanicalInitialState} from '/previews/0.6.0/compiled/${published.runtime_directory}/vf-world-mechanical-runtime.mjs';
 import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/${published.runtime_directory}/vf-world-mechanical-gpu.mjs';
 import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/${published.runtime_directory}/vf-world-scene-embedding-gpu.mjs';
+import {auditDynamicTreeContact} from '/previews/0.6.0/live/tree/runtime/vf-tree-dynamic-contact-audit.mjs';
 const check=(x,m)=>{if(!x)throw Error(m)};let device;
 function countEmbeddedStoneVertices(state,initial,meshes){
  const rotate=(q,p)=>{const t=[2*(q[1]*p[2]-q[2]*p[1]),2*(q[2]*p[0]-q[0]*p[2]),2*(q[0]*p[1]-q[1]*p[0])];return p.map((v,a)=>v+q[3]*t[a]+[q[1]*t[2]-q[2]*t[1],q[2]*t[0]-q[0]*t[2],q[0]*t[1]-q[1]*t[0]][a]);};
@@ -38,25 +39,29 @@ try{
  const base='/previews/0.6.0/compiled/${published.directory}/';
  const inputs={bytes:new Uint8Array(await(await fetch(base+'main.wasm')).arrayBuffer()),manifest:await(await fetch(base+'manifest.json')).json()};
  const runtime=await (VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync?VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync(inputs):VfCompiledRuntimeBridge.instantiateWasmRuntime(inputs));runtime.init();
- const world=runtime.worldProgram().gpu_worlds[0],asset=world.kind==='wind'?await new Promise((resolve,reject)=>{
+ const world=runtime.worldProgram().gpu_worlds[0];
+ const variant=new URLSearchParams(location.search).get('variant');
+ const treeAssetUrl=variant?world.solid_properties.variants?.[variant]:world.solid_properties?.asset;
+ if(world.kind==='wind'&&location.search.includes('asset')){const probe=await fetch(treeAssetUrl);if(!probe.ok)throw Error(await probe.text());}
+ const asset=world.kind==='wind'&&!location.search.includes('asset')?await new Promise((resolve,reject)=>{
   const worker=new Worker('/previews/0.6.0/live/tree/runtime/vf-tree-generation-worker.mjs',{type:'module'});
   worker.onmessage=event=>{worker.terminate();event.data.error?reject(Error(event.data.error)):resolve(event.data.meshes)};
   worker.onerror=event=>{worker.terminate();reject(Error(event.message))};worker.postMessage({species:'oak',distribution:'normal',height:8,splitFactor:.65,turnFactor:.5});
- }):await readMechanicalAsset(world.properties.asset);
+ }):await readMechanicalAsset(world.kind==='wind'?treeAssetUrl:world.properties.asset);
  const isTree=world.kind==='wind';check(isTree===expectedTree,'GPU test loaded the wrong published artifact');check(isTree||asset.length===5,'Expected five stones');
  const adapter=await navigator.gpu.requestAdapter();check(adapter&&!adapter.isFallbackAdapter,'Requires physical GPU');device=await adapter.requestDevice();
  const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
  const {initial,meshes}=prepareMechanicalInitialState(world,runtime.worldLayerViews(),asset),prefix='$world$gpu$'+world.world_id;
  const physics=await createMechanicalWorldGpu(device,world,initial,runtime.readBinding(prefix+'$physics'));
  const canvas=document.querySelector('canvas'),embedding=await createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,isTree?runtime.readBinding(prefix+'$embedding'):WORLD_SCENE_WGSL);
- let encoder,z=null,expected=null,wind=null,coupling=null,stoneDynamics=null,treePerformance=null;
+ let encoder,z=null,expected=null,wind=null,coupling=null,stoneDynamics=null,treePerformance=null,dynamicContact=null;
  if(isTree){
   coupling=[];
   // A free branch and its attached leaf must exchange internal momentum.
   // Exercise the compiled World kernel, not a host integration formula.
   for(const applied of [0,.01]){
    const count=12,index=8,dt=.01,scale=16777216;
-   const data=new ArrayBuffer(128),f=new Float32Array(data),u=new Uint32Array(data);f[3]=dt;u.set([0,0,count,0],4);u.set([2,2,3,0],20);
+   const data=new ArrayBuffer(144),f=new Float32Array(data),u=new Uint32Array(data);f[3]=dt;u.set([0,0,count,0],4);u.set([2,2,3,0],20);
    const state=new Float32Array(count*16),geometry=new Float32Array(count*16),impulses=new Int32Array(count*3);
    state[(count+index)*8]=.2;impulses[index*3]=Math.round(applied*scale);
    for(let i=0;i<count;i++){geometry.set([2,.2,.03,1],(count+i)*4);geometry[(count*3+i)*4+3]=i;}
@@ -127,12 +132,37 @@ try{
    'Stone-stone contact tunneled through one fixed step: '+JSON.stringify(stoneDynamics.rapidCollision));
   check(Math.abs(stoneDynamics.rapidCollision.afterMomentum-stoneDynamics.rapidCollision.beforeMomentum)<.05,
    'Fast stone-stone impact lost horizontal momentum: '+JSON.stringify(stoneDynamics.rapidCollision));
- }else{physics.setSpeed(8);const samples=[];for(let batch=0;batch<30;batch++){encoder=device.createCommandEncoder();for(let step=0;step<8;step++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();if(batch===14||batch===29)samples.push(await physics.inspectLeafModes());}wind=await physics.inspect();wind.leaves=samples;check(wind.finite&&samples.every(s=>s.finite),'Nonfinite wind state');check(samples.every(s=>s.maxAngle>.02&&s.maxAngle<2.73),'Leaf angle outside elastic response: '+JSON.stringify(wind));check(samples[1].maxAngularVelocity>.01,'Leaves stopped moving');}
+ }else{
+  physics.setSpeed(8);
+  const samples=[],contactSweep=[];
+  const contactAudit=async()=>{
+   const result=await auditDynamicTreeContact(device,world,physics,meshes,asset,
+     runtime.readBinding(prefix+'$embedding'));
+   check(result.penetrations===0,'Wind-driven leaves penetrate wood: '+JSON.stringify(result));
+   contactSweep.push(result);
+  };
+  if(location.search.includes('contact-sweep'))await contactAudit();
+  const longSweep=location.search.includes('long-sweep');
+  for(let batch=0;batch<(longSweep?150:30);batch++){
+   encoder=device.createCommandEncoder();for(let step=0;step<8;step++)physics.step(encoder);
+   device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
+   if(batch===14||batch===29)samples.push(await physics.inspectLeafModes());
+   if(location.search.includes('contact-sweep')&&
+      (longSweep?([29,59,89,119,149].includes(batch)):[5,14,22,29].includes(batch)))await contactAudit();
+  }
+  wind=await physics.inspect();wind.leaves=samples;
+  check(wind.finite&&samples.every(s=>s.finite),'Nonfinite wind state');
+  check(samples.every(s=>s.maxAngle>.02&&s.maxAngle<2.73),'Leaf angle outside elastic response: '+JSON.stringify(wind));
+  check(samples[1].maxAngularVelocity>.01,'Leaves stopped moving');
+  if(location.search.includes('contact-audit')&&!location.search.includes('contact-sweep'))await contactAudit();
+  if(contactSweep.length)dynamicContact=contactSweep;
+ }
  const format=navigator.gpu.getPreferredCanvasFormat(),context=canvas.getContext('webgpu');context.configure({device,format,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
  let camera=isTree?{pos:[8,-17,7],target:[0,0,3.7],fov:42}:initial.sceneFrame.camera;
  if(!isTree&&location.search.includes('closeup')){const target=Array.from(initial.bodies.subarray(0,3));camera={target,pos:target.map((v,a)=>v+[.12,-.42,.15][a]),fov:42};}
- if(isTree&&location.search.includes('closeup')){physics.reset();const leaf=meshes.find(m=>m.vertices[15]===1).vertices;
-  const anchor=Array.from(leaf.subarray(16,19)),tip=Array.from(leaf.subarray(35*24,35*24+3)),normal=Array.from(leaf.subarray(3,6));
+ if(isTree&&location.search.includes('closeup')){if(!location.search.includes('animated'))physics.reset();const leaf=meshes.find(m=>m.vertices[15]===1).vertices;
+  const leafCount=asset.find(m=>m.id?.includes('foliage')).leaf_vertex_count??12;
+  const anchor=Array.from(leaf.subarray(16,19)),tip=Array.from(leaf.subarray((leafCount-1)*24,(leafCount-1)*24+3)),normal=Array.from(leaf.subarray(3,6));
   const target=anchor.map((v,a)=>(v+tip[a])*.5);camera={target,pos:target.map((v,a)=>v+normal[a]*.72+[.08,-.10,.10][a]),fov:42};
  }
  if(!isTree){
@@ -182,7 +212,7 @@ try{
  readback.unmap();readback.destroy();check(new Set(pixels).size>20,'Blank rendered image');
  const copy=document.createElement('canvas');copy.width=canvas.width;copy.height=canvas.height;copy.getContext('2d').putImageData(new ImageData(pixels,canvas.width,canvas.height),0,0);
  const png=copy.toDataURL('image/png');check(errors.length===0,errors.join('\n'));
- await fetch('/result',{method:'POST',body:JSON.stringify({passed:true,adapter:adapter.info,z,expected,wind,coupling,stoneDynamics,treePerformance,png})});embedding.destroy();physics.destroy();device.destroy();
+ await fetch('/result',{method:'POST',body:JSON.stringify({passed:true,adapter:adapter.info,z,expected,wind,coupling,stoneDynamics,treePerformance,dynamicContact,png})});embedding.destroy();physics.destroy();device.destroy();
 }catch(error){await fetch('/result',{method:'POST',body:JSON.stringify({passed:false,error:String(error.stack??error)})});device?.destroy();}
 </script>`;
 const server=createServer(async(req,res)=>{try{
@@ -193,7 +223,8 @@ const server=createServer(async(req,res)=>{try{
  res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.json':'application/json','.wasm':'application/wasm'})[path.extname(target)]??'application/octet-stream');res.end(await readFile(target));
 }catch(e){res.writeHead(500).end(String(e));}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const query=[closeup?'closeup':'',hires?'hires':'',process.argv.includes('--ccd-probe')?'ccd-probe':''].filter(Boolean);
+const variantArg=process.argv.find(arg=>arg.startsWith('--tree-variant='));
+const query=[closeup?'closeup':'',hires?'hires':'',process.argv.includes('--ccd-probe')?'ccd-probe':'',process.argv.includes('--tree-asset')?'asset':'',process.argv.includes('--animated')?'animated':'',process.argv.includes('--contact-audit')?'contact-audit':'',process.argv.includes('--contact-sweep')?'contact-sweep':'',process.argv.includes('--long-sweep')?'long-sweep':'',variantArg?'variant='+encodeURIComponent(variantArg.slice('--tree-variant='.length)):''].filter(Boolean);
 const args=['--headless=new','--enable-gpu','--no-first-run','--no-default-browser-check',hires?'--window-size=1700,1450':'--window-size=900,800','--user-data-dir='+path.join(work,'profile'),'http://127.0.0.1:'+server.address().port+'/test'+(query.length?'?'+query.join('&'):'')];
 const browser=process.env.VF_TEST_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const child=spawn(browser,args,{windowsHide:true});let stderr='';child.stderr.on('data',d=>stderr=(stderr+d).slice(-16000));child.stdout.resume();child.on('error',e=>finish({passed:false,error:String(e)}));child.on('exit',code=>finish({passed:false,error:'Browser exited '+code,stderr}));

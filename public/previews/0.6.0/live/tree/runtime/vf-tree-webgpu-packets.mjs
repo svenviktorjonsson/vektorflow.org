@@ -1,4 +1,5 @@
 import { proGenDistributionReference, sampleProGenDistributionReference } from './vf-pro-gen-distribution-reference.mjs';
+import { createTriangleSurfaceAdmissionReference } from './vf-stone-triangle-contact.mjs';
 const MAX_VERTEX_BUDGET = 393_216;
 const MAX_INDEX_BUDGET = 2_359_296;
 const KIND_TRUNK = 0;
@@ -971,6 +972,7 @@ function leafBodyCells(body) {
 }
 
 function leafBodyOverlaps(body, physics) {
+  if (physics.woodSurface?.intersects(body.bladePacket)) return true;
   const possible = new Set();
   for (const key of leafBodyCells(body)) {
     for (const index of physics.cells.get(key) ?? []) possible.add(index);
@@ -1014,49 +1016,25 @@ function leafTrianglesIntersect(first, second) {
   return false;
 }
 
-const LEAF_CONTACT_TRIANGLES = Object.freeze([
-  [0, 1, 3], [0, 3, 2], [4, 5, 7], [2, 5, 4], [3, 4, 7],
-  [5, 8, 9], [5, 9, 6], [6, 9, 10], [6, 10, 7],
-  [8, 11, 9], [9, 11, 10],
-]);
-
-function leafPositions(parameters, pose) {
-  const { attachment, bladeBase, apex, longAxis, wideAxis, normal } = pose;
-  const bladeLength = parameters[0];
-  const bladeWidth = parameters[1];
-  const baseRoundness = parameters[2];
-  const asymmetry = parameters[3];
-  const camber = parameters[5];
-  const petioleHalfWidth = Math.max(bladeWidth * 0.025, bladeLength * 0.008);
-  const positions = [
-    add(attachment, scale(wideAxis, -petioleHalfWidth)),
-    add(attachment, scale(wideAxis, petioleHalfWidth)),
-    add(bladeBase, scale(wideAxis, -petioleHalfWidth)),
-    add(bladeBase, scale(wideAxis, petioleHalfWidth)),
-    bladeBase,
-  ];
-  for (const station of [0.42, 0.76]) {
-    const profile = Math.pow(Math.sin(Math.PI * station), baseRoundness)
-      * (1 - station * 0.12);
-    const halfWidth = bladeWidth * 0.5 * profile;
-    const center = add(
-      add(bladeBase, scale(longAxis, bladeLength * station)),
-      add(
-        scale(wideAxis, bladeWidth * asymmetry * Math.sin(Math.PI * station)),
-        scale(normal, camber * Math.sin(Math.PI * station)),
-      ),
-    );
-    positions.push(add(center, scale(wideAxis, -halfWidth)), center,
-      add(center, scale(wideAxis, halfWidth)));
+function leafContactBody(parameters, pose, outline) {
+  // Contact uses the emitted outline, not a two-station approximation.
+  const builder = meshBuilder(128, 1024, { vertices: 0, indices: 0 });
+  appendOvateLeaf(builder, [0, 0, 0, 1], 1, parameters, pose, outline);
+  const vertices = new Float32Array(builder.vertices);
+  const positions = [];
+  for (let offset = 0; offset < vertices.length; offset += 10) {
+    positions.push(Array.from(vertices.subarray(offset, offset + 3)));
   }
-  positions.push(apex);
-  return positions;
-}
-
-function leafContactBody(parameters, pose) {
-  const positions = leafPositions(parameters, pose);
+  const triangles = [], bladeIndices = [];
+  for (let offset = 0; offset < builder.indices.length; offset += 6) {
+    const triangle = builder.indices.slice(offset, offset + 3);
+    triangles.push(triangle.map((index) => positions[index]));
+    // The short petiole is the attachment joint; only it may touch wood.
+    if (triangle.every((index) => builder.uvs[index * 2 + 1] >= 0.16)) bladeIndices.push(...triangle);
+  }
   return {
-    triangles: LEAF_CONTACT_TRIANGLES.map((triangle) => triangle.map((index) => positions[index])),
+    triangles,
+    bladePacket: { vertices, indices: new Uint32Array(bladeIndices) },
     minimum: [0, 1, 2].map((axis) => Math.min(...positions.map((point) => point[axis]))),
     maximum: [0, 1, 2].map((axis) => Math.max(...positions.map((point) => point[axis]))),
   };
@@ -1157,7 +1135,7 @@ function resolveLeafPose(transform, parameters, leafIndex, physics) {
     const pose = leafPose(
       transform, parameters, leafIndex, candidate.bend, candidate.twist,
     );
-    const body = leafContactBody(parameters, pose);
+    const body = leafContactBody(parameters, pose, physics.outline);
     if (leafBodyOverlaps(body, physics)) continue;
     addLeafBody(body, physics);
     if (candidate.energy > 0) physics.bentLeaves += 1;
@@ -1343,8 +1321,11 @@ export function adaptTreeRenderPacketToWebGpuMeshesReference(
   const leafPhysics = {
     shape,
     outline:leafOutline,
-    solver: 'petiole-torsion-hard-contact:v1',
+    solver: 'rounded-blade-surface-admission:v2',
     enabled: leafContact === true,
+    woodSurface: leafContact === true ? createTriangleSurfaceAdmissionReference({
+      vertices: new Float32Array(wood.vertices), indices: new Uint32Array(wood.indices),
+    }) : null,
     bodies: [], cells: new Map(), candidateTests: 0, bentLeaves: 0,
     rejectedLeaves: 0, maximumBend: 0, maximumTwist: 0,
   };
@@ -1405,7 +1386,7 @@ export function adaptTreeRenderPacketToWebGpuMeshesReference(
       rejectedLeaves: leafPhysics.rejectedLeaves,
       maximumBend: leafPhysics.maximumBend,
       maximumTwist: leafPhysics.maximumTwist,
-      maximumPenetration: 0,
+      staticSurfaceAdmission: true,
     }),
     bark,
     leafMaterial: Object.freeze({

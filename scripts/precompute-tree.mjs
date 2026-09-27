@@ -4,7 +4,7 @@ import { createForestPopulationReference, realizeForestPatchesReference } from '
 import { createTreeGeometryPlannerReference, planTreeGeometryReference } from '../public/previews/0.6.0/live/tree/runtime/vf-tree-geometry-plan.mjs';
 import { createTreeMaterialFieldReference, realizeTreeMaterialsReference } from '../public/previews/0.6.0/live/tree/runtime/vf-tree-material-field.mjs';
 import { adaptTreeWorkingSetsToRetainedPacketsReference } from '../public/previews/0.6.0/live/tree/runtime/vf-tree-renderer-packets.mjs';
-import { adaptTreeRenderPacketToWebGpuMeshesReference } from '../../vektor-flow/build/branches/pre-gen/web/vf-ui/vf-tree-webgpu-packets.mjs';
+import { adaptTreeRenderPacketToWebGpuMeshesReference } from '../public/previews/0.6.0/live/tree/runtime/vf-tree-webgpu-packets.mjs';
 import { treeProGenPresets, treeProGenAsset } from '../public/previews/0.6.0/live/tree/runtime/vf-tree-pro-gen-presets.mjs';
 
 const variant = process.argv[2] ?? 'original';
@@ -16,7 +16,10 @@ const forest=realizeForestPatchesReference(createForestPopulationReference(ident
 const geometry=planTreeGeometryReference(createTreeGeometryPlannerReference(identity,{splitDepth:7,lateralShoots:true,trunkShoots:false,foliageDensity:.42,scaffoldBranches:2,branching:preset.branching}),forest,{treeIndices:[0],detailLevels:[2],primitiveBudget:2400});
 const materials=realizeTreeMaterialsReference(createTreeMaterialFieldReference(identity),forest,geometry,{materialBudget:2400});
 const retained=adaptTreeWorkingSetsToRetainedPacketsReference(geometry,materials);
-const tree=adaptTreeRenderPacketToWebGpuMeshesReference(retained.packets[0],{vertexBudget:393216,indexBudget:2359296,leafContact:true,leafShape:preset.leafShape,leafSegments:10});
+const tree=adaptTreeRenderPacketToWebGpuMeshesReference(retained.packets[0],{
+  vertexBudget:393216,indexBudget:2359296,leafContact:true,leafShape:preset.leafShape,
+  leafOutline:'oak',allowSparse:true,barkDetail:true,
+});
 const encoder=new TextEncoder();
 const chunks=[];
 const pushU32=(value)=>{const bytes=new Uint8Array(4);new DataView(bytes.buffer).setUint32(0,value,true);chunks.push(bytes);};

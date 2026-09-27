@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {generateTreeMeshes,TREE_SPECIES} from '../public/previews/0.6.0/live/tree/runtime/vf-tree-live-generation.mjs';
-import {prepareMechanicalInitialState} from '../public/previews/0.6.0/compiled/runtime-tree-13/vf-world-mechanical-runtime.mjs';
+import {prepareMechanicalInitialState} from '../public/previews/0.6.0/compiled/runtime-tree-14/vf-world-mechanical-runtime.mjs';
+import {createTriangleSurfaceAdmissionReference} from '../public/previews/0.6.0/live/tree/runtime/vf-stone-triangle-contact.mjs';
 
 const require=createRequire(import.meta.url);
-const bridge=require('../public/previews/0.6.0/compiled/runtime-tree-13/vf-compiled-runtime-bridge.js');
-const base=new URL('../public/previews/0.6.0/compiled/tree-air-13/',import.meta.url);
+const bridge=require('../public/previews/0.6.0/compiled/runtime-tree-14/vf-compiled-runtime-bridge.js');
+const base=new URL('../public/previews/0.6.0/compiled/tree-air-14/',import.meta.url);
 const runtime=bridge.instantiateWasmRuntime({
   bytes:await readFile(new URL('main.wasm',base)),
   manifest:JSON.parse(await readFile(new URL('manifest.json',base))),
@@ -32,6 +33,29 @@ assert.equal(noSplit.meshes[1].leaf_vertex_count,30);
 assert.equal(equalSplit.meshes[1].leaf_vertex_count,30);
 const short=generateTreeMeshes({height:3}),tall=generateTreeMeshes({height:8});
 assert.ok(height(tall)>height(short)*2,'Height control must affect generated geometry');
+const [wood, foliage] = tall.meshes;
+const woodSurface = createTriangleSurfaceAdmissionReference(wood);
+let auditedLeaves = 0;
+const leafVertexCount = foliage.leaf_vertex_count;
+const leafTotal = foliage.vertices.length / (leafVertexCount * 10);
+const bladeIndicesByLeaf = Array.from({length: leafTotal}, () => []);
+for (let offset = 0; offset < foliage.indices.length; offset += 3) {
+  const triangle = Array.from(foliage.indices.subarray(offset, offset + 3));
+  const leaf = Math.floor(triangle[0] / leafVertexCount);
+  assert.ok(triangle.every((index) => Math.floor(index / leafVertexCount) === leaf));
+  if (triangle.every((index) => foliage.uvs[index * 2 + 1] >= 0.16)) {
+    bladeIndicesByLeaf[leaf].push(...triangle.map((index) => index - leaf * leafVertexCount));
+  }
+}
+for (let first = 0; first < foliage.vertices.length / 10; first += leafVertexCount) {
+  const bladeIndices = bladeIndicesByLeaf[first / leafVertexCount];
+  const packet = {
+    vertices: foliage.vertices.subarray(first * 10, (first + leafVertexCount) * 10),
+    indices: new Uint32Array(bladeIndices),
+  };
+  assert.equal(woodSurface.intersects(packet), null, `Leaf ${auditedLeaves} penetrates wood`);
+  auditedLeaves += 1;
+}
 for(const [species,profile] of Object.entries(TREE_SPECIES)){
   const result=generateTreeMeshes({species});
   assert.equal(result.controls.species,species);
@@ -46,4 +70,4 @@ for(const [species,profile] of Object.entries(TREE_SPECIES)){
 }
 console.log(JSON.stringify({passed:true,split0:noSplit.primitiveCount,split1:equalSplit.primitiveCount,
   shortHeight:height(short),tallHeight:height(tall),species:Object.keys(TREE_SPECIES),
-  generationMs:performance.now()-start}));
+  auditedLeaves,generationMs:performance.now()-start}));

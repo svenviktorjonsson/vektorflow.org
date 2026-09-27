@@ -1,5 +1,5 @@
 // Publish one source-compiled application; preserve all other applications.
-import {readFile,copyFile,mkdir,writeFile} from 'node:fs/promises';
+import {readFile,copyFile,mkdir,writeFile,mkdtemp,rm} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -11,8 +11,9 @@ const root=path.join(site,'public'),compiled=path.join(root,'previews/0.6.0/comp
 const id=process.argv[3]??'stones';if(!['stones','tree','wheel'].includes(id))throw Error('Unknown application');
 const committedRuntime=process.argv.includes('--committed-runtime');
 const preserveRuntime=process.argv.includes('--preserve-runtime');
+const packagedUi=process.argv.includes('--packaged-ui');
 if(preserveRuntime&&id!=='wheel')throw Error('Preserved runtime is only staged for the wheel');
-const runtime_directory=id==='wheel'?'runtime-wheel-44':id==='stones'?'runtime-stones-18':'runtime-tree-13',directory=id==='wheel'?'wheel-water-only-44':id==='stones'?'stones-mixed-18':'tree-air-13';
+const runtime_directory=id==='wheel'?'runtime-wheel-44':id==='stones'?'runtime-stones-18':'runtime-tree-14',directory=id==='wheel'?'wheel-water-only-44':id==='stones'?'stones-mixed-18':'tree-air-14';
 const bundlePath=path.join(compiled,'bundle.json'),bundle=JSON.parse(await readFile(bundlePath));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),runtime={};
 const input=path.join(compiler,'examples',id==='wheel'?'world-wheel':id==='stones'?'world-stones':'world-tree');
@@ -22,14 +23,50 @@ for(const name of names)snapshots.set(name,await readFile(path.join(input,name))
 const buildDir=path.join(input,'.vkfbuild',path.parse(entry).name);
 const compilerExe=process.env.VKF_PREVIEW_COMPILER??path.join(compiler,'.work/world-model-ninja/bin/vkf.exe');
 const emitterExe=process.env.VKF_PREVIEW_WASM_EMITTER??path.join(compiler,'.work/world-model-ninja/bin/vkf_wasm_artifact_smoke.exe');
+const packageEntries=executable=>{
+  const footer=Buffer.from('VKF_SCENE_BUNDLE_END_V1'),end=executable.length-footer.length;
+  if(!executable.subarray(end).equals(footer))throw Error('Packaged preview lacks scene bundle footer');
+  const size=Number(executable.readBigUInt64LE(end-8)),start=end-8-size;
+  const payload=executable.subarray(start,end-8),header=Buffer.from('VKF_SCENE_BUNDLE_V1\n');
+  if(start<0||!payload.subarray(0,header.length).equals(header))throw Error('Invalid packaged scene bundle');
+  let offset=header.length;const count=payload.readUInt32LE(offset);offset+=4;const entries=new Map();
+  for(let i=0;i<count;i++){
+    if(offset+12>payload.length)throw Error('Truncated packaged scene entry');
+    const nameLength=payload.readUInt32LE(offset),dataLength=Number(payload.readBigUInt64LE(offset+4));offset+=12;
+    if(offset+nameLength+dataLength>payload.length)throw Error('Invalid packaged scene entry length');
+    const name=payload.toString('utf8',offset,offset+nameLength);offset+=nameLength;
+    if(entries.has(name))throw Error('Duplicate packaged scene path: '+name);
+    entries.set(name,payload.subarray(offset,offset+dataLength));offset+=dataLength;
+  }
+  if(offset!==payload.length)throw Error('Trailing packaged scene bytes');
+  return entries;
+};
 // Never pair current source with a pre-existing executable. Compile those
 // exact inputs, then fail closed if any imported file changed during build.
-for(const [exe,args] of [[compilerExe,['--source',path.join(input,entry),'--aot','--emit-wasm']],[emitterExe,['--source',path.join(input,entry),'--typed-ir',path.join(buildDir,'typed-ir.json')]]]){
+let packagedWasm,packagedManifest,packageHash;
+if(packagedUi){
+  const temporaryRoot=path.join(site,'.w');await mkdir(temporaryRoot,{recursive:true});
+  const temporary=await mkdtemp(path.join(temporaryRoot,'preview-package-'));
+  try{
+    const output=path.join(temporary,'preview.exe');
+    const result=spawnSync(compilerExe,['-b',path.join(input,entry),'-o',output],{cwd:compiler,encoding:'utf8',windowsHide:true});
+    if(result.status!==0)throw Error(`Preview compilation failed: ${result.error??result.stderr??result.stdout}`);
+    const executable=await readFile(output),entries=packageEntries(executable),prefix=`sessions/${path.parse(entry).name}/`;
+    packageHash=hash(executable);packagedWasm=entries.get(prefix+'vkf-program.wasm');
+    packagedManifest=entries.get(prefix+'vf-world-manifest.json');
+    if(!packagedWasm||!packagedManifest)throw Error('Packaged preview lacks compiled World artifacts');
+  }finally{
+    if(path.dirname(temporary)!==temporaryRoot||!path.basename(temporary).startsWith('preview-package-'))throw Error('Unsafe preview cleanup target');
+    await rm(temporary,{recursive:true,force:true});
+  }
+}else for(const [exe,args] of [[compilerExe,['--source',path.join(input,entry),'--aot','--emit-wasm']],[emitterExe,['--source',path.join(input,entry),'--typed-ir',path.join(buildDir,'typed-ir.json')]]]){
   const result=spawnSync(exe,args,{cwd:compiler,encoding:'utf8',windowsHide:true});
   if(result.status!==0)throw Error(`Preview compilation failed: ${result.error??result.stderr??result.stdout}`);
 }
 for(const [name,bytes] of snapshots)if(hash(await readFile(path.join(input,name)))!==hash(bytes))throw Error(`Source changed during compilation: ${name}`);
-const build={entry:'main.vkf',compiler:hash(await readFile(compilerExe)),emitter:hash(await readFile(emitterExe)),typed_ir:hash(await readFile(path.join(buildDir,'typed-ir.json')))};
+const build={entry:'main.vkf',compiler:hash(await readFile(compilerExe)),emitter:hash(await readFile(emitterExe))};
+if(packagedUi)build.package=packageHash;
+else build.typed_ir=hash(await readFile(path.join(buildDir,'typed-ir.json')));
 function committedBytes(args){const result=spawnSync('git',args,{cwd:compiler,windowsHide:true,maxBuffer:16*1024*1024});if(result.status!==0)throw Error('Cannot read committed runtime: '+result.stderr);return result.stdout;}
 if(committedRuntime)build.runtime_revision=committedBytes(['rev-parse','HEAD']).toString().trim();
 await mkdir(path.join(compiled,runtime_directory),{recursive:true});
@@ -46,10 +83,11 @@ async function copyRuntime(name){
 for(const name of ['vf-world-layer-runtime.js','vf-compiled-runtime-bridge.js',id==='wheel'?'vf-world-material-runtime.mjs':'vf-world-mechanical-runtime.mjs'])await copyRuntime(name);
 const output=path.join(compiled,directory),sources=path.join(root,'sources/coming-soon',id);
 await mkdir(output,{recursive:true});await mkdir(sources,{recursive:true});
-const bytes=await readFile(path.join(buildDir,`${path.parse(entry).name}.wasm`));
+const bytes=packagedWasm??await readFile(path.join(buildDir,`${path.parse(entry).name}.wasm`));
 if(!WebAssembly.validate(bytes))throw Error('Invalid application WASM');
 await writeFile(path.join(output,'main.wasm'),bytes);
-await copyFile(path.join(buildDir,'wasm-manifest.json'),path.join(output,'manifest.json'));
+if(packagedManifest)await writeFile(path.join(output,'manifest.json'),packagedManifest);
+else await copyFile(path.join(buildDir,'wasm-manifest.json'),path.join(output,'manifest.json'));
 const hashes={};for(const [name,bytes] of snapshots){const source=Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n'));const publicName=name===entry?'main.vkf':name;await writeFile(path.join(sources,publicName),source);hashes[publicName]=hash(source);}
 build.sources=hashes;build.wasm=hash(bytes);
 bundle.applications[id]={directory,runtime_directory,runtime,wasm:hash(bytes),manifest:hash(await readFile(path.join(output,'manifest.json'))),sources:hashes,build};
