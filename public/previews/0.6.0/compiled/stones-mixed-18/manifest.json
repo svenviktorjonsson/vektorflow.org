@@ -1,11 +1,17 @@
 {
-  "artifact_content_sha256": "89c04a4094dfdb40",
+  "artifact_content_sha256": "784b9c2357633cf5",
   "artifact_kind": "wasm",
   "artifact_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow-integration-060-into-047\\examples\\world-stones\\.vkfbuild\\main\\main.wasm",
   "compiler_version": "vkf-wasm-artifact-smoke-0.2",
-  "dependencies": [],
-  "manifest_hash": "25b7045571c3704c",
-  "runtime_hash": "89c04a4094dfdb40",
+  "dependencies": [
+    {
+      "name": "physics",
+      "path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow-integration-060-into-047\\compiler\\self_hosted\\stdlib\\physics.vkf",
+      "sha256": "fa19be4697057dce"
+    }
+  ],
+  "manifest_hash": "21de91678f33f467",
+  "runtime_hash": "784b9c2357633cf5",
   "runtime_surface": {
     "bindings": [
       {
@@ -183,5 +189,5 @@
   "source_path": "C:\\Users\\developer\\Documents\\ViktorTemp\\vektor-flow-integration-060-into-047\\examples\\world-stones\\main.vkf",
   "source_sha256": "f180acdbaafc7e3c",
   "status": "compiled",
-  "typed_ir_sha256": "cf0ca9dcaaa8af75"
+  "typed_ir_sha256": "a6c14d67ea46f926"
 }

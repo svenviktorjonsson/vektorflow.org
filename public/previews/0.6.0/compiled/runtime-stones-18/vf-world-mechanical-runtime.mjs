@@ -1,6 +1,8 @@
 import { createMechanicalWorldGpu } from './vf-world-mechanical-gpu.mjs';
 import { createWorldSceneEmbeddingGpu,projectPoint,sub } from './vf-world-scene-embedding-gpu.mjs';
 import {cantileverParameters,zoomCamera,emissiveSphere} from './vf-world-physical-parameters.mjs';
+import {parseMechanicalAssetBytes,mapPhysicalSurfaceToWorld} from './vf-world-mechanical-asset.mjs';
+import {createFieldDrivenSurfaceWorldGpu} from './vf-world-surface-pipeline-gpu.mjs';
 
 export function mechanicalFrameSchedule(world,debt,elapsed){
   const dt=world.time_step,budget=world.kind==='rigid'?64:8;
@@ -21,22 +23,48 @@ export function rigidSceneFrame(asset){
 export async function readMechanicalAsset(url){
   const response=await fetch(url);if(!response.ok)throw new Error(`Added geometry unavailable: ${response.status}`);
   const bytes=url.includes('.gz')?await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer():await response.arrayBuffer();
-  const view=new DataView(bytes),decode=new TextDecoder();if(decode.decode(new Uint8Array(bytes,0,8))!=='VFTREE02')throw new Error('Invalid added geometry asset');
-  let offset=20;const meshes=[];
-  for(let i=0;i<view.getUint32(8,true);i++){
-    const sizes=Array.from({length:5},(_,j)=>view.getUint32(offset+j*4,true));offset+=20;
-    const meta=JSON.parse(decode.decode(new Uint8Array(bytes,offset,sizes[0])));offset+=sizes[0]+(4-sizes[0]%4)%4;
-    const vertices=new Float32Array(bytes,offset,sizes[1]);offset+=sizes[1]*4;
-    const indices=new Uint32Array(bytes,offset,sizes[2]);offset+=sizes[2]*4;
-    const uvs=new Float32Array(bytes,offset,sizes[3]);offset+=(sizes[3]+sizes[4])*4;
-    if(vertices.length%10||indices.some(index=>index>=vertices.length/10)||vertices.some(v=>!Number.isFinite(v)))throw new Error('Invalid geometry vertices or indices');
-    meshes.push({...meta,vertices,indices,uvs});
+  return parseMechanicalAssetBytes(bytes);
+}
+
+function inverseRigidInertia(collision,mass){
+  const scale=mass/collision.mass;
+  const value=collision.inertia_tensor??collision.inertia;
+  const matrix=typeof value==='number'?
+    [[value,0,0],[0,value,0],[0,0,value]]:value;
+  if(!Array.isArray(matrix)||matrix.length!==3||matrix.some(row=>
+    !Array.isArray(row)||row.length!==3||row.some(v=>!Number.isFinite(v))))
+    throw new Error('Rigid inertia must be a finite 3x3 tensor');
+  const a=matrix[0][0],b=matrix[0][1],c=matrix[0][2],d=matrix[1][1],e=matrix[1][2],f=matrix[2][2];
+  const det=a*(d*f-e*e)-b*(b*f-c*e)+c*(b*e-c*d);
+  if(Math.abs(matrix[1][0]-b)>1e-8||Math.abs(matrix[2][0]-c)>1e-8||
+    Math.abs(matrix[2][1]-e)>1e-8||!(a>0&&a*d-b*b>0&&det>0&&scale>0))
+    throw new Error('Rigid inertia tensor must be symmetric positive definite');
+  const inverse=[[(d*f-e*e)/det,(c*e-b*f)/det,(b*e-c*d)/det],
+    [(c*e-b*f)/det,(a*f-c*c)/det,(b*c-a*e)/det],
+    [(b*e-c*d)/det,(b*c-a*e)/det,(a*d-b*b)/det]];
+  const packed=new Float32Array(12);
+  for(let row=0;row<3;row++)for(let column=0;column<3;column++){
+    const v=inverse[row][column]/scale;
+    if(!Number.isFinite(v)||!Number.isFinite(Math.fround(v)))
+      throw new Error('Rigid inverse inertia must fit finite GPU values');
+    packed[row*4+column]=v;
   }
-  if(offset!==bytes.byteLength)throw new Error('Geometry asset length mismatch');return meshes;
+  return packed;
+}
+export function surfaceContactLawParameters(world){
+  const law=world.surface_contact;
+  const cellSize=law?.cell_size,cellSlots=law?.cell_slots,pairCapacity=law?.pair_capacity;
+  const bucketCount=law?.bucket_count??0;
+  if(!(Number.isFinite(cellSize)&&cellSize>0&&Number.isInteger(cellSlots)&&cellSlots>=1&&cellSlots<=512&&
+    Number.isInteger(pairCapacity)&&pairCapacity>=15&&pairCapacity%15===0&&
+    Number.isInteger(bucketCount)&&bucketCount>=0&&
+    (bucketCount===0||bucketCount>=2&&(bucketCount&(bucketCount-1))===0)))
+    throw new RangeError('Physical surface requires authored generic contact Law parameters');
+  return {cellSize,cellSlots,pairCapacity,bucketCount};
 }
 export function prepareMechanicalInitialState(world,arenas,asset){
   const arena=arenas.find(a=>a.layer.id===world.layer_id),kind=world.kind,p=world.properties;
-  const meshes=[];const initial={bodyCount:0,parcelCount:0,nodeCount:0,bodies:new Float32Array(20),parcels:new Float32Array(8),nodes:new Float32Array(8),geometry:new Float32Array(4)};
+  const meshes=[];let surfaceTransform={scale:1,offset:[0,0,0]};const initial={bodyCount:0,parcelCount:0,nodeCount:0,bodies:new Float32Array(20),parcels:new Float32Array(8),parcelMasses:new Float32Array(1),nodes:new Float32Array(8),geometry:new Float32Array(4)};
   const convert=(vertices,tag,compliance,transform)=>{
     const out=new Float32Array(vertices.length/10*24);
     for(let i=0;i<vertices.length/10;i++){const src=i*10,d=i*24;out.set(vertices.subarray(src,src+10),d);if(transform)transform(out,d);out[d+10]=tag;out[d+11]=compliance?compliance(out,d):0;}
@@ -48,18 +76,42 @@ export function prepareMechanicalInitialState(world,arenas,asset){
     if(authoredMass&&authoredMass.length!==arena.layer.count)throw new Error('Particle mass must align with the rigid layer');
     const hullCount=asset[0]?.collision?.hull?.length/4;
     if(!Number.isInteger(hullCount)||hullCount<16||asset.some(item=>item.collision?.hull?.length!==hullCount*4))throw new Error('Added rigid support hulls disagree');
-    initial.bodyCount=asset.length;initial.hullCount=hullCount;initial.sceneFrame=rigidSceneFrame(asset);initial.bodies=new Float32Array(asset.length*20);initial.geometry=new Float32Array(asset.length*hullCount*4);
+    const groupCount=(asset[0].collision.hull_groups?.length??0)/4;
+    if(!Number.isInteger(groupCount)||groupCount<0||groupCount*8!==hullCount&&groupCount!==0||
+      asset.some(item=>(item.collision.hull_groups?.length??0)/4!==groupCount))
+      throw new Error('Added rigid support groups disagree');
+    initial.bodyCount=asset.length;initial.hullCount=hullCount;initial.groupCount=groupCount;initial.sceneFrame=rigidSceneFrame(asset);initial.bodies=new Float32Array(asset.length*20);initial.geometry=new Float32Array(asset.length*hullCount*4+asset.length*12+asset.length*groupCount*4);initial.inverseInertia=new Float32Array(asset.length*12);
     for(let i=0;i<asset.length;i++){
       const item=asset[i],o=i*20,s=i*9;const position=[arena.state[s],arena.state[s+3],arena.state[s+6]];
       if(!item.collision||item.collision.center.some((v,a)=>Math.abs(v-position[a])>1e-5))throw new Error('Added rigid placement disagrees with geometry asset');
+      const localCenter=item.collision.center_of_mass??[0,0,0];
+      if(!Array.isArray(localCenter)||localCenter.length!==3||localCenter.some(v=>!Number.isFinite(v)))
+        throw new Error('Rigid center of mass must be a finite 3D point');
       const referenceDensity=item.collision.reference_density??2700,authoredDensity=item.collision.density??referenceDensity;
       const mass=authoredMass?.[i]??p.mass??item.collision.mass*(p.density??authoredDensity)/referenceDensity;
-      const inertia=item.collision.inertia*mass/item.collision.mass;
+      if(!(Number.isFinite(mass)&&mass>0&&Number.isFinite(Math.fround(mass))&&Math.fround(mass)>0))
+        throw new Error('Rigid mass and inertia must be positive, finite GPU values');
+      const inverseInertia=inverseRigidInertia(item.collision,mass);
+      const inertia=(item.collision.inertia??(item.collision.inertia_tensor[0][0]+item.collision.inertia_tensor[1][1]+item.collision.inertia_tensor[2][2])/3)*mass/item.collision.mass;
       if(!(Number.isFinite(mass)&&mass>0&&Number.isFinite(Math.fround(mass))&&Math.fround(mass)>0&&Number.isFinite(inertia)&&inertia>0&&Number.isFinite(Math.fround(inertia))&&Math.fround(inertia)>0))
         throw new Error('Rigid mass and inertia must be positive, finite GPU values');
-      initial.bodies.set([...position,0,arena.state[s+1],arena.state[s+4],arena.state[s+7],0,0,0,0,1,0,0,0,0,mass,inertia,item.collision.radius,p.sleep===true?1:0],o);
+      const centerPosition=position.map((v,a)=>v+localCenter[a]);
+      const radius=item.collision.radius+Math.hypot(...localCenter);
+      initial.bodies.set([...centerPosition,0,arena.state[s+1],arena.state[s+4],arena.state[s+7],0,0,0,0,1,0,0,0,0,mass,inertia,radius,p.sleep===true?1:0],o);
+      initial.inverseInertia.set(inverseInertia,i*12);
       initial.geometry.set(item.collision.hull,i*hullCount*4);
-      meshes.push({vertices:convert(item.vertices,i,null),indices:item.indices});
+      for(let vertex=0;vertex<hullCount;vertex++)for(let axis=0;axis<3;axis++)
+        initial.geometry[(i*hullCount+vertex)*4+axis]-=localCenter[axis];
+      initial.geometry.set(inverseInertia,asset.length*hullCount*4+i*12);
+      if(groupCount){
+        const offset=asset.length*hullCount*4+asset.length*12+i*groupCount*4;
+        initial.geometry.set(item.collision.hull_groups,offset);
+        for(let group=0;group<groupCount;group++)for(let axis=0;axis<3;axis++)
+          initial.geometry[offset+group*4+axis]-=localCenter[axis];
+      }
+      meshes.push({vertices:convert(item.vertices,i,null,(out,at)=>{
+        for(let axis=0;axis<3;axis++)out[at+axis]-=localCenter[axis];
+      }),indices:item.indices});
     }
   }else{
     initial.parcelCount=arena.layer.count;initial.parcels=new Float32Array(initial.parcelCount*8);
@@ -77,6 +129,7 @@ export function prepareMechanicalInitialState(world,arenas,asset){
     }
     let lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(const item of asset)for(let j=0;j<item.vertices.length;j+=10)for(let a=0;a<3;a++){lo[a]=Math.min(lo[a],item.vertices[j+a]);hi[a]=Math.max(hi[a],item.vertices[j+a]);}
     const scale=(world.solid_properties.height??8)/(hi[2]-lo[2]);const origin=arenas.find(a=>a.layer.id===world.solid_layer_id).state;
+    surfaceTransform={scale,offset:[origin[0]-(lo[0]+hi[0])*.5*scale,origin[3]-(lo[1]+hi[1])*.5*scale,origin[6]-lo[2]*scale]};
     const routeDistance=new Float64Array(initial.nodeCount).fill(Infinity);
     for(const item of asset){const collisionClass=item.id?.includes('foliage')?3:1;const vertices=convert(item.vertices,-1,(v,d)=>Math.pow(Math.max(0,v[d+2])/8,2)*0.65,(v,d)=>{
       v[d]=(v[d]-(lo[0]+hi[0])*.5)*scale+origin[0];v[d+1]=(v[d+1]-(lo[1]+hi[1])*.5)*scale+origin[3];v[d+2]=(v[d+2]-lo[2])*scale+origin[6];const occupied=cell(v[d],v[d+1],v[d+2]);initial.geometry[occupied*4+3]=Math.max(initial.geometry[occupied*4+3],collisionClass);
@@ -112,7 +165,7 @@ export function prepareMechanicalInitialState(world,arenas,asset){
           initial.geometry[normalOffset+3]+=area;
           // The View's vein field owns colour variation, not triangle vertices.
           const bladeColor=Array.from(vertices.subarray(base+5*24+6,base+5*24+10));
-          for(let j=0;j<leafCount;j++){const d=base+j*24;vertices.set(anchor,d+16);vertices[d+19]=1;vertices[d+15]=1;vertices.set(bladeColor,d+6);vertices.set(normal,d+3);vertices.set(item.uvs?.subarray((d/24)*2,(d/24)*2+2)??[.5,0],d+12);vertices.set(hinge.map(v=>v/Math.max(norm,1e-8)),d+20);vertices[d+23]=length;vertices[d+11]=Math.pow(Math.max(0,anchor[2])/8,2)*0.65;
+          for(let j=0;j<leafCount;j++){const d=base+j*24;vertices.set(anchor,d+16);vertices[d+19]=1;vertices[d+15]=1;vertices.set(bladeColor,d+6);vertices.set(normal,d+3);vertices.set(item.uvs?.subarray((d/24)*2,(d/24)*2+2)??[.5,0],d+12);vertices.set(hinge.map(v=>v/Math.max(norm,1e-8)),d+20);vertices[d+23]=length;
             const hit=cell(vertices[d],vertices[d+1],vertices[d+2]),distance=anchor.reduce((sum,v,a)=>sum+(v-initial.geometry[hit*4+a])**2,0);
             if(distance<routeDistance[hit]){routeDistance[hit]=distance;initial.geometry[(initial.nodeCount*3+hit)*4+3]=c;}
           }
@@ -140,8 +193,16 @@ export function prepareMechanicalInitialState(world,arenas,asset){
       const normalOffset=(initial.nodeCount*4+i)*4,totalArea=initial.geometry[normalOffset+3],normalLength=Math.hypot(...initial.geometry.subarray(normalOffset,normalOffset+3));
       if(totalArea>0&&normalLength>1e-8)for(let axis=0;axis<3;axis++)initial.geometry[normalOffset+axis]/=normalLength;
     }
-    p.grass_count=world.grass_properties.count??81920;p.density??=1.225;p.turbulence_intensity??=.12;p.integral_scale??=2.4;p.drag_coefficient??=1.05;p.eddy_decay??=.75;p.parcel_mass=p.mass??p.density*span.reduce((v,n)=>v*n,1)/initial.parcelCount;p.node_mass=beam?.mass??world.nodes_properties.mass??1;p.spring_constant=beam?.stiffness??(world.nodes_properties.spring_constant??60)/(world.nodes_properties.elasticity??1);p.damping=beam?.damping??world.nodes_properties.damping??12;p.beam=beam;
-    if(!(p.parcel_mass>0&&p.node_mass>0&&p.spring_constant>0&&p.damping>=0&&p.density>0&&p.turbulence_intensity>=0&&p.integral_scale>0&&p.drag_coefficient>=0&&p.eddy_decay>=0))throw new Error('Invalid wind/elastic World properties');
+    p.grass_count=world.grass_properties.count??81920;p.grass_wind_area=world.grass_properties.wind_area??0.6;p.grass_reconfiguration_speed=world.grass_properties.reconfiguration_speed??6;p.density??=1.225;p.turbulence_intensity??=.12;p.integral_scale??=2.4;p.drag_coefficient??=1.05;p.eddy_decay??=.75;p.parcel_mass=p.mass??p.density*span.reduce((v,n)=>v*n,1)/initial.parcelCount;p.node_mass=beam?.mass??world.nodes_properties.mass??1;p.spring_constant=beam?.stiffness??(world.nodes_properties.spring_constant??60)/(world.nodes_properties.elasticity??1);p.damping=beam?.damping??world.nodes_properties.damping??12;p.beam=beam;
+    if(!(p.parcel_mass>0&&p.node_mass>0&&p.spring_constant>0&&p.damping>=0&&p.density>0&&p.turbulence_intensity>=0&&p.integral_scale>0&&p.drag_coefficient>=0&&p.eddy_decay>=0&&Number.isFinite(p.grass_wind_area)&&p.grass_wind_area>=0&&Number.isFinite(p.grass_reconfiguration_speed)&&p.grass_reconfiguration_speed>0))throw new Error('Invalid wind/elastic World properties');
+    const authoredMass=arena.particleChannels?.mass;
+    if(authoredMass&&authoredMass.length!==initial.parcelCount)throw new Error('Particle mass must align with the air layer');
+    initial.parcelMasses=new Float32Array(Math.ceil(initial.parcelCount/4)*4);
+    for(let i=0;i<initial.parcelCount;i++){
+      const mass=authoredMass?.[i]??p.parcel_mass,rounded=Math.fround(mass);
+      if(!(Number.isFinite(mass)&&rounded>0&&Number.isFinite(rounded)))throw new Error('Air parcel mass must be positive, finite GPU values');
+      initial.parcelMasses[i]=rounded;
+    }
   }
   const radius=kind==='wind'?7:initial.sceneFrame.floorRadius,color=kind==='wind'?[.065,.14,.022,1]:[.12,.125,.12,1];
   // The View floor coincides with the World collision plane. A centimetre
@@ -151,7 +212,7 @@ export function prepareMechanicalInitialState(world,arenas,asset){
   for(const layer of arenas.filter(a=>a.layer.world_id===world.world_id&&a.layer.properties?.shape==='sphere'&&a.layer.properties?.emissivity>0)){
     for(let i=0;i<layer.layer.count;i++){const center=[layer.state[i*9],layer.state[i*9+3],layer.state[i*9+6]],mesh=emissiveSphere(center,layer.layer.properties);meshes.push(mesh);p.lights.push(mesh.light);}
   }
-  return {initial,meshes};
+  return {initial,meshes,surfaceTransform};
 }
 
 export async function bootMaterialWorlds(compiled){
@@ -168,17 +229,33 @@ export async function bootMaterialWorlds(compiled){
   const source=world.kind==='rigid'?world.properties:world.solid_properties;
   const requested=new URLSearchParams(location.search).get('generation')??'original';
   const assetUrl=requested==='original'?source.asset:source.variants?.[requested];if(!assetUrl)throw new Error('Unknown procedural geometry distribution');
-  const [asset,adapter]=await Promise.all([readMechanicalAsset(assetUrl),navigator.gpu.requestAdapter({powerPreference:'high-performance'})]);if(!adapter)throw new Error('No WebGPU adapter');const device=await adapter.requestDevice();
+  const [loaded,adapter]=await Promise.all([readMechanicalAsset(assetUrl),navigator.gpu.requestAdapter({powerPreference:'high-performance'})]);if(!adapter)throw new Error('No WebGPU adapter');
+  if(world.surface_contact&&!loaded.contact)throw new Error('Authored surface contact Law requires physical asset geometry');
+  const asset=loaded.meshes,device=await adapter.requestDevice();
   const fail=e=>{stopped=true;error.hidden=false;error.textContent=String(e.stack??e.message??e);console.error(error.textContent);};device.addEventListener('uncapturederror',e=>fail(e.error));device.lost.then(info=>{if(!stopped)fail(new Error(info.message));});
-  const {initial,meshes}=prepareMechanicalInitialState(world,compiled.worldLayerViews(),asset);
+  const {initial,meshes,surfaceTransform}=prepareMechanicalInitialState(world,compiled.worldLayerViews(),asset);
   const prefix=`$world$gpu$${world.world_id}`;const physics=await createMechanicalWorldGpu(device,world,initial,compiled.readBinding(`${prefix}$physics`));
-  const embedding=await createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,compiled.readBinding(`${prefix}$embedding`));
+  // The contact Law consumes physical surfaces, never object or mesh names.
+  // Field displacement is one target Law; other target Laws can share this gate.
+  let surface=null;
+  if(loaded.contact){
+    if(!world.nodes_layer_id||!initial.nodeCount)throw new Error('Physical surface has no authored target Law');
+    surface=await createFieldDrivenSurfaceWorldGpu(device,{
+      contact:mapPhysicalSurfaceToWorld(loaded.contact,surfaceTransform),nodes:physics.buffers[2],
+      grid:world.properties.grid,domainMin:world.properties.domain_min,
+      domainSpan:world.properties.domain_span,timeStep:world.time_step,
+      broadphase:surfaceContactLawParameters(world),
+    });
+  }
+  const embedding=await createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,
+    compiled.readBinding(`${prefix}$embedding`),{acceptedSurfacePositions:surface?.positionBuffer??null,
+      acceptedSurfaceVertexCount:surface?asset.reduce((count,item)=>count+item.vertices.length/10,0):null});
   const camera=world.kind==='rigid'?initial.sceneFrame.camera:{pos:[8,-17,7],target:[0,0,3.7],fov:42};
   const bodyMasses=world.kind==='rigid'?Array.from({length:initial.bodyCount},(_,body)=>initial.bodies[body*20+16]):[];
   const report=()=>{status.textContent=world.kind==='rigid'?`5 stones · ${Math.min(...bodyMasses).toFixed(1)}–${Math.max(...bodyMasses).toFixed(1)} kg · rigid contacts + floor friction · g ${Math.abs(world.gravity[2]).toFixed(2)} m/s² @ ${(1/world.time_step).toFixed(0)} Hz · ${drag?.kind==='stone'?'lifted':'stone drag · empty-space orbit · zoom'} · ${physics.time.toFixed(2)} s`:`8 m tree · ${world.properties.grass_count.toLocaleString()} grass blades · ${initial.parcelCount.toLocaleString()} coherent air parcels · ${particles?'contact parcels, α ≤ 0.5':'particles hidden'} · ${physics.time.toFixed(2)} s`;};
   const button=(label,pressed,handler)=>{const b=document.createElement('button');b.textContent=label;b.type='button';if(pressed!==null)b.setAttribute('aria-pressed',String(pressed));b.addEventListener('click',()=>handler(b));controls.append(b);return b;};
   if(settings.pause)button('Pause',false,b=>{paused=!paused;b.textContent=paused?'Play':'Pause';b.setAttribute('aria-pressed',String(paused));previous=null;report();});
-  if(settings.reset)button('Reset',null,()=>{physics.setHeld(-1,0);physics.reset();drag=null;pointers.clear();pinchDistance=0;snapshot=initial.bodies.slice();previous=null;accumulator=0;report();});
+  if(settings.reset)button('Reset',null,()=>{physics.setHeld(-1,0);physics.reset();surface?.reset();drag=null;pointers.clear();pinchDistance=0;snapshot=initial.bodies.slice();previous=null;accumulator=0;report();});
   if(new URLSearchParams(location.search).has('verify')){const output=document.createElement('pre');output.id='world-inspection';output.setAttribute('role','status');output.style.cssText='margin:0;font:11px monospace;white-space:pre-wrap';document.body.append(output);button('Inspect GPU state',null,async()=>{output.textContent=JSON.stringify(await physics.inspect());});
     if(settings.orbit)button('Verify pinch gesture',null,()=>{const rect=canvas.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,before=camera.pos.slice(),orbit=Number(canvas.dataset.orbitRevision??0);
       const dispatch=(type,id,dx)=>canvas.dispatchEvent(new PointerEvent(type,{pointerId:id,pointerType:'touch',button:0,clientX:x+dx,clientY:y,bubbles:true,cancelable:true}));
@@ -225,10 +302,10 @@ export async function bootMaterialWorlds(compiled){
     // Rigid drops keep elapsed-time debt instead of silently slowing gravity
     // below 30 fps. The bounded submission budget does not change the law's dt.
     const elapsed=previous==null?0:(timestamp-previous)/1000;previous=timestamp;
-    try{const encoder=device.createCommandEncoder();if(!paused){const schedule=mechanicalFrameSchedule(world,accumulator,elapsed);accumulator=schedule.debt;for(let step=0;step<schedule.steps;step++)physics.step(encoder);}
-      physics.placeHeld(encoder);embedding.render(encoder,camera,{grass,particles});device.queue.submit([encoder.finish()]);pending=true;device.queue.onSubmittedWorkDone().then(()=>{pending=false;},fail);canvas.dataset.renderedFrames=String(++frames);if(frames%12===0){report();read();}
+    try{const encoder=device.createCommandEncoder();let advanced=false;if(!paused){const schedule=mechanicalFrameSchedule(world,accumulator,elapsed);accumulator=schedule.debt;for(let step=0;step<schedule.steps;step++)physics.step(encoder);advanced=schedule.steps>0;}
+      physics.placeHeld(encoder);if(advanced)surface?.encode(encoder);embedding.render(encoder,camera,{grass,particles});device.queue.submit([encoder.finish()]);pending=true;device.queue.onSubmittedWorkDone().then(()=>{pending=false;},fail);canvas.dataset.renderedFrames=String(++frames);if(frames%12===0){report();read();}
     }catch(e){fail(e);}
   }
   report();canvas.dataset.readyMs=String(Math.round(performance.now()-started));document.body.dataset.vfWorldLayerReady='true';requestAnimationFrame(frame);
-  const application={compiled,program,physics,embedding,canvas,destroy(){stopped=true;physics.destroy();embedding.destroy();device.destroy();}};globalThis.__vfWorldLayerApplication=application;return application;
+  const application={compiled,program,physics,surface,embedding,canvas,destroy(){stopped=true;surface?.destroy();physics.destroy();embedding.destroy();device.destroy();}};globalThis.__vfWorldLayerApplication=application;return application;
 }
