@@ -7,7 +7,8 @@ export async function verifyPreviewBytes(bytes,expected){
   if(digest!==expected)throw Error('Source/build mismatch: reload before running');
 }
 let bundlePromise;
-const previewBundle=()=>bundlePromise??=fetch('./previews/0.6.0/compiled/bundle.json?v=preview-release-28').then(r=>{if(!r.ok)throw Error('Build receipt unavailable');return r.json();});
+const previewBundle=()=>bundlePromise??=fetch('./previews/0.6.0/compiled/bundle.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Build receipt unavailable');return r.json();});
+export const previewSourceUrl=(id,name,digest)=>`./sources/coming-soon/${id}/${name}?v=${digest}`;
 
 export const applications = [
   { id: 'wheel', files: ['main.vkf', 'geometry.vkf', 'materials.vkf', 'particles.vkf'] },
@@ -26,10 +27,9 @@ function mountSourceTabs({ id, files }) {
   const run=document.createElement('button');run.type='button';run.textContent='Run compiled application';run.className='source-run';
   host.querySelector('.source-footer').append(' · ',run,' · ',state);
   const cache = new Map(); let request = 0;
-  const sourceUrl=name=>`./sources/coming-soon/${id}/${name}?v=${id==='stones'?'stones-15':id==='tree'?'air-12':'wheel-water-only-29'}`;
   async function source(name){
     if(!cache.has(name))cache.set(name,(async()=>{
-      const record=(await previewBundle()).applications[id],response=await fetch(sourceUrl(name));
+      const record=(await previewBundle()).applications[id],response=await fetch(previewSourceUrl(id,name,record.sources[name]));
       if(!response.ok)throw Error(`Source unavailable (${response.status})`);
       const bytes=await response.arrayBuffer();await verifyPreviewBytes(bytes,record.sources[name]);return new TextDecoder().decode(bytes);
     })().catch(error=>{cache.delete(name);throw error;}));
@@ -48,19 +48,21 @@ function mountSourceTabs({ id, files }) {
   });
   async function select(index, focus = false) {
     const current = ++request; const name = files[index];
-    const url = sourceUrl(name);
     for (const [i, button] of [...tabs.children].entries()) {
       button.setAttribute('aria-selected', String(i === index)); button.tabIndex = i === index ? 0 : -1;
     }
     panel.setAttribute('aria-labelledby', `${id}-source-${index}`);
     panel.setAttribute('aria-busy', 'true');
-    link.href = url; link.textContent = `Download ${name}`;
+    link.removeAttribute('href');link.textContent = `Download ${name}`;
     if (focus) tabs.children[index].focus();
     code.textContent = `Loading ${name}…`;
     try {
+      const record=(await previewBundle()).applications[id];
+      if(request!==current)return;
+      link.href=previewSourceUrl(id,name,record.sources[name]);
       const text=await source(name);
       if (request === current) {code.textContent=text;globalThis.Prism.highlightElement(code);
-        const record=(await previewBundle()).applications[id];state.textContent=`Read-only · ${record.build?'source-compiled':'legacy published'} build ${record.wasm.slice(0,12)}`;
+        state.textContent=`Read-only · ${record.build?'source-compiled':'legacy published'} build ${record.wasm.slice(0,12)}`;
       }
     } catch (error) { if (request === current) code.textContent = String(error.message); }
     finally { if (request === current) panel.setAttribute('aria-busy', 'false'); }
