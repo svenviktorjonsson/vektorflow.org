@@ -16,7 +16,10 @@ export function registerVektorFlowPrism(Prism) {
   };
 
   Prism.languages.vektorflow = {
-    comment: /#.*/,
+    comment: [
+      { pattern: /##[\s\S]*?(?:##|$)/, greedy: true },
+      /#(?!#).*/,
+    ],
     'triple-quoted-string': [
       { pattern: /"""[\s\S]*?"""/, greedy: true, alias: 'string' },
       { pattern: /'''[\s\S]*?'''/, greedy: true, alias: 'string' },

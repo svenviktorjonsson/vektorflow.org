@@ -42,7 +42,7 @@ function codeOnly(source) {
   let cursor = 0;
   while (cursor < source.length) {
     const rest = source.slice(cursor);
-    const hidden = /^(?:#[^\n]*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*")/u.exec(rest);
+    const hidden = /^(?:##(?:[\s\S]*?##|[\s\S]*)|#(?!#)[^\n]*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*")/u.exec(rest);
     if (!hidden) {
       output += source[cursor];
       cursor += 1;
@@ -135,7 +135,7 @@ export function highlightVkf(source) {
   let cursor = 0;
   while (cursor < source.length) {
     const rest = source.slice(cursor);
-    const comment = /^#[^\n]*/u.exec(rest);
+    const comment = /^(?:##(?:[\s\S]*?##|[\s\S]*)|#(?!#)[^\n]*)/u.exec(rest);
     if (comment) {
       html += token("comment", comment[0]);
       cursor += comment[0].length;
