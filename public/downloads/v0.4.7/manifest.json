@@ -6,50 +6,50 @@
     {
       "kind": "download",
       "name": "vektor-flow-windows-x64-setup.exe",
-      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64-setup.exe?sha256=107ac4588951ea80e2179d73b1f61baf895777c9161387873b6fee2c33f473ef",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64-setup.exe?sha256=2f656c5cb9f3d4f8e544a2157c54dce1d73004e7296e842573da1acada27a955",
       "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64-setup.exe.sha256",
-      "sha256": "107ac4588951ea80e2179d73b1f61baf895777c9161387873b6fee2c33f473ef",
-      "bytes": 5668893
+      "sha256": "2f656c5cb9f3d4f8e544a2157c54dce1d73004e7296e842573da1acada27a955",
+      "bytes": 5667231
     },
     {
       "kind": "download",
       "name": "vektor-flow-windows-x64.zip",
-      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64.zip?sha256=cc5b6630476a5d92433ba21a2cb789755c9aa58124171337c74b6e67aee186d9",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64.zip?sha256=ca05457ebf22f79b4ec2807f486146e33c37fbd83a23059ef647f5de4c8884b4",
       "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-windows-x64.zip.sha256",
-      "sha256": "cc5b6630476a5d92433ba21a2cb789755c9aa58124171337c74b6e67aee186d9",
-      "bytes": 10161916
+      "sha256": "ca05457ebf22f79b4ec2807f486146e33c37fbd83a23059ef647f5de4c8884b4",
+      "bytes": 10163342
     },
     {
       "kind": "download",
       "name": "vektor-flow-linux-x64.deb",
-      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.deb?sha256=1fedae29c7d30723c4ab4203b84fdb5ce57d5a8903c3ed7c8c9ff8e28d8000cd",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.deb?sha256=2eccd6af9460a50538d7bbf06c09f3a77f695c4bb0f56a2531379bbb8d60bd71",
       "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.deb.sha256",
-      "sha256": "1fedae29c7d30723c4ab4203b84fdb5ce57d5a8903c3ed7c8c9ff8e28d8000cd",
-      "bytes": 2462084
+      "sha256": "2eccd6af9460a50538d7bbf06c09f3a77f695c4bb0f56a2531379bbb8d60bd71",
+      "bytes": 2446924
     },
     {
       "kind": "download",
       "name": "vektor-flow-linux-x64.tar.gz",
-      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.tar.gz?sha256=db6961e5921848a9e77699c7f80ad68002581584100c2630f6e86416887c90d1",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.tar.gz?sha256=a97acc60fa5630babad4aeafc47dd622c3b54a754d7cb6f5fcc705d0f69f8cf8",
       "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-linux-x64.tar.gz.sha256",
-      "sha256": "db6961e5921848a9e77699c7f80ad68002581584100c2630f6e86416887c90d1",
-      "bytes": 3040683
+      "sha256": "a97acc60fa5630babad4aeafc47dd622c3b54a754d7cb6f5fcc705d0f69f8cf8",
+      "bytes": 3040565
     },
     {
       "kind": "download",
       "name": "vektor-flow-browser-wasm.zip",
-      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-browser-wasm.zip?sha256=12e53571e982724fe29ca78c473c7410e0b90ad2918089619cd75dc1a9a8fb35",
+      "url": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-browser-wasm.zip?sha256=eee0782a3d5c85dd35d86f78f0e2009c238c7612df826b3802c3f7f5dfc16cfc",
       "checksumUrl": "https://vektorflow.org/downloads/v0.4.7/vektor-flow-browser-wasm.zip.sha256",
-      "sha256": "12e53571e982724fe29ca78c473c7410e0b90ad2918089619cd75dc1a9a8fb35",
-      "bytes": 1771163
+      "sha256": "eee0782a3d5c85dd35d86f78f0e2009c238c7612df826b3802c3f7f5dfc16cfc",
+      "bytes": 1771013
     },
     {
       "kind": "runtime",
       "name": "vkf-shared-compiler.wasm",
-      "url": "https://vektorflow.org/runtimes/v0.4.7/vkf-shared-compiler.wasm?sha256=2f58a889d1cf606f5a2cfdf132c007607758322a2205576548542c3f675f17a6",
+      "url": "https://vektorflow.org/runtimes/v0.4.7/vkf-shared-compiler.wasm?sha256=d906c29e80bb4fa6ed3999379ad8679bc55a6ba708a50483fe09147437a1b3e9",
       "checksumUrl": "https://vektorflow.org/runtimes/v0.4.7/vkf-shared-compiler.wasm.sha256",
-      "sha256": "2f58a889d1cf606f5a2cfdf132c007607758322a2205576548542c3f675f17a6",
-      "bytes": 9152613
+      "sha256": "d906c29e80bb4fa6ed3999379ad8679bc55a6ba708a50483fe09147437a1b3e9",
+      "bytes": 9152688
     }
   ]
 }

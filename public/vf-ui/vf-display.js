@@ -8039,7 +8039,8 @@
   function isSimple2DMarkerLineMesh(mesh) {
     var topology = String(mesh && mesh.topology || "");
     var renderMode = String(mesh && mesh.render_mode || "");
-    var retainedCurve = String(mesh && mesh.curve_path || "") === "open-continuous";
+    var curvePath = String(mesh && mesh.curve_path || "");
+    var retainedCurve = curvePath === "open-continuous" || curvePath === "grouped-continuous";
     var retainedArenaArrays =
       ArrayBuffer.isView(mesh && mesh.vertices) &&
       ArrayBuffer.isView(mesh && mesh.indices);
@@ -8055,6 +8056,37 @@
       arrays &&
       (retainedPoints || retainedLine)
     );
+  }
+
+  function continuousCurvePaths(indices, curvePath) {
+    var mode = String(curvePath || "");
+    var grouped = mode === "grouped-continuous";
+    if (mode !== "open-continuous" && !grouped) { return []; }
+    if (!indices || typeof indices.length !== "number" || indices.length % 2 !== 0) {
+      throw new Error("continuous curve indices must contain complete segments");
+    }
+    var paths = [];
+    var current = null;
+    var previous = null;
+    for (var i = 0; i < indices.length; i += 2) {
+      var start = Number(indices[i]);
+      var end = Number(indices[i + 1]);
+      if (!Number.isSafeInteger(start) || start < 0 ||
+          !Number.isSafeInteger(end) || end < 0) {
+        throw new Error("continuous curve indices must be non-negative integers");
+      }
+      if (previous == null || start !== previous) {
+        if (previous != null && !grouped) {
+          throw new Error("open continuous curve indices must form one ordered path");
+        }
+        current = [start, end];
+        paths.push(current);
+      } else {
+        current.push(end);
+      }
+      previous = end;
+    }
+    return paths;
   }
 
   function stopGeomFrameRenderers(fid, options) {
@@ -9607,7 +9639,9 @@
         ctx.restore();
         continue;
       }
-      if (!boundController && String(mesh.curve_path || "") === "open-continuous") {
+      var curvePathMode = String(mesh.curve_path || "");
+      if (!boundController &&
+          (curvePathMode === "open-continuous" || curvePathMode === "grouped-continuous")) {
         var curveView = mesh.axis_ticks ? axisViewport(mesh, mesh.axis_ticks, w, h) : null;
         if (!curveView) {
           throw new Error("open continuous curve requires finite axis bounds");
@@ -9624,34 +9658,34 @@
 
         ctx.beginPath();
         ctx.strokeStyle = runtimeColorCss(color);
-        var previousCurveIndex = null;
-        for (var ci = 0; ci + 1 < mesh.indices.length; ci += 2) {
-          var curveStartIndex = Number(mesh.indices[ci]);
-          var curveEndIndex = Number(mesh.indices[ci + 1]);
-          if (!Number.isSafeInteger(curveStartIndex) || !Number.isSafeInteger(curveEndIndex) ||
-              (previousCurveIndex != null && curveStartIndex !== previousCurveIndex)) {
-            throw new Error("open continuous curve indices must form one ordered path");
+        var curvePaths = continuousCurvePaths(mesh.indices, curvePathMode);
+        var curvePoint = function (index) {
+          var offset = index * 10;
+          if (offset + 1 >= mesh.vertices.length) {
+            throw new Error("continuous curve index exceeds its vertices");
           }
-          var curveStartOffset = curveStartIndex * 10;
-          var curveEndOffset = curveEndIndex * 10;
-          if (curveStartOffset + 1 >= mesh.vertices.length || curveEndOffset + 1 >= mesh.vertices.length) {
-            throw new Error("open continuous curve index exceeds its vertices");
-          }
-          var curveStart = [
-            curveView.dataToX(mesh.vertices[curveStartOffset]),
-            curveView.dataToY(mesh.vertices[curveStartOffset + 1])
+          return [
+            curveView.dataToX(mesh.vertices[offset]),
+            curveView.dataToY(mesh.vertices[offset + 1])
           ];
-          var curveEnd = [
-            curveView.dataToX(mesh.vertices[curveEndOffset]),
-            curveView.dataToY(mesh.vertices[curveEndOffset + 1])
-          ];
-          if (mesh.use_vertex_color === true) {
-            strokeColoredSegment(ctx, mesh, curveStartIndex, curveEndIndex, curveStart, curveEnd, color);
-          } else {
-            if (previousCurveIndex == null) { ctx.moveTo(curveStart[0], curveStart[1]); }
-            ctx.lineTo(curveEnd[0], curveEnd[1]);
+        };
+        for (var curveGroup = 0; curveGroup < curvePaths.length; curveGroup += 1) {
+          var path = curvePaths[curveGroup];
+          if (mesh.use_vertex_color !== true) {
+            var firstPoint = curvePoint(path[0]);
+            ctx.moveTo(firstPoint[0], firstPoint[1]);
           }
-          previousCurveIndex = curveEndIndex;
+          for (var curveIndex = 0; curveIndex + 1 < path.length; curveIndex += 1) {
+            var curveStartIndex = path[curveIndex];
+            var curveEndIndex = path[curveIndex + 1];
+            var curveStart = curvePoint(curveStartIndex);
+            var curveEnd = curvePoint(curveEndIndex);
+            if (mesh.use_vertex_color === true) {
+              strokeColoredSegment(ctx, mesh, curveStartIndex, curveEndIndex, curveStart, curveEnd, color);
+            } else {
+              ctx.lineTo(curveEnd[0], curveEnd[1]);
+            }
+          }
         }
         if (mesh.use_vertex_color !== true) { ctx.stroke(); }
         ctx.restore();
@@ -13782,6 +13816,7 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       themeDefaultGeometryColor: themeDefaultGeometryColor,
       applyRetainedScene3DDefaults: applyRetainedScene3DDefaults,
       isSimple2DMarkerLineMesh: isSimple2DMarkerLineMesh,
+      continuousCurvePaths: continuousCurvePaths,
       axisMathText: axisMathText,
       collectAxisTickLabelSpecs: collectAxisTickLabelSpecs,
       geomTextToPx: geomTextToPx,
