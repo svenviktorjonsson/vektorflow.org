@@ -224,13 +224,7 @@ select:focus-visible, textarea:focus-visible {
 .vf-token.keyword, .vf-token.operator { color: #ff7b72; }
 .vf-token.binding, .vf-token.function { color: #d2a8ff; }
 .vf-token.builtin, .vf-token.type { color: #ffa657; }
-.vf-token.dimension { font-weight: 650; }
-.vf-token.dimension-i, .vf-token.dimension-j, .vf-token.dimension-k { color: #7ee787; }
-.vf-token.dimension-u, .vf-token.dimension-v, .vf-token.dimension-w { color: #56d4dd; }
-.vf-token.dimension-t { color: #d2a8ff; }
-.vf-token.dimension-c, .vf-token.dimension-m { color: #ffa657; }
-.vf-token.dimension-a, .vf-token.dimension-b, .vf-token.dimension-d,
-.vf-token.dimension-n, .vf-token.dimension-p, .vf-token.dimension-q { color: #79c0ff; }
+.vf-token.dimension { color: #56d4dd; font-weight: 650; }
 .vf-token.anonymous-dimension { color: #8b949e; font-style: italic; }
 .vf-token.punctuation { color: #c9d1d9; }
 

@@ -1,5 +1,6 @@
 const KEYWORDS = new Set(["true", "false"]);
 const BUILTINS = new Set(["any", "bit", "chr", "dig", "int", "num", "str", "type"]);
+const EMPTY_IDENTIFIERS = new Set();
 const STRUCTURAL_MEMBER_FUNCTIONS = new Set([
   "correlation", "count", "covariance", "deriv", "differentiate", "diff",
   "depends_on", "integ", "integrate", "iqr", "limit", "max", "mean", "median",
@@ -20,25 +21,79 @@ function token(kind, value) {
 }
 
 function dimensionToken(value) {
-  return token(`dimension dimension-${value}`, value);
+  return token("dimension", value);
 }
 
-// A structural suffix is a run of one-character axis names (or compile-time
-// digits). Multi-character suffixes remain ordinary identifiers: x_min and
-// particle_count must never be split by a lexical highlighter.
-function structuralIdentifier(value, { memberCall = false } = {}) {
+function codeOnly(source) {
+  let output = "";
+  let cursor = 0;
+  while (cursor < source.length) {
+    const rest = source.slice(cursor);
+    const hidden = /^(?:#[^\n]*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*")/u.exec(rest);
+    if (!hidden) {
+      output += source[cursor];
+      cursor += 1;
+      continue;
+    }
+    output += hidden[0].replace(/[^\n]/gu, " ");
+    cursor += hidden[0].length;
+  }
+  return output;
+}
+
+function functionDeclaration(line) {
+  const head = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[([^\]\n]*)\]\s*)?\(/u.exec(line);
+  if (!head) return null;
+  const open = head[0].lastIndexOf("(");
+  let depth = 0;
+  let close = -1;
+  for (let index = open; index < line.length; index++) {
+    if (line[index] === "(") depth += 1;
+    if (line[index] !== ")") continue;
+    depth -= 1;
+    if (depth === 0) {
+      close = index;
+      break;
+    }
+  }
+  if (close < 0) return null;
+  const tail = line.slice(close + 1).trimStart();
+  if (!tail.startsWith(":") && !(tail.startsWith("->") && tail.includes(":"))) return null;
+  return { name: head[1], compileParameters: head[2], parameters: line.slice(open + 1, close) };
+}
+
+function declaredIdentifiers(source) {
+  const declared = new Set();
+  for (const line of codeOnly(source).split("\n")) {
+    const functionDefinition = functionDeclaration(line);
+    if (functionDefinition) {
+      declared.add(functionDefinition.name);
+      for (const parameters of [functionDefinition.compileParameters, functionDefinition.parameters]) {
+        if (!parameters) continue;
+        for (const match of parameters.matchAll(/(?:^|,)\s*([A-Za-z_][A-Za-z0-9_]*)\s*:/gu)) {
+          declared.add(match[1]);
+        }
+      }
+      continue;
+    }
+    const binding = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:(?!:)/u.exec(line);
+    if (binding) declared.add(binding[1]);
+  }
+  return declared;
+}
+
+// Resolve a complete declared name first. Otherwise a trailing run of
+// lowercase index labels (or compile-time digits) is one structural suffix;
+// its letters never select different highlighting categories.
+function structuralIdentifier(value, { memberCall = false, declared = EMPTY_IDENTIFIERS } = {}) {
   const separator = value.lastIndexOf("_");
   if (separator <= 0 || separator === value.length - 1) return null;
+  if (declared.has(value)) return null;
   const base = value.slice(0, separator);
   const suffix = value.slice(separator + 1);
   // A dotted call normally has an ordinary snake_case member name. Only the
   // standard axis-polymorphic operations specialize a member call by suffix.
   if (memberCall && !STRUCTURAL_MEMBER_FUNCTIONS.has(base)) return null;
-  // Common ordinary underscore identifiers take precedence in the lexical
-  // fallback. A semantic/LSP provider can override this with resolved names.
-  if (new Set(["min", "max", "minima", "maxima", "pot", "tot", "count"]).has(suffix)) {
-    return null;
-  }
   if (!/^(?:[A-Za-z]|\d)+$/u.test(suffix)) return null;
   if (/[A-Za-z]/u.test(suffix) && ![...suffix].every((axis) => /[a-z]/u.test(axis))) {
     return null;
@@ -59,6 +114,7 @@ function identifierKind(source, start, value, end) {
 }
 
 export function highlightVkf(source) {
+  const declared = declaredIdentifiers(source);
   let html = "";
   let cursor = 0;
   while (cursor < source.length) {
@@ -91,26 +147,18 @@ export function highlightVkf(source) {
         : null;
       if (attached) {
         html += token("operator", "_");
-        if (attached.suffix === "phi" || attached.suffix === "theta") {
-          html += dimensionToken(attached.suffix);
-        } else {
-          for (const axis of attached.suffix) html += dimensionToken(axis);
-        }
+        html += dimensionToken(attached.suffix);
         cursor += value.length;
         continue;
       }
       const memberCall = /\.\s*$/u.test(source.slice(0, cursor))
         && /^\s*\(/u.test(source.slice(identifierEnd));
-      const structural = structuralIdentifier(value, { memberCall });
+      const structural = structuralIdentifier(value, { memberCall, declared });
       if (structural) {
         const kind = identifierKind(source, cursor, structural.base, identifierEnd);
         html += kind ? token(kind, structural.base) : escapeHtml(structural.base);
         html += token("operator", "_");
-        if (structural.suffix === "phi" || structural.suffix === "theta") {
-          html += dimensionToken(structural.suffix);
-        } else {
-          for (const axis of structural.suffix) html += dimensionToken(axis);
-        }
+        html += dimensionToken(structural.suffix);
       } else {
         const kind = identifierKind(source, cursor, value, cursor + value.length);
         html += kind ? token(kind, value) : escapeHtml(value);
