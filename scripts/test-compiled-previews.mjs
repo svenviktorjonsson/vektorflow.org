@@ -54,6 +54,17 @@ for(const {id,files} of applications){
   else {assert.equal(program.gpu_worlds[0].kind,id==='stones'?'rigid':'wind');assert.equal(arenas.find(a=>a.layer.id===program.gpu_worlds[0].layer_id).layer.count,id==='stones'?5:64000);}
   if(id==='stones'){const embedding=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$embedding`),kernel=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$physics`);assert.ok(embedding.includes('fn granite('),'stone material must be compiled');for(const kind of [1,2,3,4])assert.ok(embedding.includes(`kind==${kind}u`),`stone material ${kind} missing`);assert.match(kernel,/rolling_moment=min\(params\.material\.z\*jn\*contact_radius/);assert.match(kernel,/spin_moment=min\(params\.material\.w\*jn\*contact_radius/);const asset=gunzipSync(await readFile(new URL(program.gpu_worlds[0].properties.asset.slice(1),root)));assert.equal(asset.readUInt32LE(8),5);let offset=20;const species=new Set();for(let i=0;i<5;i++){const sizes=Array.from({length:5},(_,j)=>asset.readUInt32LE(offset+j*4));offset+=20;const metadata=JSON.parse(asset.subarray(offset,offset+sizes[0]));species.add(metadata.species);assert.ok(metadata.collision.density>=2600&&metadata.collision.density<=3050);for(let axis=0;axis<3;axis++)assert.ok(Math.abs(metadata.collision.center[axis]-arenas[0].state[i*9+axis*3])<1e-8,'asset and add placement must agree');offset+=sizes[0]+(4-sizes[0]%4)%4+(sizes[1]+sizes[2]+sizes[3]+sizes[4])*4;}assert.equal(species.size,5);assert.equal(offset,asset.length);}
   if(id==='stones'){
+    const world=program.gpu_worlds[0],arena=arenas.find(a=>a.layer.id===world.layer_id);
+    assert.equal(arena.particleChannels.mass.length,5,'Stone masses must be authored in VKF');
+    const asset=decodeMeshes(await readFile(new URL(world.properties.asset.slice(1),root)));
+    const {prepareMechanicalInitialState}=await import(`../public/previews/0.6.0/compiled/${record.runtime_directory}/vf-world-mechanical-runtime.mjs`);
+    const {initial}=prepareMechanicalInitialState(world,arenas,asset);
+    for(let i=0;i<5;i++){
+      const mass=arena.particleChannels.mass[i],collision=asset[i].collision;
+      assert.equal(initial.bodies[i*20+16],Math.fround(mass));
+      assert.equal(initial.bodies[i*20+17],Math.fround(collision.inertia*mass/collision.mass));
+      assert.ok(mass>0&&mass<=30);
+    }
     const embedding=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$embedding`);
     assert.match(embedding,/let gap=max\(0\.0,receiver-blocker\)/,'Stone penumbra must follow blocker-to-receiver distance');
     assert.doesNotMatch(embedding,/contactOcclusion/,'Stone shadow must not use a fake contact disk');

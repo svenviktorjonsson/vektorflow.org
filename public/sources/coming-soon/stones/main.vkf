@@ -6,7 +6,7 @@ materials: .materials
 world: World(dim:3,time_step:1 / 60)
 display: Display(dim:3)
 view: display.append(world,axis:false)
-stones: world.add(p_ij:geometry.centers,properties:materials.stone)
+stones: world.add(p_ij:geometry.centers,mass_i:[17.32249650975806,29.99999993181628,12.397406634708515,4.8729763793624965,3.400126748841257],properties:materials.stone)
 light: world.add(p_ij:[[-4,-5,2.8]],properties:materials.light)
 world.push((kind:"gravity",acceleration:[0,0,-9.82]))
 world.push((kind:"rigid",layer:stones))
