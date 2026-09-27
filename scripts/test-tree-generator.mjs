@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {generateTreeMeshes,TREE_SPECIES} from '../public/previews/0.6.0/live/tree/runtime/vf-tree-live-generation.mjs';
-import {prepareMechanicalInitialState} from '../public/previews/0.6.0/compiled/runtime-tree-12/vf-world-mechanical-runtime.mjs';
+import {prepareMechanicalInitialState} from '../public/previews/0.6.0/compiled/runtime-tree-13/vf-world-mechanical-runtime.mjs';
 
 const require=createRequire(import.meta.url);
-const bridge=require('../public/previews/0.6.0/compiled/runtime-tree-12/vf-compiled-runtime-bridge.js');
-const base=new URL('../public/previews/0.6.0/compiled/tree-air-12/',import.meta.url);
+const bridge=require('../public/previews/0.6.0/compiled/runtime-tree-13/vf-compiled-runtime-bridge.js');
+const base=new URL('../public/previews/0.6.0/compiled/tree-air-13/',import.meta.url);
 const runtime=bridge.instantiateWasmRuntime({
   bytes:await readFile(new URL('main.wasm',base)),
   manifest:JSON.parse(await readFile(new URL('manifest.json',base))),
