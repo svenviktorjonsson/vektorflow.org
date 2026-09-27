@@ -50,6 +50,14 @@ for(const {id,files} of applications){
     assert.equal(initial.particleMass,arena.particleChannels.mass[0]);
     assert.equal(initial.floats[11],Math.fround(arena.particleChannels.volume[0]));
     assert.ok(Math.abs(arena.particleChannels.mass[0]/arena.particleChannels.volume[0]-world.properties.density)<1e-8);
+    assert.equal(runtime.manifest.runtime_surface.pointer_rotation_2d.version,2);
+    const rotation=runtime.pointerRotation2D(),rect={left:0,top:0,width:100,height:100};
+    rotation.setAngle(world.geometry.rotation);
+    assert.equal(rotation.sample(0,{clientX:75,clientY:50,timeStamp:0},rect,[-1,-1,1,1],[0,0]),world.geometry.rotation);
+    const moved=rotation.sample(1,{clientX:50,clientY:25,timeStamp:16},rect,[-1,-1,1,1],[0,0]);
+    assert.ok(Math.abs(moved-world.geometry.rotation-Math.PI/2)<1e-6,'Published pointer geometry must run in WASM');
+    rotation.sample(2,{clientX:50,clientY:25,timeStamp:17},rect,[-1,-1,1,1],[0,0]);
+    assert.equal(rotation.angularVelocity,0);
   }
   else {assert.equal(program.gpu_worlds[0].kind,id==='stones'?'rigid':'wind');assert.equal(arenas.find(a=>a.layer.id===program.gpu_worlds[0].layer_id).layer.count,id==='stones'?5:64000);}
   if(id==='stones'){const embedding=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$embedding`),kernel=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$physics`);assert.ok(embedding.includes('fn granite('),'stone material must be compiled');for(const kind of [1,2,3,4])assert.ok(embedding.includes(`kind==${kind}u`),`stone material ${kind} missing`);assert.match(kernel,/rolling_moment=min\(params\.material\.z\*jn\*contact_radius/);assert.match(kernel,/spin_moment=min\(params\.material\.w\*jn\*contact_radius/);const asset=gunzipSync(await readFile(new URL(program.gpu_worlds[0].properties.asset.slice(1),root)));assert.equal(asset.readUInt32LE(8),5);let offset=20;const species=new Set();for(let i=0;i<5;i++){const sizes=Array.from({length:5},(_,j)=>asset.readUInt32LE(offset+j*4));offset+=20;const metadata=JSON.parse(asset.subarray(offset,offset+sizes[0]));species.add(metadata.species);assert.ok(metadata.collision.density>=2600&&metadata.collision.density<=3050);for(let axis=0;axis<3;axis++)assert.ok(Math.abs(metadata.collision.center[axis]-arenas[0].state[i*9+axis*3])<1e-8,'asset and add placement must agree');offset+=sizes[0]+(4-sizes[0]%4)%4+(sizes[1]+sizes[2]+sizes[3]+sizes[4])*4;}assert.equal(species.size,5);assert.equal(offset,asset.length);}
