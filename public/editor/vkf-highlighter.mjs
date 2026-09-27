@@ -85,6 +85,20 @@ export function highlightVkf(source) {
     if (identifier) {
       const value = identifier[0];
       const identifierEnd = cursor + value.length;
+      const attached = value.startsWith("_")
+        && /[0-9'"\])}]/u.test(source[cursor - 1] ?? "")
+        ? structuralIdentifier(`value${value}`)
+        : null;
+      if (attached) {
+        html += token("operator", "_");
+        if (attached.suffix === "phi" || attached.suffix === "theta") {
+          html += dimensionToken(attached.suffix);
+        } else {
+          for (const axis of attached.suffix) html += dimensionToken(axis);
+        }
+        cursor += value.length;
+        continue;
+      }
       const memberCall = /\.\s*$/u.test(source.slice(0, cursor))
         && /^\s*\(/u.test(source.slice(identifierEnd));
       const structural = structuralIdentifier(value, { memberCall });
