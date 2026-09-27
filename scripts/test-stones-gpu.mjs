@@ -20,7 +20,24 @@ import {createMechanicalWorldGpu} from '/previews/0.6.0/compiled/${published.run
 import {createWorldSceneEmbeddingGpu,WORLD_SCENE_WGSL} from '/previews/0.6.0/compiled/${published.runtime_directory}/vf-world-scene-embedding-gpu.mjs';
 import {auditDynamicTreeContact} from '/previews/0.6.0/live/tree/runtime/vf-tree-dynamic-contact-audit.mjs';
 const check=(x,m)=>{if(!x)throw Error(m)};let device;
-function countEmbeddedStoneVertices(state,initial,meshes){
+const rotate3=(q,p)=>{const t=[2*(q[1]*p[2]-q[2]*p[1]),2*(q[2]*p[0]-q[0]*p[2]),2*(q[0]*p[1]-q[1]*p[0])];return p.map((v,a)=>v+q[3]*t[a]+[q[1]*t[2]-q[2]*t[1],q[2]*t[0]-q[0]*t[2],q[0]*t[1]-q[1]*t[0]][a]);};
+const cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function rigidTotals(state,asset){const momentum=[0,0,0],angular=[0,0,0];let energy=0;
+ for(let body=0;body<asset.length;body++){const o=body*20,m=state[o+16],p=Array.from(state.subarray(o,o+3)),v=Array.from(state.subarray(o+4,o+7)),q=Array.from(state.subarray(o+8,o+12)),w=Array.from(state.subarray(o+12,o+15));
+  const local=rotate3([-q[0],-q[1],-q[2],q[3]],w),scale=m/asset[body].collision.mass;
+  const spin=rotate3(q,asset[body].collision.inertia_tensor.map(row=>scale*row.reduce((sum,value,index)=>sum+value*local[index],0)));
+  const orbit=cross3(p,v.map(value=>m*value));for(let axis=0;axis<3;axis++){momentum[axis]+=m*v[axis];angular[axis]+=orbit[axis]+spin[axis];}
+  energy+=.5*m*v.reduce((sum,value)=>sum+value*value,0)+.5*w.reduce((sum,value,axis)=>sum+value*spin[axis],0);
+ }return {momentum,angular,energy};}
+function auditSupportGroups(asset){for(const item of asset){const hull=item.collision.hull,groups=item.collision.hull_groups,count=hull.length/4;
+ check(groups.length/4*8===count,'Rigid support groups must cover every hull vertex');
+ for(let sample=0;sample<257;sample++){const z=1-2*sample/256,angle=sample*2.399963229728653,r=Math.sqrt(Math.max(0,1-z*z)),n=[r*Math.cos(angle),r*Math.sin(angle),z];
+  let exact=-Infinity,grouped=-Infinity;for(let point=0;point<count;point++)exact=Math.max(exact,hull[point*4]*n[0]+hull[point*4+1]*n[1]+hull[point*4+2]*n[2]);
+  for(let group=0;group<groups.length/4;group++){const o=group*4,bound=groups[o]*n[0]+groups[o+1]*n[1]+groups[o+2]*n[2]+groups[o+3]+1e-6;
+   if(bound<=grouped)continue;for(let lane=0;lane<8;lane++){const p=(group*8+lane)*4;grouped=Math.max(grouped,hull[p]*n[0]+hull[p+1]*n[1]+hull[p+2]*n[2]);}}
+  check(Math.abs(exact-grouped)<2e-6,'Support bound skipped an extreme vertex');
+ }}return true;}
+function countEmbeddedStoneVertices(state,initial,meshes,asset){
  const rotate=(q,p)=>{const t=[2*(q[1]*p[2]-q[2]*p[1]),2*(q[2]*p[0]-q[0]*p[2]),2*(q[0]*p[1]-q[1]*p[0])];return p.map((v,a)=>v+q[3]*t[a]+[q[1]*t[2]-q[2]*t[1],q[2]*t[0]-q[0]*t[2],q[0]*t[1]-q[1]*t[0]][a]);};
  const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],add=(a,b)=>a.map((v,i)=>v+b[i]),sub=(a,b)=>a.map((v,i)=>v-b[i]);
  let count=0,worstDepth=0;const samples=initial.hullCount,pairs=[];
@@ -28,7 +45,7 @@ function countEmbeddedStoneVertices(state,initial,meshes){
   let pairCount=0,pairDepth=0;
   const pa=Array.from(state.subarray(a*20,a*20+3)),qa=Array.from(state.subarray(a*20+8,a*20+12)),pb=Array.from(state.subarray(b*20,b*20+3)),qb=Array.from(state.subarray(b*20+8,b*20+12)),inverse=[-qb[0],-qb[1],-qb[2],qb[3]];
   for(let index=0;index<meshes[a].vertices.length;index+=24){const local=rotate(inverse,sub(add(pa,rotate(qa,Array.from(meshes[a].vertices.subarray(index,index+3)))),pb));let depth=Infinity;
-   for(let k=0;k<samples;k++){const z=1-2*k/(samples-1),theta=k*2.399963229728653,r=Math.sqrt(1-z*z),n=[r*Math.cos(theta),r*Math.sin(theta),z],h=initial.geometry.subarray((b*samples+k)*4,(b*samples+k)*4+3);depth=Math.min(depth,dot(n,h)-dot(n,local));if(depth<=.001)break;}
+   for(let k=0;k<samples;k++){const n=asset[b].collision.hull_normals.slice(k*3,k*3+3),h=initial.geometry.subarray((b*samples+k)*4,(b*samples+k)*4+3);depth=Math.min(depth,dot(n,h)-dot(n,local));if(depth<=.001)break;}
    if(depth>.001){count++;pairCount++;worstDepth=Math.max(worstDepth,depth);pairDepth=Math.max(pairDepth,depth);}
   }
   if(pairCount)pairs.push({a,b,count:pairCount,worstDepth:pairDepth});
@@ -40,18 +57,27 @@ try{
  const inputs={bytes:new Uint8Array(await(await fetch(base+'main.wasm')).arrayBuffer()),manifest:await(await fetch(base+'manifest.json')).json()};
  const runtime=await (VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync?VfCompiledRuntimeBridge.instantiateWasmRuntimeAsync(inputs):VfCompiledRuntimeBridge.instantiateWasmRuntime(inputs));runtime.init();
  const world=runtime.worldProgram().gpu_worlds[0];
+ for(const [flag,property] of [['rolling','rolling_friction'],['spin','spin_friction']]){
+  const value=new URLSearchParams(location.search).get(flag);
+  if(value!==null)world.properties[property]=Number(value);
+ }
  const variant=new URLSearchParams(location.search).get('variant');
  const treeAssetUrl=variant?world.solid_properties.variants?.[variant]:world.solid_properties?.asset;
  if(world.kind==='wind'&&location.search.includes('asset')){const probe=await fetch(treeAssetUrl);if(!probe.ok)throw Error(await probe.text());}
- const asset=world.kind==='wind'&&!location.search.includes('asset')?await new Promise((resolve,reject)=>{
+ const loaded=world.kind==='wind'&&!location.search.includes('asset')?await new Promise((resolve,reject)=>{
   const worker=new Worker('/previews/0.6.0/live/tree/runtime/vf-tree-generation-worker.mjs',{type:'module'});
   worker.onmessage=event=>{worker.terminate();event.data.error?reject(Error(event.data.error)):resolve(event.data.meshes)};
   worker.onerror=event=>{worker.terminate();reject(Error(event.message))};worker.postMessage({species:'oak',distribution:'normal',height:8,splitFactor:.65,turnFactor:.5});
  }):await readMechanicalAsset(world.kind==='wind'?treeAssetUrl:world.properties.asset);
+ const asset=Array.isArray(loaded)?loaded:loaded.meshes;
  const isTree=world.kind==='wind';check(isTree===expectedTree,'GPU test loaded the wrong published artifact');check(isTree||asset.length===5,'Expected five stones');
+ if(!isTree)auditSupportGroups(asset);
  const adapter=await navigator.gpu.requestAdapter();check(adapter&&!adapter.isFallbackAdapter,'Requires physical GPU');device=await adapter.requestDevice();
  const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
  const {initial,meshes}=prepareMechanicalInitialState(world,runtime.worldLayerViews(),asset),prefix='$world$gpu$'+world.world_id;
+ if(!isTree)check(runtime.readBinding(prefix+'$physics').includes('fn rigid_contact_impulse')&&
+  runtime.readBinding(prefix+'$physics').includes('fn inverse_inertia_world'),
+  'Compiled stone law lacks coupled tensor contact');
  const physics=await createMechanicalWorldGpu(device,world,initial,runtime.readBinding(prefix+'$physics'));
  const canvas=document.querySelector('canvas'),embedding=await createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,isTree?runtime.readBinding(prefix+'$embedding'):WORLD_SCENE_WGSL);
  let encoder,z=null,expected=null,wind=null,coupling=null,stoneDynamics=null,treePerformance=null,dynamicContact=null;
@@ -76,21 +102,28 @@ try{
    coupling.push({applied:expectedImpulse,momentum,branchVelocity,leafVelocity});output.unmap();output.destroy();buffers.forEach(b=>b.destroy());
   }
  }
- if(!isTree){const droppedBody=4,dropHeight=initial.sceneFrame.liftCeiling,masses=Array.from({length:initial.bodyCount},(_,body)=>initial.bodies[body*20+16]);check(initial.bodies[droppedBody*20+16]===Math.min(...masses),'Regression requires the smallest stone');check(Math.abs(Math.max(...masses)-30)<1e-4,'Largest stone must be 30 kg: '+JSON.stringify(masses));physics.setHeld(droppedBody,dropHeight);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.releaseHeld();
+ if(!isTree){const droppedBody=4,dropHeight=initial.sceneFrame.liftCeiling,masses=Array.from({length:initial.bodyCount},(_,body)=>initial.bodies[body*20+16]);check(initial.bodies[droppedBody*20+16]===Math.min(...masses),'Regression requires the smallest stone');check(Math.abs(Math.max(...masses)-30)<1e-4,'Largest stone must be 30 kg: '+JSON.stringify(masses));
+ const quiet=await createMechanicalWorldGpu(device,world,initial,runtime.readBinding(prefix+'$physics'));
+ for(let batch=0;batch<150;batch++){const quietStep=device.createCommandEncoder();for(let i=0;i<8;i++)quiet.step(quietStep);device.queue.submit([quietStep.finish()]);}
+ await device.queue.onSubmittedWorkDone();const quietState=await quiet.readBodies();quiet.destroy();
+ const quietBaseDisplacements=Array.from({length:3},(_,body)=>[0,1,2].map(axis=>quietState[body*20+axis]-initial.bodies[body*20+axis]));
+ physics.setHeld(droppedBody,dropHeight);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.releaseHeld();
  const dropSteps=20;encoder=device.createCommandEncoder();for(let i=0;i<dropSteps;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
  const state=await physics.readBodies();z=state[droppedBody*20+2];expected=dropHeight+world.gravity[2]*world.time_step**2*dropSteps*(dropSteps+1)/2;
  check(state.every(Number.isFinite),'Nonfinite rigid state');check(Math.abs(z-expected)<0.002,'Drop differs from gravity: '+z+' / '+expected);check(Math.abs(physics.time-world.time_step*dropSteps)<1e-6,'Physical clock differs');
  check(Math.hypot(...state.subarray(droppedBody*20+12,droppedBody*20+15))<1e-4,'Release created rotation before contact');
  check(Math.abs(state[droppedBody*20+8])+Math.abs(state[droppedBody*20+9])<1e-4,'Stone orientation changed without a collision');physics.reset();
  physics.setHeld(droppedBody,dropHeight);encoder=device.createCommandEncoder();physics.placeHeld(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();physics.setHeld(-1,0);
- let minimumVerticalSpeed=0,maximumUpwardSpeed=0,maximumAngularSpeed=0,maximumTransferredSpeed=0,maximumBaseSpeed=0,maximumBaseDisplacement=0;
- for(let batch=0;batch<150;batch++){encoder=device.createCommandEncoder();for(let i=0;i<8;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();const bodies=await physics.readBodies();minimumVerticalSpeed=Math.min(minimumVerticalSpeed,bodies[droppedBody*20+6]);maximumUpwardSpeed=Math.max(maximumUpwardSpeed,bodies[droppedBody*20+6]);maximumAngularSpeed=Math.max(maximumAngularSpeed,Math.hypot(...bodies.subarray(droppedBody*20+12,droppedBody*20+15)));for(let body=0;body<initial.bodyCount;body++){if(body!==droppedBody)maximumTransferredSpeed=Math.max(maximumTransferredSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));if(body<3){maximumBaseSpeed=Math.max(maximumBaseSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));maximumBaseDisplacement=Math.max(maximumBaseDisplacement,Math.hypot(...[0,1,2].map(axis=>bodies[body*20+axis]-initial.bodies[body*20+axis])));}}}
+ let minimumVerticalSpeed=0,maximumUpwardSpeed=0,maximumAngularSpeed=0,maximumTransferredSpeed=0,maximumBaseSpeed=0,maximumBaseDisplacement=0,maximumBaseSlip=0;
+ for(let batch=0;batch<150;batch++){encoder=device.createCommandEncoder();for(let i=0;i<8;i++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();const bodies=await physics.readBodies();minimumVerticalSpeed=Math.min(minimumVerticalSpeed,bodies[droppedBody*20+6]);maximumUpwardSpeed=Math.max(maximumUpwardSpeed,bodies[droppedBody*20+6]);maximumAngularSpeed=Math.max(maximumAngularSpeed,Math.hypot(...bodies.subarray(droppedBody*20+12,droppedBody*20+15)));for(let body=0;body<initial.bodyCount;body++){if(body!==droppedBody)maximumTransferredSpeed=Math.max(maximumTransferredSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));if(body<3){maximumBaseSpeed=Math.max(maximumBaseSpeed,Math.hypot(...bodies.subarray(body*20+4,body*20+7)));maximumBaseDisplacement=Math.max(maximumBaseDisplacement,Math.hypot(...[0,1,2].map(axis=>bodies[body*20+axis]-initial.bodies[body*20+axis])));let similarity=0;for(let axis=0;axis<4;axis++)similarity+=bodies[body*20+8+axis]*initial.bodies[body*20+8+axis];const rotation=2*Math.acos(Math.min(1,Math.abs(similarity)));const translation=Math.hypot(bodies[body*20]-initial.bodies[body*20],bodies[body*20+1]-initial.bodies[body*20+1]);maximumBaseSlip=Math.max(maximumBaseSlip,Math.max(0,translation-initial.bodies[body*20+18]*rotation));}}}
  const settled=await physics.readBodies(),linearSpeed=Math.hypot(...settled.subarray(droppedBody*20+4,droppedBody*20+7)),angularSpeed=Math.hypot(...settled.subarray(droppedBody*20+12,droppedBody*20+15)),sleepingBodies=Array.from({length:initial.bodyCount},(_,body)=>settled[body*20+19]>.5).filter(Boolean).length;let minimumFloorClearance=Infinity;for(let body=0;body<initial.bodyCount;body++){const q=settled.subarray(body*20+8,body*20+12),pz=settled[body*20+2];for(let point=0;point<initial.hullCount;point++){const h=initial.geometry.subarray((body*initial.hullCount+point)*4,(body*initial.hullCount+point)*4+3),t=[2*(q[1]*h[2]-q[2]*h[1]),2*(q[2]*h[0]-q[0]*h[2]),2*(q[0]*h[1]-q[1]*h[0])],rz=h[2]+q[3]*t[2]+q[0]*t[1]-q[1]*t[0];minimumFloorClearance=Math.min(minimumFloorClearance,pz+rz);}}
  const finalBodies=Array.from({length:initial.bodyCount},(_,body)=>({linearSpeed:Math.hypot(...settled.subarray(body*20+4,body*20+7)),quietSeconds:settled[body*20+7],angularSpeed:Math.hypot(...settled.subarray(body*20+12,body*20+15)),contact:settled[body*20+15],sleeping:settled[body*20+19]>.5}));
- stoneDynamics={droppedBody,droppedMassKg:initial.bodies[droppedBody*20+16],minimumVerticalSpeed,maximumUpwardSpeed,maximumAngularSpeed,maximumTransferredSpeed,maximumBaseSpeed,maximumBaseDisplacement,finalLinearSpeed:linearSpeed,finalAngularSpeed:angularSpeed,sleepingBodies,minimumFloorClearance,finalBodies,initialEmbeddedVertices:countEmbeddedStoneVertices(initial.bodies,initial,meshes),embeddedVertices:countEmbeddedStoneVertices(settled,initial,meshes)};
+ const baseDisplacements=Array.from({length:3},(_,body)=>[0,1,2].map(axis=>settled[body*20+axis]-initial.bodies[body*20+axis]));
+ const baseRotationAngles=Array.from({length:3},(_,body)=>{const o=body*20+8;let similarity=0;for(let axis=0;axis<4;axis++)similarity+=settled[o+axis]*initial.bodies[o+axis];return 2*Math.acos(Math.min(1,Math.abs(similarity)));});
+ stoneDynamics={droppedBody,droppedMassKg:initial.bodies[droppedBody*20+16],minimumVerticalSpeed,maximumUpwardSpeed,maximumAngularSpeed,maximumTransferredSpeed,maximumBaseSpeed,maximumBaseDisplacement,maximumBaseSlip,baseDisplacements,baseRotationAngles,quietBaseDisplacements,finalLinearSpeed:linearSpeed,finalAngularSpeed:angularSpeed,sleepingBodies,minimumFloorClearance,finalBodies,initialEmbeddedVertices:countEmbeddedStoneVertices(initial.bodies,initial,meshes,asset),embeddedVertices:countEmbeddedStoneVertices(settled,initial,meshes,asset)};
  check(stoneDynamics.initialEmbeddedVertices.count===0&&stoneDynamics.embeddedVertices.count===0,'Rendered stones overlap their collision envelopes: '+JSON.stringify(stoneDynamics));
  check(minimumVerticalSpeed<-1,'Stone never reached impact speed: '+JSON.stringify(stoneDynamics));check(maximumUpwardSpeed>.03||maximumAngularSpeed>.03,'Irregular stone contact produced no bounce or rotation response: '+JSON.stringify(stoneDynamics));check(minimumFloorClearance>-.002,'Stone tunneled through ground: '+JSON.stringify(stoneDynamics));check(sleepingBodies===initial.bodyCount&&linearSpeed<.01&&angularSpeed<.01,'Dropped stone did not sleep after settling: '+JSON.stringify(stoneDynamics));
- check(maximumBaseSpeed<.25&&maximumBaseDisplacement<initial.sceneFrame.span*.05,'Small stone moved supported bases unrealistically: '+JSON.stringify(stoneDynamics));
+ check(maximumBaseSpeed<.25&&maximumBaseSlip<initial.sceneFrame.span*.01,'Small stone caused unsupported floor slip: '+JSON.stringify(stoneDynamics));
  // The displayed drop primarily tests floor support: grounded stones may
  // correctly absorb a small impulse. Also exercise a free two-body impact so
  // equal/opposite momentum exchange cannot silently disappear.
@@ -103,21 +136,31 @@ try{
   pairInitial.bodies[offset+19]=0;
  }
  pairInitial.bodies[4]=2;
- const pairPhysics=await createMechanicalWorldGpu(device,world,pairInitial,
+ const pairWorld={...world,gravity:[0,0,0]};
+ const pairBefore=rigidTotals(pairInitial.bodies,asset);
+ const pairPhysics=await createMechanicalWorldGpu(device,pairWorld,pairInitial,
   runtime.readBinding(prefix+'$physics'));
- encoder=device.createCommandEncoder();for(let step=0;step<12;step++)pairPhysics.step(encoder);
- device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
+ const pairHistory=[];
+ for(let step=0;step<12;step++){encoder=device.createCommandEncoder();pairPhysics.step(encoder);
+  device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
+  pairHistory.push({step:step+1,totals:rigidTotals(await pairPhysics.readBodies(),asset)});}
  const pairState=await pairPhysics.readBodies();pairPhysics.destroy();
+ const pairAfter=rigidTotals(pairState,asset);
  const beforeMomentum=2*masses[0],afterMomentum=masses[0]*pairState[4]+masses[1]*pairState[24];
  const pairCollision={targetSpeed:pairState[24],sourceSpeed:pairState[4],
   beforeMomentum,afterMomentum,angularSpeed:Math.hypot(...pairState.subarray(12,15))+
    Math.hypot(...pairState.subarray(32,35)),
-  embeddedVertices:countEmbeddedStoneVertices(pairState,pairInitial,meshes)};
+  embeddedVertices:countEmbeddedStoneVertices(pairState,pairInitial,meshes,asset),beforeTotals:pairBefore,afterTotals:pairAfter,pairHistory};
  stoneDynamics.pairCollision=pairCollision;
  check(pairCollision.targetSpeed>.05&&pairCollision.sourceSpeed<1.95,
   'Free stone-stone collision transferred no impulse: '+JSON.stringify(pairCollision));
  check(Math.abs(afterMomentum-beforeMomentum)<.05,
   'Stone-stone collision lost horizontal momentum: '+JSON.stringify(pairCollision));
+ check(pairBefore.momentum.every((value,axis)=>Math.abs(value-pairAfter.momentum[axis])<.05)&&
+  pairBefore.angular.every((value,axis)=>Math.abs(value-pairAfter.angular[axis])<.05),
+  'Stone-stone generalized impulses lost linear or angular momentum: '+JSON.stringify(pairCollision));
+ check(pairAfter.energy<=pairBefore.energy+.02,
+  'Inelastic stone contact created kinetic energy: '+JSON.stringify(pairCollision));
  check(pairCollision.angularSpeed>.01&&pairCollision.embeddedVertices.worstDepth<.002,
   'Irregular stone collision missed spin or exceeded 2 mm visual-hull slop: '+JSON.stringify(pairCollision));
   const rapidInitial={...pairInitial,bodies:new Float32Array(pairInitial.bodies)};
@@ -224,7 +267,8 @@ const server=createServer(async(req,res)=>{try{
 }catch(e){res.writeHead(500).end(String(e));}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const variantArg=process.argv.find(arg=>arg.startsWith('--tree-variant='));
-const query=[closeup?'closeup':'',hires?'hires':'',process.argv.includes('--ccd-probe')?'ccd-probe':'',process.argv.includes('--tree-asset')?'asset':'',process.argv.includes('--animated')?'animated':'',process.argv.includes('--contact-audit')?'contact-audit':'',process.argv.includes('--contact-sweep')?'contact-sweep':'',process.argv.includes('--long-sweep')?'long-sweep':'',variantArg?'variant='+encodeURIComponent(variantArg.slice('--tree-variant='.length)):''].filter(Boolean);
+const rollingArg=process.argv.find(arg=>arg.startsWith('--rolling=')),spinArg=process.argv.find(arg=>arg.startsWith('--spin='));
+const query=[closeup?'closeup':'',hires?'hires':'',process.argv.includes('--ccd-probe')?'ccd-probe':'',process.argv.includes('--tree-asset')?'asset':'',process.argv.includes('--animated')?'animated':'',process.argv.includes('--contact-audit')?'contact-audit':'',process.argv.includes('--contact-sweep')?'contact-sweep':'',process.argv.includes('--long-sweep')?'long-sweep':'',variantArg?'variant='+encodeURIComponent(variantArg.slice('--tree-variant='.length)):'',rollingArg?'rolling='+encodeURIComponent(rollingArg.slice(10)):'',spinArg?'spin='+encodeURIComponent(spinArg.slice(7)):''].filter(Boolean);
 const args=['--headless=new','--enable-gpu','--no-first-run','--no-default-browser-check',hires?'--window-size=1700,1450':'--window-size=900,800','--user-data-dir='+path.join(work,'profile'),'http://127.0.0.1:'+server.address().port+'/test'+(query.length?'?'+query.join('&'):'')];
 const browser=process.env.VF_TEST_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const child=spawn(browser,args,{windowsHide:true});let stderr='';child.stderr.on('data',d=>stderr=(stderr+d).slice(-16000));child.stdout.resume();child.on('error',e=>finish({passed:false,error:String(e)}));child.on('exit',code=>finish({passed:false,error:'Browser exited '+code,stderr}));
