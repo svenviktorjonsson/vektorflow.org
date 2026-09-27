@@ -1,5 +1,6 @@
 const DEFAULT_WASM_URL = new URL("./playground/artifacts/vkf-shared-compiler.wasm", import.meta.url);
 const WORKER_URL = new URL("./inline-runner-worker.mjs", import.meta.url);
+export const DEFAULT_EXECUTION_TIMEOUT_MS = 15_000;
 
 function resultPackets(output) {
   if (Array.isArray(output?.retained_scene_arenas) && output.retained_scene_arenas.length > 0) {
@@ -19,7 +20,7 @@ export function createInlineRunner({
   compileModule = globalThis.WebAssembly?.compile,
   fetchImpl = globalThis.fetch,
   WorkerClass = globalThis.Worker,
-  timeoutMs = 2_000,
+  timeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS,
 } = {}) {
   if (typeof compileModule !== "function"
       || typeof fetchImpl !== "function"

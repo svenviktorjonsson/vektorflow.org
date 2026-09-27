@@ -168,8 +168,8 @@
       width: 1280,
       height: 720
     });
-    var panel = runtime.ui.display.frame({ title: sceneCase.name });
-    runtime.ui.display.add_frame(panel, [0, 0, 1, 1]);
+    var panel = runtime.ui.viewport.frame({ title: sceneCase.name });
+    runtime.ui.viewport.add_frame(panel, [0, 0, 1, 1]);
     var objects = [];
     var meshes = [];
     var vertexOffset = 0;

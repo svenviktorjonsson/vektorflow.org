@@ -6403,7 +6403,11 @@
     return String(Number(n.toPrecision(6)));
   }
 
-  var liveCoordinateParameters = ["x", "y", "z", "t", "c", "i", "j", "k", "s", "w"];
+  var liveCoordinateParameters = ["x", "y", "z", "r", "phi", "theta", "t", "c"];
+
+  function isLiveCoordinateParameter(name) {
+    return /^[a-z][a-z0-9]*$/.test(name);
+  }
 
   function plotCoordinateLabels(geomSpec, mesh, cfg, axes) {
     var labels = {};
@@ -6497,10 +6501,6 @@
   function publishPlotCoordinates(body, coordinate) {
     if (!coordinate || !Array.isArray(coordinate.axes) || !Array.isArray(coordinate.values) ||
         !body || typeof body.dispatchEvent !== "function" || typeof global.CustomEvent !== "function") { return; }
-    var allowed = {};
-    for (var ai = 0; ai < liveCoordinateParameters.length; ai += 1) {
-      allowed[liveCoordinateParameters[ai]] = true;
-    }
     var axes = [];
     var values = [];
     var formattedValues = [];
@@ -6508,7 +6508,7 @@
     var parts = [];
     for (var i = 0; i < coordinate.axes.length && i < coordinate.values.length; i += 1) {
       var axis = String(coordinate.axes[i] == null ? "" : coordinate.axes[i]).trim();
-      if (!allowed[axis]) { continue; }
+      if (!isLiveCoordinateParameter(axis)) { continue; }
       var configured = coordinate.labels && Object.prototype.hasOwnProperty.call(coordinate.labels, axis)
         ? String(coordinate.labels[axis] == null ? "" : coordinate.labels[axis]).trim()
         : "";
@@ -6767,12 +6767,12 @@
       } else {
         var snapshot = command === "back" ? history.back()
           : command === "forward" ? history.forward()
-          : command === "reset" ? body.__vfViewInitial
+          : command === "home" ? body.__vfViewInitial
           : null;
         if (snapshot && applyFrameViewSnapshot(geom, snapshot)) {
           renderAxis2DInteractiveFrame(fid, frameEl, geom.meshes || [], geom);
           schedulePlotCameraUpdate(fid);
-          if (command === "reset") { history.commit(snapshot); }
+          if (command === "home") { history.commit(snapshot); }
           notifyViewHistoryState(body, history);
         }
       }
@@ -7104,11 +7104,11 @@
         } else {
           var snapshot = command === "back" ? history.back()
             : command === "forward" ? history.forward()
-            : command === "reset" ? body.__vfViewInitial
+            : command === "home" ? body.__vfViewInitial
             : null;
           if (snapshot && applyFrameViewSnapshot(geom, snapshot)) {
             schedulePlotCameraUpdate(fid);
-            if (command === "reset") { history.commit(snapshot); }
+            if (command === "home") { history.commit(snapshot); }
             notifyViewHistoryState(body, history);
           }
         }
@@ -7231,12 +7231,12 @@
       } else {
         var snapshot = command === "back" ? history.back()
           : command === "forward" ? history.forward()
-          : command === "reset" ? body.__vfViewInitial
+          : command === "home" ? body.__vfViewInitial
           : null;
         if (snapshot && applyFrameViewSnapshot(geom, snapshot)) {
           resetAxis3DVisualLayers(fid);
           refreshAxis3DRuntimeFrame(fid, true);
-          if (command === "reset") { history.commit(snapshot); }
+          if (command === "home") { history.commit(snapshot); }
           notifyViewHistoryState(body, history);
         }
       }
@@ -13166,6 +13166,82 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
     return display;
   }
 
+  function mountViewStackControl(fid, geomSpec) {
+    var frameEl = findFrameEl(String(fid));
+    if (!frameEl || !frameEl.querySelector) { return; }
+    if (!geomSpec || !Array.isArray(geomSpec.views) || geomSpec.views.length < 2) {
+      publishViewAnimationState(frameEl, geomSpec);
+      return;
+    }
+    var host = frameEl.querySelector(".vf-frame__toolbar-controls") ||
+      frameEl.querySelector(".vf-frame__header") ||
+      frameEl.querySelector(".vf-frame__body") || frameEl;
+    var control = frameEl.querySelector("select[data-vf-view-stack='1']");
+    if (!control) {
+      control = document.createElement("select");
+      control.className = "vf-view-stack";
+      control.setAttribute("data-vf-view-stack", "1");
+      control.setAttribute("aria-label", "View");
+      host.appendChild(control);
+    }
+    var titles = geomSpec.views.map(viewStackOptionText);
+    var signature = JSON.stringify(titles);
+    if (control.__vfViewSignature !== signature) {
+      control.textContent = "";
+      titles.forEach(function(title, index) {
+        var option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = title;
+        control.appendChild(option);
+      });
+      control.__vfViewSignature = signature;
+    }
+    var active = Number.isInteger(geomSpec.active_view) ? geomSpec.active_view : 0;
+    active = Math.max(0, Math.min(geomSpec.views.length - 1, active));
+    control.value = String(active);
+    publishViewAnimationState(frameEl, geomSpec.views[active]);
+    control.onchange = function() {
+      var index = Math.max(0, Math.min(
+        geomSpec.views.length - 1, Math.trunc(Number(control.value) || 0)));
+      var view = geomSpec.views[index] || {};
+      geomSpec.active_view = index;
+      geomSpec.meshes = Array.isArray(view.meshes) ? view.meshes : [];
+      geomSpec.texts = Array.isArray(view.texts) ? view.texts : [];
+      publishViewAnimationState(frameEl, view);
+      updateGeomFrame(String(fid), geomSpec);
+    };
+  }
+
+  function viewHasAnimation(view) {
+    if (!view || typeof view !== "object") { return false; }
+    if (view.coordinates && Array.isArray(view.coordinates.t) && view.coordinates.t.length > 1) {
+      return true;
+    }
+    return Array.isArray(view.meshes) && view.meshes.some(function(mesh) {
+      return !!(mesh && mesh._layer_time);
+    });
+  }
+
+  function publishViewAnimationState(frameEl, view, playing) {
+    if (!frameEl || typeof frameEl.dispatchEvent !== "function" ||
+        typeof global.CustomEvent !== "function") { return; }
+    frameEl.dispatchEvent(new global.CustomEvent("vf-view-animation-state", {
+      bubbles: true,
+      detail: { animated: viewHasAnimation(view), playing: playing !== false }
+    }));
+  }
+
+  function viewStackOptionText(view, index) {
+    var title = view && view.title != null && String(view.title).trim()
+      ? String(view.title).trim() : "View " + String(index + 1);
+    var keys = view && view.keys && typeof view.keys === "object" && !Array.isArray(view.keys)
+      ? Object.keys(view.keys).sort().map(function(axis) {
+          return axis + " " + String(view.keys[axis]);
+        })
+      : [];
+    return keys.length ? title + " — " + keys.join("   ") : title;
+  }
+
   function renderFromJson(data) {
     if (!data || typeof data !== "object") {
       vlog("warn", "renderFromJson: data is null or not an object");
@@ -13241,6 +13317,7 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       for (var gid in geom) {
         if (!Object.prototype.hasOwnProperty.call(geom, gid)) { continue; }
         geom[gid] = materializeGeomVariant(geom[gid], geom[gid] && geom[gid].active_geom_variant);
+        mountViewStackControl(gid, geom[gid]);
         updateGeomFrame(gid, geom[gid]);
       }
     }
@@ -13667,6 +13744,7 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       plotCoordinatesAtClientPoint: plotCoordinatesAtClientPoint,
       formatPlotCoordinate: formatPlotCoordinate,
       liveCoordinateParameters: liveCoordinateParameters,
+      isLiveCoordinateParameter: isLiveCoordinateParameter,
       plotCoordinateLabels: plotCoordinateLabels,
       publishPlotCoordinates: publishPlotCoordinates,
       ensureAxis2DControls: ensureAxis2DControls,
@@ -13696,7 +13774,9 @@ fn fsMain(in : VOut) -> @location(0) vec4<f32> {
       rememberGeomTextOverlay: rememberGeomTextOverlay,
       renderAxis2DInteractiveFrame: renderAxis2DInteractiveFrame,
       scheduleAxis3DOverlayRender: scheduleAxis3DOverlayRender,
-      toolbarBottomInsetPx: toolbarBottomInsetPx
+      toolbarBottomInsetPx: toolbarBottomInsetPx,
+      viewStackOptionText: viewStackOptionText,
+      viewHasAnimation: viewHasAnimation
     }
   };
   ensureRuntimeShellLoaded();

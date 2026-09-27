@@ -476,6 +476,67 @@
     return result;
   }
 
+  function retainedTimeSample(descriptor, time) {
+    var coordinates = descriptor && descriptor.coordinates;
+    if (!Array.isArray(coordinates) || coordinates.length < 2 || !Number.isFinite(time)) {
+      throw new TypeError("internal retained View time patch is malformed");
+    }
+    var last = coordinates.length - 1;
+    var selected = Math.max(Number(coordinates[0]), Math.min(Number(coordinates[last]), time));
+    var upper = coordinates.findIndex(function(coordinate) { return Number(coordinate) >= selected; });
+    if (upper <= 0) upper = 1;
+    var lower = upper - 1;
+    var span = Number(coordinates[upper]) - Number(coordinates[lower]);
+    return { lower: lower, upper: upper, alpha: span > 0
+      ? (selected - Number(coordinates[lower])) / span : 0 };
+  }
+
+  function interpolateRetainedChannel(channel, sample) {
+    var lower = channel && channel.value && channel.value[sample.lower];
+    var upper = channel && channel.value && channel.value[sample.upper];
+    if (lower == null || upper == null) return null;
+    if (!Array.isArray(lower)) {
+      return Number(lower) + (Number(upper) - Number(lower)) * sample.alpha;
+    }
+    return lower.map(function(value, index) {
+      return Number(value) + (Number(upper[index]) - Number(value)) * sample.alpha;
+    });
+  }
+
+  function applyRetainedViewTime(geometry, time) {
+    function updateMeshes(meshes) {
+      (meshes || []).forEach(function(mesh) {
+        var descriptor = mesh && mesh._layer_time;
+        if (!descriptor) return;
+        var sample = retainedTimeSample(descriptor, time);
+        (descriptor.channels || []).forEach(function(channel) {
+          var value = interpolateRetainedChannel(channel, sample);
+          if (value == null) return;
+          if (channel.name === "p" && Array.isArray(mesh.vertices)) {
+            for (var index = 0; index < value.length; index += 1) mesh.vertices[index] = value[index];
+          } else if (channel.name === "c" && Array.isArray(mesh.vertices)) {
+            for (var color = 0; color < value.length; color += 1) mesh.vertices[6 + color] = value[color];
+          } else if (channel.name === "s") {
+            mesh.vertex_size = Number(value);
+          }
+        });
+      });
+    }
+    updateMeshes(geometry.meshes);
+    (geometry.views || []).forEach(function(view) { updateMeshes(view && view.meshes); });
+    var camera = geometry.camera;
+    if (camera && camera._camera_time) {
+      var cameraSample = retainedTimeSample(camera._camera_time, time);
+      (camera._camera_time.channels || []).forEach(function(channel) {
+        var value = interpolateRetainedChannel(channel, cameraSample);
+        if (value == null) return;
+        if (channel.name === "p") camera.pos = value;
+        else if (channel.name === "target") camera.target = value;
+        else if (channel.name === "fov") camera.fov = Number(value);
+      });
+    }
+  }
+
   function createInternalRetainedEventProgramExecution(program) {
     if (!program || program.schema !== "vektor-flow/retained-event-program" ||
         program.version !== 1 || !Array.isArray(program.rules)) {
@@ -496,6 +557,27 @@
           for (var actionIndex = 0; actionIndex < rule.actions.length; actionIndex += 1) {
             var action = rule.actions[actionIndex];
             var state = action && action.state;
+            if (action && action.op === "retained_view_time_patch") {
+              if (typeof action.target !== "string" || !action.target || !state ||
+                  typeof state !== "object" || !state.geom || typeof state.geom !== "object" ||
+                  !state.value || typeof state.value !== "object") {
+                throw new TypeError("internal retained View time patch is malformed");
+              }
+              if (!geometry[action.target]) geometry[action.target] = cloneRetainedEventValue(state.geom);
+              var selectedTime;
+              if (state.value.kind === "const") selectedTime = Number(state.value.value);
+              else if (state.value.kind === "event_field" &&
+                       typeof state.value.field === "string" &&
+                       Object.prototype.hasOwnProperty.call(event, state.value.field)) {
+                selectedTime = Number(event[state.value.field]);
+              } else throw new TypeError("internal retained View time value is malformed");
+              if (!Number.isFinite(selectedTime)) {
+                throw new TypeError("internal retained View time must be finite");
+              }
+              applyRetainedViewTime(geometry[action.target], selectedTime);
+              geomPatch[action.target] = cloneRetainedEventValue(geometry[action.target]);
+              continue;
+            }
             if (!action || action.op !== "retained_layer_patch" ||
                 typeof action.target !== "string" || !action.target ||
                 !state || typeof state !== "object" || !Array.isArray(state.geom && state.geom.meshes) ||

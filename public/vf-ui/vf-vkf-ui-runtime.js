@@ -688,11 +688,13 @@
     var display = {
       width: Number(options.width || 960),
       height: Number(options.height || 540),
-      frames: [],
       set_size: function(size) {
         this.width = Number(size.width || this.width);
         this.height = Number(size.height || this.height);
-      },
+      }
+    };
+    var viewport = {
+      frames: [],
       frame: function(frameOptions) {
         return new Frame(display, frameOptions || {});
       },
@@ -868,7 +870,7 @@
     var ui = {
       MOUSE_DRAG: "mouse_drag",
       MOUSE_MOVE: "mouse_move",
-      display: display,
+      viewport: viewport,
       selection: undefined,
       cursor: {
         mode: "default",
@@ -958,7 +960,8 @@
     }
 
     return {
-      ui: ui
+      ui: ui,
+      system: { display: display }
     };
   }
 

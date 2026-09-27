@@ -58,6 +58,9 @@ export function mountRetainedSceneResult(container, packets, {
     throw new Error("native VfFrame/VfDisplay retained renderer is unavailable");
   }
   const ownedPackets = ownRetainedScenePackets(packets);
+  const selectors = ownedPackets.map((packet) => packet.metadata.scene.view_selector);
+  const hasViewSelector = ownedPackets.length > 1 && selectors.every((selector, index) =>
+    selector?.axis === "n" && selector.index === index && selector.count === ownedPackets.length);
   const layer = document.createElement("div");
   layer.className = "readme-example-retained-layer";
   layer.dataset.vfRenderState = "pending";
@@ -69,24 +72,35 @@ export function mountRetainedSceneResult(container, packets, {
     if (frame.root.style) frame.root.style.display = visible ? "" : "none";
   };
   for (const [index, packet] of ownedPackets.entries()) {
+    const scene = packet.metadata.scene;
+    const containerKind = scene.container_kind ?? "viewport";
+    const isWindow = containerKind === "window";
     const frame = VfFrame.mount(layer, {
-      id: packet.metadata.scene.frame,
-      title: packet.metadata.scene.title ?? "",
-      frameless: true,
-      draggable: false,
-      dockable: false,
-      resizable: false,
-      closable: false,
+      id: scene.frame,
+      containerKind,
+      title: scene.title ?? "",
+      frameless: !isWindow,
+      draggable: isWindow,
+      dockable: isWindow,
+      resizable: isWindow,
+      closable: isWindow,
       alpha: 1,
-      toolbar: packet.metadata.scene.toolbar === null ? null : undefined,
+      toolbar: scene.toolbar ?? null,
     });
     frame?.body?.classList?.add("vf-frame__body--transparent");
-    showFrame(frame, index === 0);
+    if (frame?.root?.style && Array.isArray(scene.pos) && scene.pos.length === 2 &&
+        Array.isArray(scene.size) && scene.size.length === 2 &&
+        [...scene.pos, ...scene.size].every(Number.isFinite)) {
+      frame.root.style.left = `${scene.pos[0] * 100}%`;
+      frame.root.style.top = `${scene.pos[1] * 100}%`;
+      frame.root.style.right = "auto";
+      frame.root.style.bottom = "auto";
+      frame.root.style.width = `${scene.size[0] * 100}%`;
+      frame.root.style.height = `${scene.size[1] * 100}%`;
+    }
+    showFrame(frame, !hasViewSelector || index === 0);
     frames.push(frame);
   }
-  const selectors = ownedPackets.map((packet) => packet.metadata.scene.view_selector);
-  const hasViewSelector = ownedPackets.length > 1 && selectors.every((selector, index) =>
-    selector?.axis === "n" && selector.index === index && selector.count === ownedPackets.length);
   let selector = null;
   let viewport = layer;
   if (hasViewSelector) {
@@ -120,14 +134,90 @@ export function mountRetainedSceneResult(container, packets, {
   container.append(viewport);
   let disposed = false;
   let presentFrame = 0;
-  let animationStart = null;
+  let animationLast = null;
+  let animationElapsed = 0;
+  let animationPlaying = true;
+  let playbackRate = 1;
   const animated = ownedPackets.some((packet) =>
     packet.metadata.scene.meshes?.some((mesh) => mesh._layer_time));
+  const animationStateEvent = () => {
+    if (typeof globalThis.CustomEvent === "function") {
+      return new globalThis.CustomEvent("vf-view-animation-state", {
+        bubbles: true, detail: { animated, playing: animationPlaying },
+      });
+    }
+    const event = new Event("vf-view-animation-state", { bubbles: true });
+    Object.defineProperty(event, "detail", {
+      value: { animated, playing: animationPlaying }, enumerable: true,
+    });
+    return event;
+  };
+  const publishAnimationState = () => frames.forEach((frame) =>
+    frame?.root?.dispatchEvent?.(animationStateEvent()));
+  const animationCommand = (event) => {
+    const command = String(event?.detail?.command ?? "");
+    if (command === "play-pause") animationPlaying = !animationPlaying;
+    else if (command === "animation-reset") {
+      animationElapsed = 0;
+      animationLast = null;
+      for (const packet of ownedPackets) updateRetainedSceneTime(packet, 0);
+      for (const packet of ownedPackets) VfDisplay.renderRetainedSceneArena(packet);
+    } else return;
+    publishAnimationState();
+  };
+  const playbackRateChanged = (event) => {
+    const next = Number(event?.detail?.rate);
+    if (Number.isFinite(next) && next > 0) playbackRate = next;
+  };
+  const movieCaptures = new Map();
+  const downloadUrl = (url, filename) => {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click?.();
+  };
+  const captureCommand = (index) => async (event) => {
+    const command = String(event?.detail?.command ?? "");
+    const frame = frames[index];
+    const frameId = ownedPackets[index]?.metadata?.scene?.frame;
+    if (command === "capture-view") {
+      const url = await VfDisplay.captureGeomFrameDataUrl?.(frameId);
+      if (url) downloadUrl(url, "vektor-flow-view.png");
+      return;
+    }
+    if (command !== "capture-video") return;
+    const active = movieCaptures.get(frame?.root);
+    if (active) {
+      const blob = await active.capture.stopMovie();
+      movieCaptures.delete(frame.root);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        downloadUrl(url, "vektor-flow-view.webm");
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+      return;
+    }
+    const { createSceneMediaCapture } = await import("./vf-ui/vf-media-capture.mjs");
+    const capture = createSceneMediaCapture({
+      fallbackCanvas: () => frame?.root?.querySelector?.("canvas.vf-geom-canvas, canvas"),
+    });
+    if (await capture.startMovie()) movieCaptures.set(frame.root, { capture });
+  };
+  frames.forEach((frame, index) => {
+    frame?.root?.addEventListener?.("vf-view-command", animationCommand);
+    frame?.root?.addEventListener?.("vf-view-command", captureCommand(index));
+    frame?.root?.addEventListener?.("vf-view-playback-rate", playbackRateChanged);
+  });
+  publishAnimationState();
   const animate = (timestamp) => {
     if (disposed) return;
-    if (animationStart == null) animationStart = timestamp;
+    if (animationLast == null) animationLast = timestamp;
+    if (animationPlaying) {
+      animationElapsed += Math.max(0, timestamp - animationLast) / 1000 * playbackRate;
+    }
+    animationLast = timestamp;
     for (const packet of ownedPackets) {
-      updateRetainedSceneTime(packet, (timestamp - animationStart) / 1000);
+      updateRetainedSceneTime(packet, animationElapsed);
       VfDisplay.renderRetainedSceneArena(packet);
     }
     presentFrame = requestAnimationFrame(animate);
@@ -181,14 +271,18 @@ export function mountRetainedSceneResult(container, packets, {
     dialog.showModal();
     close.focus();
   });
-  return () => {
+  const dispose = () => {
     disposed = true;
     if (presentFrame) cancelAnimationFrame(presentFrame);
+    for (const { capture } of movieCaptures.values()) capture.cancel();
+    movieCaptures.clear();
     if (dialog) { dialog.close(); restore(); }
     enlarge.remove();
     for (const frame of frames) frame?.root?.remove?.();
     viewport.remove?.();
   };
+  dispose.element = frames.length === 1 ? frames[0]?.root ?? viewport : viewport;
+  return dispose;
 }
 
 function temporalSample(descriptor, elapsed) {

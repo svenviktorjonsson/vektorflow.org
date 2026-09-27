@@ -1,4 +1,4 @@
-export const TEXTMATE_GRAMMAR_SHA256 = '00fd4aabbc0ded77c45c7265719d1a8f3eca58d79be2ed46b178ded926b8d1dd';
+export const TEXTMATE_GRAMMAR_SHA256 = 'a81f226ba1183be77f99ce14ce48e76d19958b16ae0c2acf53a4f08455b2ca64';
 
 export function registerVektorFlowPrism(Prism) {
   if (!Prism?.languages) throw new TypeError('Prism.languages is required.');
@@ -70,7 +70,7 @@ export function registerVektorFlowPrism(Prism) {
     number: /\b(?:\d+\.\d+|\d+)\b/,
     'anonymous-dimension': /\.\.\./,
     dimension: {
-      pattern: /\b[A-Za-z][A-Za-z0-9]*_(?!min\b|max\b|pot\b|tot\b|count\b)(?:[a-z]+|[0-9]+)\b/,
+      pattern: /\b[A-Za-z][A-Za-z0-9]*_(?!min\b|max\b|pot\b|tot\b|count\b)(?:[a-z]+|[0-9]+)\b(?!\s*\()/,
       alias: 'dimension',
     },
     operator: /:::|::|>>|==|~=|!=|<=|>=|=>|->|\/\/|\.\.|><|\/\\|\\\/|@::|@:|@>|@\||@!|\(\s*[+\-*/]\s*\)|\{\s*[+\-*/]\s*\}|[=<>+\-*/^%&~:$?.|]/,

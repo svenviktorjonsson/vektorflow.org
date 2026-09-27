@@ -267,6 +267,107 @@ body.vf-frame-dragging .vf-frame__header[data-vf-frame-dragging="1"] * {
   transform: none;
 }
 
+.vf-frame__playback-rate,
+.vf-view-stack {
+  min-height: 30px;
+  max-width: 160px;
+  border: 1px solid rgba(164, 172, 196, 0.28);
+  border-radius: 7px;
+  background: rgba(25, 29, 41, 0.96);
+  color: rgba(238, 242, 255, 0.94);
+}
+
+.vf-frame--toolbar-bottom > .vf-frame__toolbar {
+  order: 3;
+  border-top: 1px solid rgba(164, 172, 196, 0.2);
+  border-bottom: 0;
+}
+
+.vf-frame--toolbar-bottom > .vf-frame__body {
+  order: 2;
+}
+
+.vf-frame--toolbar-left,
+.vf-frame--toolbar-right {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.vf-frame--toolbar-left {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.vf-frame--toolbar-right {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.vf-frame--toolbar-left > .vf-frame__header,
+.vf-frame--toolbar-right > .vf-frame__header,
+.vf-frame--toolbar-left > .vf-frame__minibar,
+.vf-frame--toolbar-right > .vf-frame__minibar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.vf-frame--toolbar-left > .vf-frame__toolbar,
+.vf-frame--toolbar-right > .vf-frame__toolbar {
+  grid-row: 2;
+  width: 96px;
+  min-width: 96px;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 6px 4px;
+  border-bottom: 0;
+}
+
+.vf-frame--toolbar-left > .vf-frame__toolbar {
+  grid-column: 1;
+  border-right: 1px solid rgba(164, 172, 196, 0.2);
+}
+
+.vf-frame--toolbar-right > .vf-frame__toolbar {
+  grid-column: 2;
+  border-left: 1px solid rgba(164, 172, 196, 0.2);
+}
+
+.vf-frame--toolbar-left > .vf-frame__body {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.vf-frame--toolbar-right > .vf-frame__body {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.vf-frame--toolbar-left .vf-frame__toolbar-controls,
+.vf-frame--toolbar-right .vf-frame__toolbar-controls {
+  flex-direction: column;
+}
+
+.vf-frame--toolbar-left .vf-frame__toolbar-coordinates,
+.vf-frame--toolbar-right .vf-frame__toolbar-coordinates {
+  width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
+.vf-frame--frameless.vf-frame--toolbar-left,
+.vf-frame--frameless.vf-frame--toolbar-right {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.vf-frame--frameless.vf-frame--toolbar-left > .vf-frame__toolbar,
+.vf-frame--frameless.vf-frame--toolbar-right > .vf-frame__toolbar,
+.vf-frame--frameless.vf-frame--toolbar-left > .vf-frame__body,
+.vf-frame--frameless.vf-frame--toolbar-right > .vf-frame__body {
+  grid-row: 1;
+  position: relative;
+  inset: auto;
+}
+
 @media (max-width: 640px), (pointer: coarse) {
   .vf-frame__toolbar {
     min-height: 76px;

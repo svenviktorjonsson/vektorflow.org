@@ -320,7 +320,7 @@
     var uiRuntime = vkfUiRuntimeModule && typeof vkfUiRuntimeModule.createVkfUiRuntime === "function"
       ? vkfUiRuntimeModule.createVkfUiRuntime({ arena: transformArena, eventArena: eventArena })
       : null;
-    var uiFrame = uiRuntime ? uiRuntime.ui.display.frame({ title: "shared-rect-demo" }) : null;
+    var uiFrame = uiRuntime ? uiRuntime.ui.viewport.frame({ title: "shared-rect-demo" }) : null;
     var writeLog = [];
     var transformRenderer = gpu.createTransformRenderer({
       arena: transformArena,
@@ -348,7 +348,7 @@
     });
     transformRenderer.flushDirtyTransforms();
     if (uiRuntime && uiFrame) {
-      uiRuntime.ui.display.add_frame(uiFrame, [0, 0, 1, 1]);
+      uiRuntime.ui.viewport.add_frame(uiFrame, [0, 0, 1, 1]);
     }
 
     var decorativeRects = [

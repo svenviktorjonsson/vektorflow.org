@@ -294,6 +294,7 @@
           if (!panel) {
             panel = frame.mount(mountLayer, {
               id: id,
+              containerKind: spec.container_kind || "window",
               title: title,
               titleAlign: titleAlign,
               aspect: spec.aspect != null ? String(spec.aspect) : null,

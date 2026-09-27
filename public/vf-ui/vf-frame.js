@@ -147,24 +147,34 @@
   const defaultToolbarCommands = Object.freeze([
     { command: "back", label: "Back", glyph: "\u2190" },
     { command: "forward", label: "Forward", glyph: "\u2192" },
-    { command: "reset", label: "Reset view", glyph: "\u21ba" },
+    { command: "home", label: "Home view", glyph: "\u2302" },
     { command: "zoom-out", label: "Zoom out", glyph: "\u2212" },
     { command: "zoom-in", label: "Zoom in", glyph: "+" },
+    { command: "capture-view", label: "Capture view", glyph: "\u25a3" },
+    { command: "capture-video", label: "Capture video", glyph: "\u25cf" },
+  ]);
+
+  const animationToolbarCommands = Object.freeze([
+    { command: "play-pause", label: "Play or pause", glyph: "\u25b6" },
+    { command: "animation-reset", label: "Reset animation", glyph: "\u21ba" },
   ]);
 
   const liveCoordinateParameters = Object.freeze([
-    "x", "y", "z", "t", "c", "i", "j", "k", "s", "w",
+    "x", "y", "z", "r", "phi", "theta", "t", "c",
   ]);
+
+  function isLiveCoordinateParameter(name) {
+    return /^[a-z][a-z0-9]*$/.test(name);
+  }
 
   function toolbarCoordinateParts(detail) {
     if (!detail || !Array.isArray(detail.axes) || !Array.isArray(detail.values)) return [];
-    const allowed = new Set(liveCoordinateParameters);
     const labels = detail.labels && typeof detail.labels === "object" ? detail.labels : {};
     const formatted = Array.isArray(detail.formattedValues) ? detail.formattedValues : [];
     const parts = [];
     for (let index = 0; index < detail.axes.length && index < detail.values.length; index += 1) {
       const axis = String(detail.axes[index] == null ? "" : detail.axes[index]).trim();
-      if (!allowed.has(axis)) continue;
+      if (!isLiveCoordinateParameter(axis)) continue;
       const configured = Object.prototype.hasOwnProperty.call(labels, axis)
         ? String(labels[axis] == null ? "" : labels[axis]).trim()
         : "";
@@ -195,6 +205,15 @@
     }));
   }
 
+  function normalizeToolbarPlacement(value) {
+    if (value == null || value === false) return null;
+    if (value === true) return "top";
+    if (typeof value === "object" &&
+        (typeof value.mount === "function" || value.nodeType === 1)) return "top";
+    const placement = String(value).trim().toLowerCase();
+    return ["top", "right", "bottom", "left"].includes(placement) ? placement : null;
+  }
+
   function createDefaultToolbar(root) {
     const toolbar = document.createElement("div");
     toolbar.className = "vf-frame__toolbar";
@@ -218,6 +237,42 @@
       });
       controls.appendChild(button);
     });
+    animationToolbarCommands.forEach(function (item) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.hidden = true;
+      button.className = "vf-frame__toolbar-button";
+      button.dataset.vfViewCommand = item.command;
+      button.dataset.vfAnimationControl = "1";
+      button.setAttribute("aria-label", item.label);
+      button.setAttribute("title", item.label);
+      button.textContent = item.glyph;
+      button.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        dispatchViewCommand(root, item.command);
+      });
+      controls.appendChild(button);
+    });
+    const playbackRate = document.createElement("select");
+    playbackRate.hidden = true;
+    playbackRate.className = "vf-frame__playback-rate";
+    playbackRate.dataset.vfAnimationControl = "1";
+    playbackRate.setAttribute("aria-label", "Playback rate");
+    for (const rate of [0.25, 0.5, 1, 2]) {
+      const option = document.createElement("option");
+      option.value = String(rate);
+      option.textContent = String(rate) + "×";
+      option.selected = rate === 1;
+      playbackRate.appendChild(option);
+    }
+    playbackRate.addEventListener("change", function () {
+      root.dispatchEvent(new CustomEvent("vf-view-playback-rate", {
+        bubbles: true,
+        detail: { rate: Number(playbackRate.value) },
+      }));
+    });
+    controls.appendChild(playbackRate);
     const coordinates = document.createElement("output");
     coordinates.className = "vf-frame__toolbar-coordinates";
     coordinates.setAttribute("aria-label", "Pointer coordinates");
@@ -233,6 +288,18 @@
     });
     root.addEventListener("vf-view-coordinate", function (event) {
       coordinates.textContent = formatToolbarCoordinates(event && event.detail);
+    });
+    root.addEventListener("vf-view-animation-state", function (event) {
+      const detail = event && event.detail || {};
+      const visible = detail.animated === true;
+      toolbar.querySelectorAll("[data-vf-animation-control='1']").forEach(function (control) {
+        control.hidden = !visible;
+      });
+      const play = toolbar.querySelector('[data-vf-view-command="play-pause"]');
+      if (play) {
+        play.textContent = detail.playing === false ? "\u25b6" : "\u23f8";
+        play.setAttribute("aria-label", detail.playing === false ? "Play" : "Pause");
+      }
     });
     const initialBack = toolbar.querySelector('[data-vf-view-command="back"]');
     const initialForward = toolbar.querySelector('[data-vf-view-command="forward"]');
@@ -960,7 +1027,7 @@
 
     /**
      * @param {HTMLElement} layer - positioned container (e.g. position:relative; inset 0)
-     * @param {{ id?: string, title?: string, titleAlign?: "left"|"center"|"right", draggable?: boolean, inLayerDrag?: boolean, dockable?: boolean, resizable?: boolean, closable?: boolean, alpha?: number, zIndexBase?: number, master?: boolean, dockLocation?: string, onFrameRemoved?: () => void, exitWhenLastFrameClosed?: boolean }} options
+     * @param {{ id?: string, containerKind?: "viewport"|"window"|"panel", title?: string, titleAlign?: "left"|"center"|"right", draggable?: boolean, inLayerDrag?: boolean, dockable?: boolean, resizable?: boolean, closable?: boolean, alpha?: number, zIndexBase?: number, master?: boolean, dockLocation?: string, onFrameRemoved?: () => void, exitWhenLastFrameClosed?: boolean }} options
      *   WebView2: by default ``inLayerDrag`` is on (set ``inLayerDrag: false`` to move the native window via ``vf-move`` when the frame fills the view).
      *   With ``master: true``, the close control removes all other ``.vf-frame``s in
      *   this layer, then this frame, then posts one host ``close``; otherwise each
@@ -971,6 +1038,8 @@
     mount(layer, options) {
       const opt = options || {};
       const id = opt.id || "vf-frame-" + Math.random().toString(36).slice(2, 9);
+      const containerKind = opt.containerKind === "viewport" ||
+        opt.containerKind === "panel" ? opt.containerKind : "window";
       let title = opt.title != null ? String(opt.title) : "";
       const frameless = opt.frameless === true;
       const ta = opt.titleAlign;
@@ -1003,11 +1072,12 @@
         root.classList.toggle("vf-frame--pass-through", alpha < th);
       }
 
-      const root = document.createElement("div");
+      const root = document.createElement("vkf-" + containerKind);
       root.className = "vf-frame";
       root.classList.toggle("vf-frame--resizable", resizable && !frameless);
       root.classList.toggle("vf-frame--frameless", frameless);
       root.dataset.vfFrameId = id;
+      root.dataset.vfContainerKind = containerKind;
       root.dataset.vfMinDock = minDock;
       if (aspect) { root.dataset.vfAspect = aspect; }
       /* Opacity on whole root would dim title/KaTeX; only shell rgba use --vf-ui-alpha. */
@@ -1073,7 +1143,8 @@
       body.appendChild(drawCanvas);
 
       let toolbar = null;
-      if (opt.toolbar !== null && opt.toolbar !== false) {
+      const toolbarPlacement = normalizeToolbarPlacement(opt.toolbar);
+      if (toolbarPlacement) {
         if (opt.toolbar && typeof opt.toolbar.mount === "function") {
           toolbar = opt.toolbar.mount({
             frame: root,
@@ -1087,6 +1158,10 @@
         }
       }
       root.classList.toggle("vf-frame--has-toolbar", !!toolbar);
+      if (toolbar) {
+        root.classList.add("vf-frame--toolbar-" + toolbarPlacement);
+        toolbar.dataset.vfToolbarPlacement = toolbarPlacement;
+      }
 
       const minibar = document.createElement("div");
       minibar.className = "vf-frame__minibar";
@@ -1553,7 +1628,10 @@
     encodeNativeHitRegionArena: encodeNativeHitRegionArena,
     createViewHistory: createViewHistory,
     defaultToolbarCommands: defaultToolbarCommands,
+    animationToolbarCommands: animationToolbarCommands,
     liveCoordinateParameters: liveCoordinateParameters,
+    isLiveCoordinateParameter: isLiveCoordinateParameter,
+    normalizeToolbarPlacement: normalizeToolbarPlacement,
     formatToolbarCoordinates: formatToolbarCoordinates,
   });
   global.VfFrame = VfFrame;
