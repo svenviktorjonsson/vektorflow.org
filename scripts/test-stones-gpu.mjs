@@ -86,6 +86,47 @@ try{
  check(stoneDynamics.initialEmbeddedVertices.count===0&&stoneDynamics.embeddedVertices.count===0,'Rendered stones overlap their collision envelopes: '+JSON.stringify(stoneDynamics));
  check(minimumVerticalSpeed<-1,'Stone never reached impact speed: '+JSON.stringify(stoneDynamics));check(maximumUpwardSpeed>.03||maximumAngularSpeed>.03,'Irregular stone contact produced no bounce or rotation response: '+JSON.stringify(stoneDynamics));check(minimumFloorClearance>-.002,'Stone tunneled through ground: '+JSON.stringify(stoneDynamics));check(sleepingBodies===initial.bodyCount&&linearSpeed<.01&&angularSpeed<.01,'Dropped stone did not sleep after settling: '+JSON.stringify(stoneDynamics));
  check(maximumBaseSpeed<.25&&maximumBaseDisplacement<initial.sceneFrame.span*.05,'Small stone moved supported bases unrealistically: '+JSON.stringify(stoneDynamics));
+ // The displayed drop primarily tests floor support: grounded stones may
+ // correctly absorb a small impulse. Also exercise a free two-body impact so
+ // equal/opposite momentum exchange cannot silently disappear.
+ const pairInitial={...initial,bodies:new Float32Array(initial.bodies)};
+ for(let body=0;body<initial.bodyCount;body++){const offset=body*20;
+  pairInitial.bodies[offset]=body===0?-.25:body===1?.25:3+body;
+  pairInitial.bodies[offset+1]=body===1?.02:0;pairInitial.bodies[offset+2]=2;
+  for(let k=4;k<8;k++)pairInitial.bodies[offset+k]=0;
+  for(let k=12;k<16;k++)pairInitial.bodies[offset+k]=0;
+  pairInitial.bodies[offset+19]=0;
+ }
+ pairInitial.bodies[4]=2;
+ const pairPhysics=await createMechanicalWorldGpu(device,world,pairInitial,
+  runtime.readBinding(prefix+'$physics'));
+ encoder=device.createCommandEncoder();for(let step=0;step<12;step++)pairPhysics.step(encoder);
+ device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();
+ const pairState=await pairPhysics.readBodies();pairPhysics.destroy();
+ const beforeMomentum=2*masses[0],afterMomentum=masses[0]*pairState[4]+masses[1]*pairState[24];
+ const pairCollision={targetSpeed:pairState[24],sourceSpeed:pairState[4],
+  beforeMomentum,afterMomentum,angularSpeed:Math.hypot(...pairState.subarray(12,15))+
+   Math.hypot(...pairState.subarray(32,35)),
+  embeddedVertices:countEmbeddedStoneVertices(pairState,pairInitial,meshes)};
+ stoneDynamics.pairCollision=pairCollision;
+ check(pairCollision.targetSpeed>.05&&pairCollision.sourceSpeed<1.95,
+  'Free stone-stone collision transferred no impulse: '+JSON.stringify(pairCollision));
+ check(Math.abs(afterMomentum-beforeMomentum)<.05,
+  'Stone-stone collision lost horizontal momentum: '+JSON.stringify(pairCollision));
+ check(pairCollision.angularSpeed>.01&&pairCollision.embeddedVertices.worstDepth<.002,
+  'Irregular stone collision missed spin or exceeded 2 mm visual-hull slop: '+JSON.stringify(pairCollision));
+  const rapidInitial={...pairInitial,bodies:new Float32Array(pairInitial.bodies)};
+  rapidInitial.bodies[0]=-.18;rapidInitial.bodies[20]=.18;rapidInitial.bodies[4]=30;
+  const rapid=await createMechanicalWorldGpu(device,world,rapidInitial,runtime.readBinding(prefix+'$physics'));
+  encoder=device.createCommandEncoder();rapid.step(encoder);device.queue.submit([encoder.finish()]);
+  await device.queue.onSubmittedWorkDone();const rapidState=await rapid.readBodies();rapid.destroy();
+  stoneDynamics.rapidCollision={sourceX:rapidState[0],targetX:rapidState[20],
+   sourceSpeed:rapidState[4],targetSpeed:rapidState[24],
+   beforeMomentum:30*masses[0],afterMomentum:masses[0]*rapidState[4]+masses[1]*rapidState[24]};
+  check(rapidState[0]<rapidState[20]&&rapidState[24]>.05,
+   'Stone-stone contact tunneled through one fixed step: '+JSON.stringify(stoneDynamics.rapidCollision));
+  check(Math.abs(stoneDynamics.rapidCollision.afterMomentum-stoneDynamics.rapidCollision.beforeMomentum)<.05,
+   'Fast stone-stone impact lost horizontal momentum: '+JSON.stringify(stoneDynamics.rapidCollision));
  }else{physics.setSpeed(8);const samples=[];for(let batch=0;batch<30;batch++){encoder=device.createCommandEncoder();for(let step=0;step<8;step++)physics.step(encoder);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();if(batch===14||batch===29)samples.push(await physics.inspectLeafModes());}wind=await physics.inspect();wind.leaves=samples;check(wind.finite&&samples.every(s=>s.finite),'Nonfinite wind state');check(samples.every(s=>s.maxAngle>.02&&s.maxAngle<2.73),'Leaf angle outside elastic response: '+JSON.stringify(wind));check(samples[1].maxAngularVelocity>.01,'Leaves stopped moving');}
  const format=navigator.gpu.getPreferredCanvasFormat(),context=canvas.getContext('webgpu');context.configure({device,format,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
  let camera=isTree?{pos:[8,-17,7],target:[0,0,3.7],fov:42}:initial.sceneFrame.camera;
@@ -152,7 +193,8 @@ const server=createServer(async(req,res)=>{try{
  res.setHeader('Content-Type',({'.mjs':'text/javascript','.js':'text/javascript','.json':'application/json','.wasm':'application/wasm'})[path.extname(target)]??'application/octet-stream');res.end(await readFile(target));
 }catch(e){res.writeHead(500).end(String(e));}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const args=['--headless=new','--enable-gpu','--no-first-run','--no-default-browser-check',hires?'--window-size=1700,1450':'--window-size=900,800','--user-data-dir='+path.join(work,'profile'),'http://127.0.0.1:'+server.address().port+'/test'+(closeup||hires?'?'+[closeup?'closeup':'',hires?'hires':''].filter(Boolean).join('&'):'')];
+const query=[closeup?'closeup':'',hires?'hires':'',process.argv.includes('--ccd-probe')?'ccd-probe':''].filter(Boolean);
+const args=['--headless=new','--enable-gpu','--no-first-run','--no-default-browser-check',hires?'--window-size=1700,1450':'--window-size=900,800','--user-data-dir='+path.join(work,'profile'),'http://127.0.0.1:'+server.address().port+'/test'+(query.length?'?'+query.join('&'):'')];
 const browser=process.env.VF_TEST_BROWSER??'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const child=spawn(browser,args,{windowsHide:true});let stderr='';child.stderr.on('data',d=>stderr=(stderr+d).slice(-16000));child.stdout.resume();child.on('error',e=>finish({passed:false,error:String(e)}));child.on('exit',code=>finish({passed:false,error:'Browser exited '+code,stderr}));
 const timeout=setTimeout(()=>finish({passed:false,error:'GPU test timed out',stderr}),60000);
