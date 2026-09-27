@@ -20,7 +20,8 @@ for(const {id,files} of applications){
   if(record.runtime_directory)for(const [name,digest] of Object.entries(record.runtime))assert.equal(hash(await readFile(new URL(`previews/0.6.0/compiled/${record.runtime_directory}/${name}`,root))),digest,`${id} runtime ${name}`);
   assert.equal(hash(bytes),record.wasm);assert.equal(hash(manifestBytes),record.manifest);assert.ok(WebAssembly.validate(bytes));assert.deepEqual(Object.keys(record.sources).sort(),[...files].sort());
   for(const name of files)assert.equal(hash(await readFile(new URL(`sources/coming-soon/${id}/${name}`,root))),record.sources[name]);
-  const runtime=bridge.instantiateWasmRuntime({bytes,manifest:JSON.parse(manifestBytes)});runtime.init();const program=runtime.worldProgram();assert.ok(program.gpu_worlds.length);assert.ok(program.views.every(view=>view.axis===false));
+  const applicationBridge=record.runtime_directory?createRequire(import.meta.url)(`../public/previews/0.6.0/compiled/${record.runtime_directory}/vf-compiled-runtime-bridge.js`):bridge;
+  const runtime=applicationBridge.instantiateWasmRuntime({bytes,manifest:JSON.parse(manifestBytes)});runtime.init();const program=runtime.worldProgram();assert.ok(program.gpu_worlds.length);assert.ok(program.views.every(view=>view.axis===false));
   const arenas=runtime.worldLayerViews();assert.ok(arenas.every(arena=>arena.state.every(Number.isFinite)));
   if(id==='tree'){
     const snapshots=arenas.map(a=>a.state.slice());for(const a of arenas){a.state[0]=123456;a.state[a.state.length-1]=-123456;}runtime.init();
@@ -35,7 +36,21 @@ for(const {id,files} of applications){
     }const kernel=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$physics`);for(const law of ['air_velocity','obstacle_normal','coupled_neighbor'])assert.ok(kernel.includes(`fn ${law}`),`Compiled tree missing ${law}`);assert.match(kernel,/characteristic_speed=max\(params\.wind\.x,length\(p\.v\.xyz\)\)/);const control=await readFile(new URL(`previews/0.6.0/compiled/${record.runtime_directory}/vf-world-mechanical-runtime.mjs`,root),'utf8');assert.match(control,/input\.min='0';input\.max='20'/);assert.equal(program.gpu_worlds[0].properties.turbulence_intensity,.16);console.log('Four tree variants: 0-20 m/s coherent air, material-aware modes, finite geometry and shared leaf anchors verified');
   }
   for(const world of program.gpu_worlds){assert.ok(runtime.readBinding(`${world.binding_prefix??`$world$gpu$${world.world_id}`}$physics`).includes('@compute'));assert.throws(()=>runtime.stepWorld(world.world_id),WebAssembly.RuntimeError);}
-  if(id==='wheel'){assert.deepEqual(program.gpu_worlds.map(world=>world.kind),['liquid']);assert.equal(program.views.length,1,'Coming Soon wheel must expose only water');assert.ok(program.views[0].controls.start_paused===true,'Water wheel must start paused');assert.equal(program.gpu_worlds[0].geometry.radius,.5);assert.ok(arenas.find(a=>a.layer.id===program.gpu_worlds[0].layer_id).layer.count>=1808);}
+  if(id==='wheel'){
+    assert.deepEqual(program.gpu_worlds.map(world=>world.kind),['liquid']);
+    assert.equal(program.views.length,1,'Coming Soon wheel must expose only water');
+    assert.ok(program.views[0].controls.start_paused===true,'Water wheel must start paused');
+    const world=program.gpu_worlds[0],arena=arenas.find(a=>a.layer.id===world.layer_id);
+    assert.equal(world.geometry.radius,.5);
+    assert.ok(arena.layer.count>=1808);
+    assert.equal(arena.particleChannels.mass.length,arena.layer.count,'Wheel mass must be authored in VKF');
+    assert.equal(arena.particleChannels.volume.length,arena.layer.count,'Wheel volume must be authored in VKF');
+    const {materialInitialState}=await import(`../public/previews/0.6.0/compiled/${record.runtime_directory}/vf-world-material-runtime.mjs`);
+    const initial=materialInitialState(world,arena);
+    assert.equal(initial.particleMass,arena.particleChannels.mass[0]);
+    assert.equal(initial.floats[11],Math.fround(arena.particleChannels.volume[0]));
+    assert.ok(Math.abs(arena.particleChannels.mass[0]/arena.particleChannels.volume[0]-world.properties.density)<1e-8);
+  }
   else {assert.equal(program.gpu_worlds[0].kind,id==='stones'?'rigid':'wind');assert.equal(arenas.find(a=>a.layer.id===program.gpu_worlds[0].layer_id).layer.count,id==='stones'?5:64000);}
   if(id==='stones'){const embedding=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$embedding`),kernel=runtime.readBinding(`$world$gpu$${program.gpu_worlds[0].world_id}$physics`);assert.ok(embedding.includes('fn granite('),'stone material must be compiled');for(const kind of [1,2,3,4])assert.ok(embedding.includes(`kind==${kind}u`),`stone material ${kind} missing`);assert.match(kernel,/rolling_moment=min\(params\.material\.z\*jn\*contact_radius/);assert.match(kernel,/spin_moment=min\(params\.material\.w\*jn\*contact_radius/);const asset=gunzipSync(await readFile(new URL(program.gpu_worlds[0].properties.asset.slice(1),root)));assert.equal(asset.readUInt32LE(8),5);let offset=20;const species=new Set();for(let i=0;i<5;i++){const sizes=Array.from({length:5},(_,j)=>asset.readUInt32LE(offset+j*4));offset+=20;const metadata=JSON.parse(asset.subarray(offset,offset+sizes[0]));species.add(metadata.species);assert.ok(metadata.collision.density>=2600&&metadata.collision.density<=3050);for(let axis=0;axis<3;axis++)assert.ok(Math.abs(metadata.collision.center[axis]-arenas[0].state[i*9+axis*3])<1e-8,'asset and add placement must agree');offset+=sizes[0]+(4-sizes[0]%4)%4+(sizes[1]+sizes[2]+sizes[3]+sizes[4])*4;}assert.equal(species.size,5);assert.equal(offset,asset.length);}
   if(id==='stones'){
