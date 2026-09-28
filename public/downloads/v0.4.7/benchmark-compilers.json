@@ -1,0 +1,19 @@
+{
+  "schema": "vektor-flow/benchmark-compilers-v1",
+  "version": "0.4.7",
+  "sourceRevision": "d9a3a2dd85fe0adbff325e87163ca6e28b9c5bd1",
+  "platforms": {
+    "windows-x64": {
+      "compiler": "vkf-benchmark-compiler-windows-x64.exe",
+      "sha256": "f2a39904a56b4a6956aed475b5946399f40431230add0adbb94f54601b7e9897",
+      "receipt": "../../sources/benchmarks/core-comparison/results/windows-x64-047-packaged-compiler-10.json",
+      "receiptSha256": "792bfa71047762fda3b964ff82ae35599dba9895bc501d99c258a5608416c4c4"
+    },
+    "linux-x64": {
+      "compiler": "vkf-benchmark-compiler-linux-x64",
+      "sha256": "c9bc1068779c527d663a8254e66154463b30f6370aedec135d92f710034bdf38",
+      "receipt": "../../sources/benchmarks/core-comparison/results/linux-x64-047-packaged-compiler-10.json",
+      "receiptSha256": "5cafc0e4b5d2ace9bb813c14a4d0ebfcbc04e5e7b690c2cb6667305700fe17a0"
+    }
+  }
+}

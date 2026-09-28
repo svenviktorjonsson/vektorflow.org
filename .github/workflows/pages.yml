@@ -25,6 +25,8 @@ jobs:
       - uses: actions/configure-pages@v5
       - name: Verify visible stable release
         run: node scripts/test-current-release-selector.mjs
+      - name: Verify benchmark compiler downloads
+        run: node scripts/test-benchmark-compiler-downloads.mjs
       - name: Verify live preview invariants
         run: node scripts/test-live-preview-invariants.mjs
       - name: Verify compiled Coming Soon applications
