@@ -487,13 +487,13 @@ export async function createLiquidParticleEmbeddingGpu(deviceArgument, canvasArg
     if (backgroundTexture) backgroundTexture.destroy();
     densityTexture = device.createTexture({
       label: 'VKF Liquid continuous field',
-      size: [width, height], format: LIQUID_PARTICLE_FIELD_FORMAT_GPU,
+      size: { width, height, depthOrArrayLayers: 1 }, format: LIQUID_PARTICLE_FIELD_FORMAT_GPU,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     densityView = densityTexture.createView();
     backgroundTexture = device.createTexture({
       label: 'VKF Liquid cached static scene background',
-      size: [width, height], format: 'rgba16float',
+      size: { width, height, depthOrArrayLayers: 1 }, format: 'rgba16float',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     backgroundView = backgroundTexture.createView();

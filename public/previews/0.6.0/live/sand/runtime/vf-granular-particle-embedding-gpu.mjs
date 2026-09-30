@@ -656,7 +656,7 @@ export async function createGranularParticleEmbeddingGpu(deviceArgument, canvasA
     densityTexture?.destroy();
     densityTexture = device.createTexture({
       label: 'VKF Granular density and motion field',
-      size: [width, height],
+      size: { width, height, depthOrArrayLayers: 1 },
       format: GRANULAR_FIELD_FORMAT_GPU,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });

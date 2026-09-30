@@ -1,10 +1,11 @@
 import { createLiquidParticleWorldGpuRuntime } from './runtime/vf-liquid-particle-world-gpu.mjs?v=wheel-pressure-9';
-import { createLiquidParticleEmbeddingGpu } from './runtime/vf-liquid-particle-embedding-gpu.mjs?v=raw-particles-11';
+import { createLiquidParticleEmbeddingGpu } from './runtime/vf-liquid-particle-embedding-gpu.mjs?v=explicit-extents-12';
 import { createFixedStepRealtimeClock } from './runtime/fixed-step-realtime-clock.mjs';
 import { createGranularParticleWorldGpuRuntime } from '../sand/runtime/vf-granular-particle-world-gpu.mjs?v=sand-repose-11';
-import { createGranularParticleEmbeddingGpu } from '../sand/runtime/vf-granular-particle-embedding-gpu.mjs?v=sand-density-11';
+import { createGranularParticleEmbeddingGpu } from '../sand/runtime/vf-granular-particle-embedding-gpu.mjs?v=explicit-extents-12';
 import { createWheelEmbeddingGpu } from './wheel-embedding-gpu.mjs';
 import { createVfLiveWorldStackReference } from '../runtime/vf-live-world-stack.mjs?v=world-stack-1';
+import { isLiveSessionActive } from '../runtime/vf-session-activity.mjs';
 
 const canvas = document.getElementById('stage');
 const waterButton = document.getElementById('water');
@@ -41,8 +42,18 @@ const fail = (error) => {
   playing = false;
   errorBox.hidden = false;
   errorBox.textContent = String(error?.message || error?.stack || error);
+  const details = String(error?.stack || error?.message || error);
+  console.error('VKF material wheel failure (explicit-extents-12)', details);
+  const diagnostic = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = 'Error details';
+  const trace = document.createElement('pre');
+  trace.textContent = `Build: explicit-extents-12\n${location.href}\n${details}`;
+  diagnostic.append(summary, trace);
+  errorBox.after(diagnostic);
   status.textContent = 'WebGPU unavailable';
-  window.__materialWheelResult = { outcome: 'fail', error: errorBox.textContent };
+  window.__materialWheelResult = { outcome: 'fail', error: errorBox.textContent,
+    stack: details, build: 'explicit-extents-12' };
 };
 
 const selected = () => {
@@ -142,6 +153,7 @@ const renderFrame = (timestamp) => {
   try {
     const active = selected();
     if (!active.runtime || !active.embedding) return;
+    if (!isLiveSessionActive()) { previousTimestamp = null; requestAnimationFrame(renderFrame); return; }
     const elapsed = previousTimestamp == null ? 0
       : Math.max(0, Math.min(0.08, (timestamp - previousTimestamp) / 1000));
     previousTimestamp = timestamp;

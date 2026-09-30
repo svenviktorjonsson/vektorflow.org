@@ -1,4 +1,5 @@
 import { createStoneSpeciesPileReference } from './runtime/vf-stone-species-pile.mjs?v=fourier-9';
+import { isLiveSessionActive } from '../runtime/vf-session-activity.mjs';
 
 const frameId = 'rigid_rocks_fourier_5_frame';
 const playButton = document.getElementById('play');
@@ -208,6 +209,7 @@ try {
   window.addEventListener('blur', finishDrop);
 
   const animate = (time) => {
+    if (!isLiveSessionActive()) { previous = null; requestAnimationFrame(animate); return; }
     const elapsed = previous == null ? 0 : Math.min(0.05, Math.max(0, (time - previous) / 1000));
     previous = time;
     let moving = Boolean(picked);

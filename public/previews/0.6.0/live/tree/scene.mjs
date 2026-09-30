@@ -3,6 +3,7 @@ import { createGrassCameraDemandControllerReference } from './ui/vf-grass-camera
 import { createRetainedGeometryPacketRuntimeReference } from './ui/vf-rock-camera-demand-runtime.mjs';
 import { createVfLiveWorldStackReference } from '../runtime/vf-live-world-stack.mjs?v=world-stack-1';
 import { treeProGenPresets, treeProGenAsset } from './runtime/vf-tree-pro-gen-presets.mjs';
+import { isLiveSessionActive } from '../runtime/vf-session-activity.mjs';
 
 const frameId = 'tree_grass_live_frame';
 const status = document.getElementById('status');
@@ -552,6 +553,7 @@ try {
   requestFrame();
 
   const animate = (time) => {
+    if (!isLiveSessionActive()) { lastWindFrame = 0; requestAnimationFrame(animate); return; }
     if (time - lastWindFrame >= 92) {
       const dt = lastWindFrame ? Math.min(0.12, (time - lastWindFrame) / 1000) : 0.092;
       lastWindFrame = time;
