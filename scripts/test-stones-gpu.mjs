@@ -104,8 +104,8 @@ try{
   frameTimings.sort((a,b)=>a-b);stoneDynamics.stepsPerDisplayFrame=stepsPerFrame;stoneDynamics.p95RenderOnlyMs=percentile(renderOnly,.95);stoneDynamics.p95ActivePhysicsOnlyMs=percentile(physicsOnly,.95);stoneDynamics.medianActiveRenderedFrameMs=frameTimings[Math.floor(frameTimings.length*.5)];stoneDynamics.p95ActiveRenderedFrameMs=frameTimings[Math.floor(frameTimings.length*.95)];stoneDynamics.maxActiveRenderedFrameMs=frameTimings.at(-1);
   if(!location.search.includes('hires'))check(stoneDynamics.p95ActiveRenderedFrameMs<16.67,'Active collision rendered frame misses 60 Hz: '+JSON.stringify(stoneDynamics));
  }else{
-  const ms=[];for(let frame=0;frame<60;frame++){encoder=device.createCommandEncoder();for(let step=0;step<Math.ceil((1/60)/world.time_step-1e-8);step++)physics.step(encoder);embedding.render(encoder,camera,{grass:true,particles:false});const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();ms.push(performance.now()-started);}
-  ms.sort((a,b)=>a-b);treePerformance={medianMs:ms[30],p95Ms:ms[Math.floor(ms.length*.95)],maxMs:ms.at(-1)};
+  const measure=async(kind)=>{const values=[];for(let frame=0;frame<60;frame++){encoder=device.createCommandEncoder();if(kind!=='render')for(let step=0;step<Math.ceil((1/60)/world.time_step-1e-8);step++)physics.step(encoder);if(kind!=='physics')embedding.render(encoder,camera,{grass:true,particles:false});const started=performance.now();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();values.push(performance.now()-started);}values.sort((a,b)=>a-b);return {median:values[30],p95:values[Math.floor(values.length*.95)],max:values.at(-1)};};
+  treePerformance={physics:await measure('physics'),render:await measure('render'),combined:await measure('combined')};
  }
  if(!isTree&&!location.search.includes('hires')){
   // Settled bodies stay fixed while the authored light orbits. Measure frame

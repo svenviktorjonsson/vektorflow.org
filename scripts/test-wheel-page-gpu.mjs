@@ -23,16 +23,17 @@ async function checkExclusion(current,{assert=true}={}){
  // in the same GPU submission as the particles, or fast-turn geometry audits
  // report a false penetration against a different frame's baffles.
  const sampledAngle=raw[n*(stride+2)+1];
- const r=world.kind==='liquid'?world.properties.spacing*.46:world.properties.radius,d=2*r,grid=new Map(),c=Math.cos(sampledAngle),s=Math.sin(sampledAngle);let pairGap=Infinity,boundaryGap=Infinity,worstBoundary=null,overlapPairs=0,overlapAreaEstimate=0,worstPair=null,worstCoords=null,kinetic=0,maximumSpeed=0,minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,sumY=0;const surfaceTopByBin=Array(16).fill(-Infinity);
+ const r=world.kind==='liquid'?world.properties.spacing*.46:world.properties.radius,d=2*r,grid=new Map(),hashCounts=new Map(),c=Math.cos(sampledAngle),s=Math.sin(sampledAngle);let pairGap=Infinity,boundaryGap=Infinity,worstBoundary=null,overlapPairs=0,nearCoincidentPairs=0,overlapAreaEstimate=0,worstPair=null,worstCoords=null,kinetic=0,maximumSpeed=0,minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,sumY=0;const surfaceTopByBin=Array(16).fill(-Infinity);
  for(let i=0;i<n;i++){const x=raw[i*stride]+raw[n*stride+2*i]-world.geometry.center[0],y=raw[i*stride+1]+raw[n*stride+2*i+1]-world.geometry.center[1],cx=Math.floor(x/d),cy=Math.floor(y/d);
+  if(world.kind==='liquid'){const scale=current.physics.seed.supportRadius,origin=current.physics.policy.worldMinimum,cellX=Math.floor((raw[i*stride]-origin[0])/scale),cellY=Math.floor((raw[i*stride+1]-origin[1])/scale);let hash=Math.imul(cellX,0x8da6b343)^Math.imul(cellY,0xd8163841);hash^=hash>>>16;hash=Math.imul(hash,0x7feb352d);hash^=hash>>>15;const bucket=(hash>>>0)&(current.physics.spatialGrid.bucketCapacity-1);hashCounts.set(bucket,(hashCounts.get(bucket)||0)+1);}
   minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);sumY+=y;const surfaceBin=Math.max(0,Math.min(15,Math.floor((x+.5)*16)));surfaceTopByBin[surfaceBin]=Math.max(surfaceTopByBin[surfaceBin],y);
-  for(let yy=cy-1;yy<=cy+1;yy++)for(let xx=cx-1;xx<=cx+1;xx++)for(const p of grid.get(xx+','+yy)||[]){const distance=Math.hypot(x-p[0],y-p[1]),gap=distance-d;if(gap<0){overlapPairs++;if(world.kind==='granular')overlapAreaEstimate+=2*r*r*Math.acos(Math.min(1,distance/d))-.5*distance*Math.sqrt(Math.max(0,d*d-distance*distance));}if(gap<pairGap){pairGap=gap;worstPair=[p[2],i];worstCoords=[[p[0],p[1]],[x,y]];}}
+  for(let yy=cy-1;yy<=cy+1;yy++)for(let xx=cx-1;xx<=cx+1;xx++)for(const p of grid.get(xx+','+yy)||[]){const distance=Math.hypot(x-p[0],y-p[1]),gap=distance-d;if(gap<0){overlapPairs++;if(distance<1e-5)nearCoincidentPairs++;if(world.kind==='granular')overlapAreaEstimate+=2*r*r*Math.acos(Math.min(1,distance/d))-.5*distance*Math.sqrt(Math.max(0,d*d-distance*distance));}if(gap<pairGap){pairGap=gap;worstPair=[p[2],i];worstCoords=[[p[0],p[1]],[x,y]];}}
   const key=cx+','+cy;if(!grid.has(key))grid.set(key,[]);grid.get(key).push([x,y,i]);const rimGap=world.geometry.radius-world.geometry.half_width-r-Math.hypot(x,y);if(rimGap<boundaryGap){boundaryGap=rimGap;worstBoundary={kind:'rim',particle:i,position:[x,y]};}
   const speed2=raw[i*stride+2]**2+raw[i*stride+3]**2;kinetic+=speed2;maximumSpeed=Math.max(maximumSpeed,Math.sqrt(speed2));
   for(let segment=0;segment<world.geometry.segments.length;segment++){const [ax,ay,bx,by]=world.geometry.segments[segment],a=c*ax-s*ay,b=s*ax+c*ay,ex=c*(bx-ax)-s*(by-ay),ey=s*(bx-ax)+c*(by-ay),t=Math.max(0,Math.min(1,((x-a)*ex+(y-b)*ey)/(ex*ex+ey*ey))),gap=Math.hypot(x-a-t*ex,y-b-t*ey)-r-world.geometry.half_width;if(gap<boundaryGap){boundaryGap=gap;worstBoundary={kind:'baffle',segment,particle:i,position:[x,y]};}}
  }
  const worstPairParts=worstPair?.map(i=>({high:[raw[i*stride],raw[i*stride+1]],low:[raw[n*stride+2*i],raw[n*stride+2*i+1]]}));
- if(assert&&!(boundaryGap>=0&&(world.kind==='liquid'||pairGap>=0)))throw Error('Paused configuration overlap: '+JSON.stringify({pairGap,boundaryGap}));return {sampledAngle,pairGap,boundaryGap,worstBoundary,overlapPairs,overlapAreaEstimate,diskAreaFraction:1-overlapAreaEstimate/(n*Math.PI*r*r),worstPair,worstCoords,worstPairParts,meanSpeedSquared:kinetic/n,maximumSpeed,meanY:sumY/n,bounds:[minX,minY,maxX,maxY],surfaceTopByBin,vertices:n};
+ if(assert&&!(boundaryGap>=0&&(world.kind==='liquid'||pairGap>=0)))throw Error('Paused configuration overlap: '+JSON.stringify({pairGap,boundaryGap}));return {sampledAngle,pairGap,boundaryGap,worstBoundary,overlapPairs,nearCoincidentPairs,overlapAreaEstimate,diskAreaFraction:1-overlapAreaEstimate/(n*Math.PI*r*r),worstPair,worstCoords,worstPairParts,meanSpeedSquared:kinetic/n,maximumSpeed,meanY:sumY/n,bounds:[minX,minY,maxX,maxY],expectedHashMaximum:Math.max(...hashCounts.values()),expectedHashNonempty:hashCounts.size,surfaceTopByBin,vertices:n};
 }
 async function checkDiffuseWheel(current){
  const n=current.physics.diffuseCapacity,bytes=n*16;
@@ -55,6 +56,42 @@ async function checkDiffuseWheel(current){
  }
  return {active,worstGap,worst,angle};
 }
+async function checkRelaxVelocityField(current){
+ const n=current.physics.primaryCount,stride=12,bytes=n*stride*4;
+ const read=auditDevice.createBuffer({size:bytes+n*8+256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const encoder=auditDevice.createCommandEncoder();
+ encoder.copyBufferToBuffer(current.physics.particleBuffer,0,read,0,bytes);
+ encoder.copyBufferToBuffer(current.contact.resources.precisionOutput,0,read,bytes,n*8);
+ encoder.copyBufferToBuffer(current.contact.resources.control,0,read,bytes+n*8,256);
+ auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+ const raw=new Float32Array(read.getMappedRange().slice(0));read.unmap();read.destroy();
+ const world=current.world,angle=raw[n*(stride+2)+1],c=Math.cos(angle),s=Math.sin(angle);
+ const samples=[],zones={contact:{count:0,speed2:0},bulk:{count:0,speed2:0}};
+ for(let i=0;i<n;i++){
+  const x=raw[i*stride]+raw[n*stride+2*i]-world.geometry.center[0],
+   y=raw[i*stride+1]+raw[n*stride+2*i+1]-world.geometry.center[1],
+   vx=raw[i*stride+2],vy=raw[i*stride+3],speed2=vx*vx+vy*vy;
+  let gap=world.geometry.radius-world.geometry.half_width-world.properties.spacing*.46-Math.hypot(x,y);
+  for(const [ax,ay,bx,by] of world.geometry.segments){
+   const a=c*ax-s*ay,b=s*ax+c*ay,ex=c*(bx-ax)-s*(by-ay),ey=s*(bx-ax)+c*(by-ay);
+   const t=Math.max(0,Math.min(1,((x-a)*ex+(y-b)*ey)/(ex*ex+ey*ey)));
+   gap=Math.min(gap,Math.hypot(x-a-t*ex,y-b-t*ey)-world.geometry.half_width-world.properties.spacing*.46);
+  }
+  const zone=gap<.015?zones.contact:zones.bulk;zone.count++;zone.speed2+=speed2;
+  samples.push({index:i,x,y,vx,vy,speed:Math.sqrt(speed2),gap});
+ }
+ samples.sort((a,b)=>b.speed-a.speed);
+ const ordered=samples.map(item=>item.speed).sort((a,b)=>a-b);
+ return {angle,zones,top:samples.slice(0,12),p50:ordered[Math.floor(n*.5)],
+  p90:ordered[Math.floor(n*.9)],p99:ordered[Math.floor(n*.99)]};
+}
+async function checkGridBuckets(current){
+ const count=current.physics.spatialGrid.bucketCapacity,read=auditDevice.createBuffer({size:count*4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const encoder=auditDevice.createCommandEncoder();encoder.copyBufferToBuffer(current.physics.telemetry.buffer,0,read,0,count*4);auditDevice.queue.submit([encoder.finish()]);
+ await read.mapAsync(GPUMapMode.READ);const cells=new Uint32Array(read.getMappedRange().slice(0));read.unmap();read.destroy();
+ let maximum=0,nonempty=0,sum=0;for(const occupancy of cells){maximum=Math.max(maximum,occupancy);if(occupancy)nonempty++;sum+=occupancy;}
+ return {maximum,nonempty,sum,buckets:count};
+}
 async function checkWaterVolume(current){
  const world=current.world,n=current.physics.primaryCount,stride=12,bytes=n*stride*4;
  const read=auditDevice.createBuffer({size:bytes+n*8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
@@ -71,9 +108,25 @@ async function checkWaterVolume(current){
  const buckets=new Map();for(let i=0;i<n;i++){const p=positions[i],key=Math.floor(p[0]/support)+','+Math.floor(p[1]/support);if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(i);}
  const kernel=(dx,dy)=>{const q=Math.hypot(dx,dy)/support;if(q>=1)return 0;return 7/(Math.PI*support*support)*(1-q)**4*(1+4*q);};
  let freshResolvedArea=0,maximumDensityStaleness=0,freshMaximumDensity=0;
+ const densityZones=[{name:'inner',count:0,excess:0,compressed:0},
+  {name:'middle',count:0,excess:0,compressed:0},{name:'rim',count:0,excess:0,compressed:0}];
+ const highestFresh=[];
  for(let i=0;i<n;i++){const p=positions[i],cx=Math.floor(p[0]/support),cy=Math.floor(p[1]/support);let fresh=0;
   for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++)for(const j of buckets.get(x+','+y)||[])fresh+=mass*kernel(p[0]-positions[j][0],p[1]-positions[j][1]);
-  freshResolvedArea+=mass/Math.max(fresh,current.physics.policy.restDensity);freshMaximumDensity=Math.max(freshMaximumDensity,fresh);maximumDensityStaleness=Math.max(maximumDensityStaleness,Math.abs(fresh-densities[i]));}
+  freshResolvedArea+=mass/Math.max(fresh,current.physics.policy.restDensity);freshMaximumDensity=Math.max(freshMaximumDensity,fresh);maximumDensityStaleness=Math.max(maximumDensityStaleness,Math.abs(fresh-densities[i]));
+  const distance=Math.hypot(p[0]-world.geometry.center[0],p[1]-world.geometry.center[1]);
+  const zone=densityZones[distance<.2?0:distance<.4?1:2];zone.count++;
+  const excess=Math.max(0,fresh/current.physics.policy.restDensity-1);
+  zone.excess+=excess;if(excess>.04)zone.compressed++;
+  const outward=[(p[0]-world.geometry.center[0])/Math.max(distance,1e-9),
+   (p[1]-world.geometry.center[1])/Math.max(distance,1e-9)];
+  const before=[raw[i*stride+4],raw[i*stride+5]],after=[raw[i*stride+2],raw[i*stride+3]];
+  highestFresh.push({index:i,position:p,density:fresh,storedDensity:densities[i],excess,
+   lambda:raw[i*stride+6],radialGap:world.geometry.radius-world.geometry.half_width-world.properties.spacing*.46-distance,
+   preContactVelocity:before,postContactVelocity:after,
+   preContactRadial:before[0]*outward[0]+before[1]*outward[1],
+   postContactRadial:after[0]*outward[0]+after[1]*outward[1]});}
+ highestFresh.sort((a,b)=>b.density-a.density);highestFresh.length=Math.min(12,highestFresh.length);
  densities.sort((a,b)=>a-b);const percentile=q=>densities[Math.min(n-1,Math.floor((n-1)*q))];
  const initial=[];for(let i=0;i<n;i++)initial.push([current.physics.seed.floats[i*stride],current.physics.seed.floats[i*stride+1]]);
  const radius=Math.sqrt(particleArea/Math.PI),cell=world.properties.spacing/4;
@@ -92,23 +145,24 @@ async function checkWaterVolume(current){
   let covered=0;for(const value of field)if(value>=threshold)covered++;return covered*step*step;}
  const initialEmbeddedArea=embeddedArea(initial),embeddedSurfaceArea=embeddedArea(positions);
  const telemetry=await current.physics.readTelemetry();
- return {vertices:n,totalArea,physicalVolume,retainedFraction,resolvedArea,numericalDensityVolumeFraction,freshDensityVolumeFraction:freshResolvedArea/totalArea,freshMaximumDensity,maximumDensityStaleness,lambdaMean:lambdaSum/n,lambdaMaximum,baselineOccupiedArea:baseline.area,occupiedArea:actual.area,occupiedAreaFraction,initialEmbeddedArea,embeddedSurfaceArea,embeddedSurfaceAreaFraction:embeddedSurfaceArea/initialEmbeddedArea,meanRadius:radialSum/n,nearRimFraction:nearRimCount/n,occupiedSectors:[...sectorCounts].filter(count=>count>0).length,sectorCounts:[...sectorCounts],initialBounds:baseline.bounds,bounds:actual.bounds,minimumDensity,meanDensity,p90Density:percentile(.9),p99Density:percentile(.99),p999Density:percentile(.999),maximumDensity,telemetry};
+ return {vertices:n,totalArea,physicalVolume,retainedFraction,resolvedArea,numericalDensityVolumeFraction,freshDensityVolumeFraction:freshResolvedArea/totalArea,freshMaximumDensity,maximumDensityStaleness,densityZones,highestFresh,lambdaMean:lambdaSum/n,lambdaMaximum,baselineOccupiedArea:baseline.area,occupiedArea:actual.area,occupiedAreaFraction,initialEmbeddedArea,embeddedSurfaceArea,embeddedSurfaceAreaFraction:embeddedSurfaceArea/initialEmbeddedArea,meanRadius:radialSum/n,nearRimFraction:nearRimCount/n,occupiedSectors:[...sectorCounts].filter(count=>count>0).length,sectorCounts:[...sectorCounts],initialBounds:baseline.bounds,bounds:actual.bounds,minimumDensity,meanDensity,p90Density:percentile(.9),p99Density:percentile(.99),p999Density:percentile(.999),maximumDensity,telemetry};
 }
 async function measurePhysicsSteps(current){
  if(!auditDevice.features.has('timestamp-query'))throw Error('GPU timestamp query unavailable');
  current.paused=true;await auditDevice.queue.onSubmittedWorkDone();
+ const profileSteps=${process.argv.includes('--double-step-profile')?8:4};
  const query=auditDevice.createQuerySet({type:'timestamp',count:2});
  const resolved=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
  const read=auditDevice.createBuffer({size:16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
  const encoder=auditDevice.createCommandEncoder();
  const start=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:0}});start.end();
- current.physics.stepMany(encoder,4);
+ current.physics.stepMany(encoder,profileSteps);
  const end=encoder.beginComputePass({timestampWrites:{querySet:query,beginningOfPassWriteIndex:1}});end.end();
  encoder.resolveQuerySet(query,0,2,resolved,0);encoder.copyBufferToBuffer(resolved,0,read,0,16);
  const wallStart=performance.now();auditDevice.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
  const values=new BigUint64Array(read.getMappedRange().slice(0));read.unmap();
  const gpuMs=Number(values[1]-values[0])/1e6,wallMs=performance.now()-wallStart;
- query.destroy();resolved.destroy();read.destroy();return {gpuMs,wallMs,steps:4};
+ query.destroy();resolved.destroy();read.destroy();return {gpuMs,wallMs,steps:profileSteps};
 }
 async function measureEmbedding(current,app){
  const query=auditDevice.createQuerySet({type:'timestamp',count:3});
@@ -164,7 +218,10 @@ const fluidSandGrainRange=${process.argv.includes('--fluid-sand-grain-range')};
 const inputLatency=${process.argv.includes('--input-latency')};
 const pausedInputLatency=${process.argv.includes('--input-latency-paused')};
 const pointerWasm=${process.argv.includes('--pointer-wasm')};
-const pointerWasmLatency=${process.argv.includes('--pointer-wasm-latency')};
+ const pointerWasmLatency=${process.argv.includes('--pointer-wasm-latency')};
+ const runningPointerWasmLatency=${process.argv.includes('--running-pointer-wasm-latency')};
+ const dragThenPlay=${process.argv.includes('--paused-drag-play')};
+ let dragPlayTarget,dragPlayBeforeTurn,dragPlayBeforeGrid,dragPlayPaused,dragPlayPausedGrid,dragPlayPausedShape,dragPlayEarly;
 const fluidSandPrototype=${process.argv.includes('--fluid-sand-prototype')||process.argv.includes('--fluid-sand-grain-range')};
 const fluidSandSpin=${process.argv.includes('--fluid-sand-spin')};
 let fluidSandStage=0;
@@ -175,18 +232,28 @@ addEventListener('error',e=>faults.push(String(e.error||e.message)));
 addEventListener('unhandledrejection',e=>faults.push(String(e.reason?.stack||e.reason)));
 function observeInputPresentation(canvas,current,target,presentedBefore,startedAt,state,label){
  let acceptedMs=null,requiredPresented=null,finished=false;
+ const initialAngle=current.logicalAngle;
+ let firstAcceptedMs=null,firstRequiredPresented=null,firstPresentedMs=null;
  const observer=new MutationObserver(sample);
  const finish=(result)=>{if(finished)return;finished=true;observer.disconnect();clearTimeout(timeout);
   fetch('/page-result',{method:'POST',body:JSON.stringify({...result,...state})});};
  const timeout=setTimeout(()=>finish({passed:false,error:label+' input did not present',acceptedMs}),2000);
  function sample(){
+  if(firstAcceptedMs===null&&Math.abs(current.logicalAngle-initialAngle)>.001){
+   firstAcceptedMs=performance.now()-startedAt;
+   firstRequiredPresented=Number(canvas.dataset.renderedFrames||0);
+  }
+  if(firstAcceptedMs!==null&&firstPresentedMs===null&&
+     Number(canvas.dataset.presentedFrames||0)>=Math.max(presentedBefore+1,firstRequiredPresented))
+   firstPresentedMs=performance.now()-startedAt;
   if(acceptedMs===null&&Math.abs(current.logicalAngle-target)<.005){
    acceptedMs=performance.now()-startedAt;
    requiredPresented=Number(canvas.dataset.renderedFrames||0);
   }
   if(acceptedMs!==null&&Number(canvas.dataset.presentedFrames||0)>=Math.max(presentedBefore+1,requiredPresented)){
    const presentedMs=performance.now()-startedAt;
-   finish({passed:true,acceptedMs,presentedMs,measurement:'GPU queue completion, not screen scanout'});
+   finish({passed:true,acceptedMs,presentedMs,firstAcceptedMs,firstPresentedMs,
+    measurement:'GPU queue completion, not screen scanout'});
   }
  }
  observer.observe(canvas,{attributes:true,attributeFilter:['data-rendered-frames','data-presented-frames']});sample();
@@ -276,7 +343,7 @@ async function inspect(){
     worlds:state.worlds,telemetry:pausedTelemetry,
     fps:profileFps?(state.frames-pausedProfileStart.frames)*1000/(state.elapsedMs-pausedProfileStart.elapsedMs):undefined,
     browserRafFps:profileFps?(browserRafFrames-pausedProfileStart.rafFrames)*1000/(state.elapsedMs-pausedProfileStart.elapsedMs):undefined,
-    browserRafFrames:profileFps?browserRafFrames:undefined};
+     browserRafFrames:profileFps?browserRafFrames:undefined};
   if(pausedTelemetry.nonFinite){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused water initialized with non-finite state',pausedReceipt,...state})});return;}
   if(pointerWasm||pointerWasmLatency){
    if(dragTarget===undefined){
@@ -302,11 +369,13 @@ async function inspect(){
    if(performance.now()-dragStarted>3000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Compiled pointer event did not turn the wheel',...state})});return;}
    setTimeout(inspect,100);return;
   }
-  if(checkDrag||pausedInputLatency){
+   if(checkDrag||pausedInputLatency||dragThenPlay){
    if(dragTarget===undefined){const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
     dragTarget=current.angle+1.2;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
     if(pausedInputLatency){observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,'Paused wheel');return;}}
-   if(Math.abs(current.logicalAngle-dragTarget)<.005){const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current);await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:current.time===0,pausedReceipt,dragMs,exclusion,...state})});return;}
+    if(Math.abs(current.logicalAngle-dragTarget)<.005){
+     if(dragThenPlay){dragPlayPaused=await current.physics.readTelemetry();dragPlayPausedGrid=await checkGridBuckets(current);dragPlayPausedShape=await checkExclusion(current,{assert:false});played=true;play.click();setTimeout(inspect,250);return;}
+     const dragMs=performance.now()-dragStarted,exclusion=await checkExclusion(current),spreadX=exclusion.bounds[2]-exclusion.bounds[0],spreadY=exclusion.bounds[3]-exclusion.bounds[1],passed=current.time===0&&spreadX>.2&&spreadY>.2;await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,pausedReceipt,dragMs,exclusion,spreadX,spreadY,...state,error:passed?undefined:'Paused drag collapsed the material configuration'})});return;}
    if(performance.now()-dragStarted>3000){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,error:'Paused 1.2-radian wheel drag not accepted within 3 seconds',dragMs:performance.now()-dragStarted,...state})});return;}
    setTimeout(inspect,100);return;
   }
@@ -316,12 +385,12 @@ async function inspect(){
   // A conserved per-particle restVolume is not proof that the simulated
   // material stayed incompressible. Audit the volume implied by the measured
   // density field too; this catches visually collapsing water.
-  const conservation=await checkWaterVolume(current),passed=conservation.retainedFraction>=.9999&&conservation.retainedFraction<=1.000001&&conservation.freshDensityVolumeFraction>=.99&&conservation.embeddedSurfaceAreaFraction>=.99&&conservation.minimumDensity>0&&conservation.p90Density<=current.physics.policy.restDensity*1.04&&conservation.p999Density<=current.physics.policy.restDensity*1.15&&!conservation.telemetry.nonFinite&&!conservation.telemetry.gridOverflow;
-  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,conservation,pausedReceipt,...state,error:passed?undefined:'Water density or reconstructed surface missed the 99% floor'})});return;
+  const conservation=await checkWaterVolume(current),exclusion=await checkExclusion(current,{assert:false}),passed=conservation.retainedFraction>=.9999&&conservation.retainedFraction<=1.000001&&conservation.freshDensityVolumeFraction>=.99&&conservation.embeddedSurfaceAreaFraction>=.99&&conservation.minimumDensity>0&&conservation.p90Density<=current.physics.policy.restDensity*1.04&&conservation.p999Density<=current.physics.policy.restDensity*1.15&&!conservation.telemetry.nonFinite&&!conservation.telemetry.gridOverflow;
+  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,conservation,exclusion,pausedReceipt,...state,error:passed?undefined:'Water density or reconstructed surface missed the 99% floor'})});return;
  }
  if(played&&gpuProfile&&state.time>=(sustained?12:5)){
   const telemetry=await current.physics.readTelemetry(),physics=await measurePhysicsSteps(current),embedding=await measureEmbedding(current,app);
-  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,physics,embedding,telemetry,pausedReceipt,...state})});return;
+  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,physics,embedding,telemetry,pressureGeometryCacheBytes:current.physics.pressureGeometryCacheBytes,pausedReceipt,...state})});return;
  }
  if(played&&steadySpin){
   // Follow simulation time, not wall time: a slow browser must not turn this
@@ -331,6 +400,15 @@ async function inspect(){
   const wallSeconds=(performance.now()-steadySpinStartMs)/1000;
   const target=steadySpinStartAngle+steadyOmega*(realtimeSpin?wallSeconds:state.time-steadySpinStartTime);
   if(target-current.targetAngle>.015)app.setLayer(current.world.boundary_ids[0],{rotation:target});
+  if(${process.argv.includes('--water-overflow-trace')}&&
+     (globalThis.__vfOverflowTraceAt===undefined||wallSeconds-globalThis.__vfOverflowTraceAt>=.25)){
+   globalThis.__vfOverflowTraceAt=wallSeconds;
+   const telemetry=await current.physics.readTelemetry();
+   if(telemetry.peakCellOccupancy>current.physics.policy.maximumParticlesPerCell){
+    const grid=await checkGridBuckets(current),shape=await checkExclusion(current,{assert:false}),volume=await checkWaterVolume(current);
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:false,overflowAt:wallSeconds,telemetry,grid,shape,volume,...state,error:'First observed grid overflow'})});return;
+   }
+  }
   if(realtimeSpin&&wallSeconds>=(realtimeSpinLong?24:8)){
    const shape=await checkExclusion(current,{assert:false}),volume=await checkWaterVolume(current);
    const realtimeFactor=(state.time-steadySpinStartTime)/wallSeconds;
@@ -359,7 +437,9 @@ async function inspect(){
    const mechanicalSpeedCeiling=(state.peakWheelSurfaceSpeed??0)+Math.sqrt(2*9.82*1)+1;
    const diffuse=fastSpin?await checkDiffuseWheel(current):undefined;
    const diffuseClear=!fastSpin||[...waterTurnSamples.map(s=>s.diffuse),diffuse].every(s=>s.active===0||s.worstGap>=-1e-4);
-   const passed=[...waterTurnSamples,...waterSnapshots].every(s=>s.shape.boundaryGap>=-1e-5)&&rest.meanSpeedSquared<Math.min(.05*.05,release.meanSpeedSquared*.01)&&diffuseClear&&(!fastSpin||(conservation.freshDensityVolumeFraction>=.99&&conservation.embeddedSurfaceAreaFraction>=.99&&!conservation.telemetry.gridOverflow&&conservation.telemetry.peakSpeed<mechanicalSpeedCeiling));await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,mechanicalSpeedCeiling,waterTurnCount,waterTurnSamples,waterSnapshots,conservation,diffuse,...state,error:passed?undefined:'Water relaxation, volume, foam, peak speed, or wheel-boundary exclusion failed'})});return;}}
+   const passed=[...waterTurnSamples,...waterSnapshots].every(s=>s.shape.boundaryGap>=-1e-5)&&rest.meanSpeedSquared<Math.min(.05*.05,release.meanSpeedSquared*.01)&&diffuseClear&&(!fastSpin||(conservation.freshDensityVolumeFraction>=.99&&conservation.embeddedSurfaceAreaFraction>=.99&&!conservation.telemetry.gridOverflow&&conservation.telemetry.peakSpeed<mechanicalSpeedCeiling));
+   const relaxVelocityField=${process.argv.includes('--water-relax-trace')}?await checkRelaxVelocityField(current):undefined;
+   await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,mechanicalSpeedCeiling,waterTurnCount,waterTurnSamples,waterSnapshots,conservation,diffuse,relaxVelocityField,...state,error:passed?undefined:'Water relaxation, volume, foam, peak speed, or wheel-boundary exclusion failed'})});return;}}
  }
  if(played&&runningDrag){
   if(dragTarget===undefined&&state.time>=5){const beforeDrag=await checkExclusion(current,{assert:false});await fetch('/page-progress',{method:'POST',body:JSON.stringify({beforeDrag})});dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});}
@@ -371,11 +451,40 @@ async function inspect(){
   dragTarget=current.angle+.4;dragStarted=performance.now();app.setLayer(current.world.boundary_ids[0],{rotation:dragTarget});
   observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,'Running wheel');return;
  }
+ if(played&&runningPointerWasmLatency&&state.time>=.5&&dragTarget===undefined){
+  const rect=app.canvas.getBoundingClientRect(),center=current.world.geometry.center;
+  const screen=point=>{const p=current.boundary.worldToScreen(point,current.physics.policy);
+   return {clientX:rect.left+p[0]*rect.width/app.canvas.width,
+    clientY:rect.top+p[1]*rect.height/app.canvas.height};};
+  const start=screen([center[0]+.35,center[1]]);
+  const end=screen([center[0]+.35*Math.cos(.4),center[1]+.35*Math.sin(.4)]);
+  const presentedBefore=Number(app.canvas.dataset.presentedFrames||0);
+  app.canvas.setPointerCapture=()=>{};app.canvas.hasPointerCapture=()=>true;
+  dragTarget=current.angle+.4;dragStarted=performance.now();
+  app.canvas.dispatchEvent(new PointerEvent('pointerdown',{pointerId:29,bubbles:true,...start}));
+  app.canvas.dispatchEvent(new PointerEvent('pointermove',{pointerId:29,bubbles:true,...end}));
+  observeInputPresentation(app.canvas,current,dragTarget,presentedBefore,dragStarted,state,
+   'Running compiled pointer wheel');return;
+ }
  if(played&&profileFps&&state.elapsedMs-pausedReceipt.elapsedMs>=(sustained?15000:5000)){
   const wallSeconds=(state.elapsedMs-pausedReceipt.elapsedMs)/1000;
-  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,playing:{fps:(state.frames-pausedReceipt.frames)/wallSeconds,browserRafFps:(browserRafFrames-pausedReceipt.browserRafFrames)/wallSeconds,realtimeFactor:(state.time-pausedReceipt.time)/wallSeconds},...state})});return;
+  const timings=globalThis.__vfRuntimeFrameTimings;
+  const summarize=values=>{if(!values?.length)return null;const sorted=[...values].sort((a,b)=>a-b);return {count:sorted.length,mean:values.reduce((a,b)=>a+b,0)/values.length,p50:sorted[Math.floor(sorted.length*.5)],p90:sorted[Math.floor(sorted.length*.9)],p99:sorted[Math.floor(sorted.length*.99)]};};
+  const frameTimings=timings?{encode:summarize(timings.encodeMs),queue:summarize(timings.queueMs),skippedInFlight:timings.skippedInFlight,skippedPending:timings.skippedPending}:null;
+  await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,playing:{fps:(state.frames-pausedReceipt.frames)/wallSeconds,browserRafFps:(browserRafFrames-pausedReceipt.browserRafFrames)/wallSeconds,realtimeFactor:(state.time-pausedReceipt.time)/wallSeconds},frameTimings,...state})});return;
  }
- if(played&&!checkVolume&&!profileFps&&!gpuProfile&&!waterRelax&&!runningDrag&&!inputLatency&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
+  if(played&&dragThenPlay){
+   if(state.time>0&&dragPlayEarly===undefined)dragPlayEarly=await current.physics.readTelemetry();
+   if(state.time>=.3&&dragPlayTarget===undefined){dragPlayBeforeTurn=await current.physics.readTelemetry();dragPlayBeforeGrid=await checkGridBuckets(current);dragPlayTarget=current.logicalAngle+.2;app.setLayer(current.world.boundary_ids[0],{rotation:dragPlayTarget});}
+   if(dragPlayTarget!==undefined&&Math.abs(current.logicalAngle-dragPlayTarget)<.005&&state.time>=.7){
+    const shape=await checkExclusion(current,{assert:false}),telemetry=await current.physics.readTelemetry();
+    const passed=dragPlayPausedShape.expectedHashNonempty>100&&dragPlayPausedGrid.nonempty>100
+      &&shape.boundaryGap>=-1e-5&&!telemetry.nonFinite&&!telemetry.gridOverflow;
+    await fetch('/page-result',{method:'POST',body:JSON.stringify({passed,shape,telemetry,dragPlayPaused,dragPlayPausedGrid,dragPlayPausedShape,dragPlayEarly,dragPlayBeforeTurn,dragPlayBeforeGrid,dragPlayTarget,...state,error:passed?undefined:'Paused drag collapsed the frozen particle configuration or lost contact'})});return;
+   }
+   setTimeout(inspect,100);return;
+  }
+  if(played&&!checkVolume&&!profileFps&&!gpuProfile&&!waterRelax&&!runningDrag&&!inputLatency&&!runningPointerWasmLatency&&!sandStarted&&state.frames>=6&&state.time>(sustained?12:.02)){
   if(!checkSand){await fetch('/page-result',{method:'POST',body:JSON.stringify({passed:true,pausedReceipt,...state})});return;}
  waterReceipt={...state};sandFrame=state.frames;sandStarted=true;
   const particles=[...document.querySelectorAll('#vf-material-controls button')].find(b=>b.textContent==='Particles');
