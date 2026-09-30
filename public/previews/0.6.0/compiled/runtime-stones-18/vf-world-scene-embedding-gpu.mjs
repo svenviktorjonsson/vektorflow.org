@@ -11,6 +11,7 @@ struct Node { d:vec4<f32>, v:vec4<f32> };
 @group(0) @binding(3) var<storage,read> nodes:array<Node>;
 @group(0) @binding(4) var shadow_texture:texture_depth_2d;
 @group(0) @binding(5) var shadow_sampler:sampler_comparison;
+@group(0) @binding(6) var<storage,read> accepted_surfaces:array<vec4<f32>>;
 struct Vertex { @location(0) p:vec3<f32>, @location(1) n:vec3<f32>, @location(2) color:vec4<f32>, @location(3) tag:f32, @location(4) compliance:f32, @location(5) emission:vec3<f32>, @location(6) anchor:vec3<f32>, @location(7) leaf:f32, @location(8) hinge:vec3<f32>, @location(9) length:f32, @location(10) category:f32 };
 struct Out { @builtin(position) clip:vec4<f32>, @location(0) p:vec3<f32>, @location(1) n:vec3<f32>, @location(2) color:vec4<f32>, @location(3) emission:vec3<f32>, @location(4) local:vec3<f32>, @location(5) @interpolate(flat) stone:f32, @location(6) uv:vec2<f32>, @location(7) @interpolate(flat) category:f32 };
 fn rotate(q:vec4<f32>,p:vec3<f32>)->vec3<f32>{return p+2.0*cross(q.xyz,cross(q.xyz,p)+q.w*p);}
@@ -24,19 +25,22 @@ fn mode_displacement(p:vec3<f32>,mode:u32)->vec3<f32>{
 }
 fn displacement(p:vec3<f32>)->vec3<f32>{return mode_displacement(p,0u);}
 fn hinge_rotate(p:vec3<f32>,axis:vec3<f32>,angle:f32)->vec3<f32>{return p*cos(angle)+cross(axis,p)*sin(angle)+axis*dot(axis,p)*(1.0-cos(angle));}
-fn posed(v:Vertex)->Out {
+fn posed(v:Vertex,id:u32,base:u32)->Out {
   var p=v.p;var n=v.n;
   if(scene.flags.x<0.5&&v.tag>=0.0){let b=bodies[u32(v.tag)];p=b.p.xyz+rotate(b.q,p);n=rotate(b.q,n);}
-  if(scene.flags.x>0.5&&v.compliance>0.0){
-    if(v.leaf>0.5){let offset=p-v.anchor;let angle=dot(mode_displacement(v.anchor,1u),v.n);
-      let blade=elastic_blade_pose(v.p,v.n,v.anchor,v.hinge,v.length,angle,displacement(v.anchor)*v.compliance);p=blade.p;n=blade.n;
-    }else{p+=displacement(p)*v.compliance;}
+  if(base+id<scene.grid.w){
+    p=accepted_surfaces[base+id].xyz;
+  }else if(scene.flags.x>0.5&&v.compliance>0.0){
+    // The View samples World displacement; it does not resolve contact.
+    // Even a shared interpolated map can fold or make separate triangles cross.
+    // Non-intersection belongs to a geometry-agnostic World contact Law.
+    p+=displacement(p)*v.compliance;
   }
   if(scene.flags.x<0.5&&v.category<0.5&&length(v.emission)>0.0){p+=scene.sun.xyz-scene.domain_min.xyz;}
   return Out(scene.vp*vec4<f32>(p,1.0),p,n,v.color,select(vec3<f32>(0.0),v.emission,v.category<0.5),v.p,select(-1.0,v.tag,scene.flags.x<0.5),v.emission.xy,v.category);
 }
-@vertex fn mesh_vertex(v:Vertex)->Out {return posed(v);}
-@vertex fn shadow_vertex(v:Vertex)->@builtin(position) vec4<f32>{return scene.light_vp*vec4<f32>(posed(v).p,1.0);}
+@vertex fn mesh_vertex(v:Vertex,@builtin(vertex_index) id:u32,@builtin(instance_index) base:u32)->Out {return posed(v,id,base);}
+@vertex fn shadow_vertex(v:Vertex,@builtin(vertex_index) id:u32,@builtin(instance_index) base:u32)->@builtin(position) vec4<f32>{return scene.light_vp*vec4<f32>(posed(v,id,base).p,1.0);}
 fn hash(x:u32)->u32{var v=x;v=(v^(v>>16u))*0x7feb352du;v=(v^(v>>15u))*0x846ca68bu;return v^(v>>16u);}
 fn unit(x:u32)->f32{return f32(hash(x)&0xffffffu)/16777216.0;}
 fn mineral_hash(p:vec3<i32>,seed:u32)->u32{return hash((bitcast<u32>(p.x)*73856093u)^(bitcast<u32>(p.y)*19349663u)^(bitcast<u32>(p.z)*83492791u)^seed);}
@@ -90,7 +94,8 @@ fn grass_pose(vertex:u32,id:u32)->Out {
   let u=unit(id*11u);let v=unit(id*29u);let angle=unit(id*31u)*6.283185307;
   let root=scene.domain_min.xyz+vec3<f32>(u*scene.domain_span.x,v*scene.domain_span.y,0.0);
   let height=0.11+unit(id*37u)*0.09;let width=0.008+unit(id*43u)*0.009;
-  let corners=array<vec2<f32>,6>(vec2<f32>(-1.0,0.0),vec2<f32>(1.0,0.0),vec2<f32>(0.0,1.0),vec2<f32>(-1.0,0.0),vec2<f32>(0.0,1.0),vec2<f32>(0.0,0.65));
+  // The former second triangle lay inside the first, doubling blade work.
+  let corners=array<vec2<f32>,3>(vec2<f32>(-1.0,0.0),vec2<f32>(1.0,0.0),vec2<f32>(0.0,1.0));
   let local=corners[vertex];let direction=vec3<f32>(cos(angle),sin(angle),0.0);
   let bend=displacement(root+vec3<f32>(0.0,0.0,0.55));
   let offset=vec3<f32>(0.0,0.0,height*local.y)+bend*local.y*local.y*0.32;
@@ -100,7 +105,7 @@ fn grass_pose(vertex:u32,id:u32)->Out {
   return Out(scene.vp*vec4<f32>(p,1.0),p,n,vec4<f32>(color,1.0),vec3<f32>(0.0),p,-1.0,vec2<f32>(0.0),0.0);
 }
 @vertex fn grass_vertex(@builtin(vertex_index) v:u32,@builtin(instance_index) i:u32)->Out{return grass_pose(v,i);}
-@vertex fn grass_shadow(@builtin(vertex_index) v:u32,@builtin(instance_index) i:u32)->@builtin(position) vec4<f32>{return scene.light_vp*vec4<f32>(grass_pose(v,i).p,1.0);}
+@vertex fn grass_shadow(@builtin(vertex_index) v:u32,@builtin(instance_index) i:u32)->@builtin(position) vec4<f32>{return scene.light_vp*vec4<f32>(grass_pose(v,i*4u).p,1.0);}
 @fragment fn material_fragment(v:Out)->@location(0) vec4<f32>{
   var n=normalize(v.n);var albedo=v.color.rgb;var roughness=0.90;
   let l=normalize(scene.sun.xyz-v.p);var microOcclusion=1.0;var cavityAmbient=1.0;
@@ -211,22 +216,34 @@ function view(eye,target){const z=normalize(sub(eye,target)),x=normalize(cross([
 function perspective(fov,aspect,near=.03,far=2000){const f=1/Math.tan(fov*Math.PI/360);return [f/aspect,0,0,0,0,f,0,0,0,0,far/(near-far),-1,0,0,far*near/(near-far),0];}
 export function shadowProjection(distance,extent=12){const near=Math.max(0.03,distance-extent*2),far=distance+extent*2;return [1/extent,0,0,0,0,1/extent,0,0,0,0,1/(near-far),0,0,0,near/(near-far),1];}
 export function projectPoint(p,camera,rect){const f=normalize(sub(camera.target,camera.pos)),r=normalize(cross(f,[0,0,1])),u=cross(r,f),d=sub(p,camera.pos),depth=dot(d,f),half=Math.tan(camera.fov*Math.PI/360);return {x:rect.left+(dot(d,r)/(depth*half*rect.width/rect.height)+1)*rect.width/2,y:rect.top+(1-dot(d,u)/(depth*half))*rect.height/2,depth};}
-export async function createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,shaderSource){
+export async function createWorldSceneEmbeddingGpu(device,canvas,world,physics,meshes,shaderSource,
+ {acceptedSurfacePositions=null,acceptedSurfaceVertexCount=null}={}){
+  const hasAcceptedBinding=/@group\(0\)\s*@binding\(6\)/.test(shaderSource);
+  if(acceptedSurfacePositions&&!hasAcceptedBinding)throw new Error('Compiled View lacks accepted World surface positions');
+  const surfaceVertexCount=meshes.reduce((count,mesh)=>count+mesh.vertices.length/24,0);
+  const physicalVertexCount=acceptedSurfaceVertexCount??surfaceVertexCount;
+  if(acceptedSurfacePositions&&(!Number.isInteger(physicalVertexCount)||physicalVertexCount<1||
+    physicalVertexCount>surfaceVertexCount||acceptedSurfacePositions.size<physicalVertexCount*16))
+    throw new RangeError('Accepted World surfaces must align with mesh vertices');
   const format=navigator.gpu.getPreferredCanvasFormat(),context=canvas.getContext('webgpu');context.configure({device,format,alphaMode:'opaque'});
   const uniform=device.createBuffer({size:256,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const shadow=device.createTexture({size:{width:2048,height:2048,depthOrArrayLayers:1},format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
-  const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},...[1,2,3].map(binding=>({binding,visibility:binding===1?GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}})),{binding:4,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'depth'}},{binding:5,visibility:GPUShaderStage.FRAGMENT,sampler:{type:'comparison'}}]});
-  const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},...[1,2,3].map(binding=>({binding,resource:{buffer:physics.buffers[binding-1]}})),{binding:4,resource:shadow.createView()},{binding:5,resource:device.createSampler({compare:'less-equal',magFilter:'linear',minFilter:'linear'})}]});
+  const emptySurface=hasAcceptedBinding&&!acceptedSurfacePositions?device.createBuffer({size:16,usage:GPUBufferUsage.STORAGE}):null;
+  const surfaceBuffer=acceptedSurfacePositions??emptySurface;
+  const surfaceEntry=hasAcceptedBinding?[{binding:6,visibility:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}}]:[];
+  const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},...[1,2,3].map(binding=>({binding,visibility:binding===1?GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}})),{binding:4,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'depth'}},{binding:5,visibility:GPUShaderStage.FRAGMENT,sampler:{type:'comparison'}},...surfaceEntry]});
+  const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},...[1,2,3].map(binding=>({binding,resource:{buffer:physics.buffers[binding-1]}})),{binding:4,resource:shadow.createView()},{binding:5,resource:device.createSampler({compare:'less-equal',magFilter:'linear',minFilter:'linear'})},...(hasAcceptedBinding?[{binding:6,resource:{buffer:surfaceBuffer}}]:[])]});
   // Shadow pipelines must not bind the texture being written as a sampled resource.
-  const shadowLayout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX,buffer:{type:'uniform'}},...[1,2,3].map(binding=>({binding,visibility:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}}))]});
-  const shadowGroup=device.createBindGroup({layout:shadowLayout,entries:[{binding:0,resource:{buffer:uniform}},...[1,2,3].map(binding=>({binding,resource:{buffer:physics.buffers[binding-1]}}))]});
+  const shadowLayout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX,buffer:{type:'uniform'}},...[1,2,3].map(binding=>({binding,visibility:GPUShaderStage.VERTEX,buffer:{type:'read-only-storage'}})),...surfaceEntry]});
+  const shadowGroup=device.createBindGroup({layout:shadowLayout,entries:[{binding:0,resource:{buffer:uniform}},...[1,2,3].map(binding=>({binding,resource:{buffer:physics.buffers[binding-1]}})),...(hasAcceptedBinding?[{binding:6,resource:{buffer:surfaceBuffer}}]:[])]});
   const module=device.createShaderModule({label:'Compiled World scene embedding',code:shaderSource});
   const errors=(await module.getCompilationInfo()).messages.filter(message=>message.type==='error');
   if(errors.length)throw new Error(errors.map(error=>`embedding WGSL ${error.lineNum}:${error.linePos}: ${error.message}`).join('\n'));
   const attributes=[{shaderLocation:0,offset:0,format:'float32x3'},{shaderLocation:1,offset:12,format:'float32x3'},{shaderLocation:2,offset:24,format:'float32x4'},{shaderLocation:3,offset:40,format:'float32'},{shaderLocation:4,offset:44,format:'float32'},{shaderLocation:5,offset:48,format:'float32x3'},{shaderLocation:6,offset:64,format:'float32x3'},{shaderLocation:7,offset:76,format:'float32'},{shaderLocation:8,offset:80,format:'float32x3'},{shaderLocation:9,offset:92,format:'float32'},{shaderLocation:10,offset:60,format:'float32'}];
   const make=(entry,shadowPass=false,particles=false)=>device.createRenderPipelineAsync({layout:device.createPipelineLayout({bindGroupLayouts:[shadowPass?shadowLayout:layout]}),vertex:{module,entryPoint:entry,buffers:entry.startsWith('mesh')||entry==='shadow_vertex'?[{arrayStride:96,attributes}]:[]},...(shadowPass?{}:{fragment:{module,entryPoint:particles?'parcel_fragment':'material_fragment',targets:[{format,...(particles?{blend:{color:{srcFactor:'src-alpha',dstFactor:'one-minus-src-alpha'},alpha:{srcFactor:'one',dstFactor:'one-minus-src-alpha'}}}:{})}]}}),primitive:{topology:particles?'triangle-strip':'triangle-list',cullMode:'none'},depthStencil:{format:'depth32float',depthWriteEnabled:!particles,depthCompare:'less-equal',...(shadowPass?{depthBias:2,depthBiasSlopeScale:2}: {})}});
   const [meshPipeline,grassPipeline,particlePipeline,meshShadow,grassShadow]=await Promise.all([make('mesh_vertex'),make('grass_vertex'),make('parcel_vertex',false,true),make('shadow_vertex',true),make('grass_shadow',true)]);
-  const packets=meshes.map(mesh=>{const vb=device.createBuffer({size:mesh.vertices.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST}),ib=device.createBuffer({size:mesh.indices.byteLength,usage:GPUBufferUsage.INDEX|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(vb,0,mesh.vertices);device.queue.writeBuffer(ib,0,mesh.indices);return {vb,ib,count:mesh.indices.length,shadow:mesh.shadow!==false};});
+  let surfaceBase=0;
+  const packets=meshes.map(mesh=>{const vb=device.createBuffer({size:mesh.vertices.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST}),ib=device.createBuffer({size:mesh.indices.byteLength,usage:GPUBufferUsage.INDEX|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(vb,0,mesh.vertices);device.queue.writeBuffer(ib,0,mesh.indices);const base=surfaceBase;surfaceBase+=mesh.vertices.length/24;return {vb,ib,count:mesh.indices.length,shadow:mesh.shadow!==false,base};});
   let depth=null,width=0,height=0;const bytes=new ArrayBuffer(256),f=new Float32Array(bytes),u=new Uint32Array(bytes);const p=world.properties;
   return {render(encoder,camera,{grass=true,particles=false}={}){
     const rect=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width*Math.min(1.5,devicePixelRatio||1))),h=Math.max(1,Math.round(rect.height*Math.min(1.5,devicePixelRatio||1)));
@@ -236,10 +253,10 @@ export async function createWorldSceneEmbeddingGpu(device,canvas,world,physics,m
     const sun=[pivot[0]+c*dx-s*dy,pivot[1]+s*dx+c*dy,light.position[2]],target=world.kind==='wind'?[0,0,3]:[0,0,.7];
     f.set(multiply(perspective(camera.fov,w/h),view(camera.pos,camera.target)),0);
     f.set(multiply(world.kind==='rigid'?perspective(50,1,.1,20):shadowProjection(Math.hypot(...sub(sun,target))),view(sun,target)),16);
-    f.set([...camera.pos,physics.time],32);f.set([...sun,Math.PI*light.radius**2*light.radiance],36);f.set([...(world.kind==='wind'?p.domain_min??[-6,-6,0]:light.position),0],40);f.set([...(p.domain_span??[12,12,9]),world.kind==='rigid'?light.radius:0],44);u.set([...(p.grid??[12,12,18]),0],48);f.set([world.kind==='wind'?1:0,...light.color],52);
+    f.set([...camera.pos,physics.time],32);f.set([...sun,Math.PI*light.radius**2*light.radiance],36);f.set([...(world.kind==='wind'?p.domain_min??[-6,-6,0]:light.position),0],40);f.set([...(p.domain_span??[12,12,9]),world.kind==='rigid'?light.radius:0],44);u.set([...(p.grid??[12,12,18]),acceptedSurfacePositions?physicalVertexCount:0],48);f.set([world.kind==='wind'?1:0,...light.color],52);
     const forward=normalize(sub(camera.target,camera.pos)),right=normalize(cross(forward,[0,0,1]));f.set([...right,0],56);f.set([...cross(right,forward),0],60);device.queue.writeBuffer(uniform,0,bytes);
     const shadowPass=encoder.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:shadow.createView(),depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'store'}});shadowPass.setBindGroup(0,shadowGroup);shadowPass.setPipeline(meshShadow);
-    for(const packet of packets)if(packet.shadow){shadowPass.setVertexBuffer(0,packet.vb);shadowPass.setIndexBuffer(packet.ib,'uint32');shadowPass.drawIndexed(packet.count);}if(grass&&world.kind==='wind'){shadowPass.setPipeline(grassShadow);shadowPass.draw(6,p.grass_count??81920);}shadowPass.end();
-    const pass=encoder.beginRenderPass({colorAttachments:[{view:context.getCurrentTexture().createView(),clearValue:world.kind==='wind'?{r:.12,g:.22,b:.30,a:1}:{r:.09,g:.11,b:.12,a:1},loadOp:'clear',storeOp:'store'}],depthStencilAttachment:{view:depth.createView(),depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'store'}});pass.setBindGroup(0,group);pass.setPipeline(meshPipeline);for(const packet of packets){pass.setVertexBuffer(0,packet.vb);pass.setIndexBuffer(packet.ib,'uint32');pass.drawIndexed(packet.count);}if(grass&&world.kind==='wind'){pass.setPipeline(grassPipeline);pass.draw(6,p.grass_count??81920);}if(particles&&world.kind==='wind'){pass.setPipeline(particlePipeline);pass.draw(4,physics.initial.parcelCount);}pass.end();
-  },destroy(){depth?.destroy();shadow.destroy();uniform.destroy();for(const packet of packets){packet.vb.destroy();packet.ib.destroy();}}};
+    for(const packet of packets)if(packet.shadow){shadowPass.setVertexBuffer(0,packet.vb);shadowPass.setIndexBuffer(packet.ib,'uint32');shadowPass.drawIndexed(packet.count,1,0,0,packet.base);}if(grass&&world.kind==='wind'){shadowPass.setPipeline(grassShadow);shadowPass.draw(3,Math.ceil((p.grass_count??81920)/4));}shadowPass.end();
+    const pass=encoder.beginRenderPass({colorAttachments:[{view:context.getCurrentTexture().createView(),clearValue:world.kind==='wind'?{r:.12,g:.22,b:.30,a:1}:{r:.09,g:.11,b:.12,a:1},loadOp:'clear',storeOp:'store'}],depthStencilAttachment:{view:depth.createView(),depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'store'}});pass.setBindGroup(0,group);pass.setPipeline(meshPipeline);for(const packet of packets){pass.setVertexBuffer(0,packet.vb);pass.setIndexBuffer(packet.ib,'uint32');pass.drawIndexed(packet.count,1,0,0,packet.base);}if(grass&&world.kind==='wind'){pass.setPipeline(grassPipeline);pass.draw(3,p.grass_count??81920);}if(particles&&world.kind==='wind'){pass.setPipeline(particlePipeline);pass.draw(4,physics.initial.parcelCount);}pass.end();
+  },destroy(){depth?.destroy();shadow.destroy();uniform.destroy();emptySurface?.destroy();for(const packet of packets){packet.vb.destroy();packet.ib.destroy();}}};
 }

@@ -2,7 +2,7 @@
 // JS below allocates/transfers buffers; it does not integrate mechanical state.
 import {ELASTIC_BLADE_POSE_WGSL} from './vf-elastic-blade-pose-wgsl.mjs';
 export const MECHANICAL_WORLD_WGSL = /* wgsl */`
-struct Params { gravity_dt:vec4<f32>, counts:vec4<u32>, wind:vec4<f32>, domain_min:vec4<f32>, domain_span:vec4<f32>, grid:vec4<u32>, held:vec4<f32>, material:vec4<f32> };
+struct Params { gravity_dt:vec4<f32>, counts:vec4<u32>, wind:vec4<f32>, domain_min:vec4<f32>, domain_span:vec4<f32>, grid:vec4<u32>, held:vec4<f32>, material:vec4<f32>, grass:vec4<f32> };
 struct Body { p:vec4<f32>, v:vec4<f32>, q:vec4<f32>, w:vec4<f32>, info:vec4<f32> };
 struct Parcel { p:vec4<f32>, v:vec4<f32> };
 struct Node { d:vec4<f32>, v:vec4<f32> };
@@ -16,36 +16,107 @@ struct Node { d:vec4<f32>, v:vec4<f32> };
 @group(0) @binding(7) var<storage,read_write> rotated_geometry:array<vec4<f32>>;
 @group(0) @binding(8) var<storage,read> prior_bodies:array<Body>;
 fn rotate(q:vec4<f32>,p:vec3<f32>)->vec3<f32>{return p+2.0*cross(q.xyz,cross(q.xyz,p)+q.w*p);}
+fn inverse_inertia_world(i:u32,torque:vec3<f32>)->vec3<f32>{
+  let q=bodies[i].q;let local=rotate(vec4<f32>(-q.xyz,q.w),torque);
+  let base=params.counts.x*params.counts.w+i*3u;
+  return rotate(q,vec3<f32>(dot(geometry[base].xyz,local),dot(geometry[base+1u].xyz,local),dot(geometry[base+2u].xyz,local)));
+}
+fn contact_matrix_component(i:u32,r:vec3<f32>,left:vec3<f32>,right:vec3<f32>,enabled:bool)->f32{
+  if(!enabled){return 0.0;}
+  return inverse_mass(i)*dot(left,right)+
+    dot(cross(r,left),inverse_inertia_world(i,cross(r,right)));
+}
+fn contact_linear_delta(i:u32,r:vec3<f32>,linear:vec3<f32>,angular:vec3<f32>,enabled:bool)->vec3<f32>{
+  if(!enabled){return vec3<f32>(0.0);}
+  return inverse_mass(i)*linear+cross(inverse_inertia_world(i,cross(r,linear)+angular),r);
+}
+fn contact_angular_delta(i:u32,r:vec3<f32>,linear:vec3<f32>,angular:vec3<f32>,enabled:bool)->vec3<f32>{
+  if(!enabled){return vec3<f32>(0.0);}
+  return inverse_inertia_world(i,cross(r,linear)+angular);
+}
+struct ContactImpulse { linear:vec3<f32>, angular:vec3<f32>, normal:f32 };
+fn rigid_contact_impulse(i:u32,j:u32,ri:vec3<f32>,rj:vec3<f32>,n:vec3<f32>,
+  relative:vec3<f32>,relative_omega:vec3<f32>,first_enabled:bool,second_enabled:bool,
+  restitution:f32,contact_radius:f32,support_load:f32)->ContactImpulse{
+  let vn=dot(relative,n);
+  if(vn>=0.0&&support_load<=0.0){return ContactImpulse(vec3<f32>(0.0),vec3<f32>(0.0),0.0);}
+  let knn=contact_matrix_component(i,ri,n,n,first_enabled)+
+    contact_matrix_component(j,rj,n,n,second_enabled);
+  if(knn<=1.0e-8){return ContactImpulse(vec3<f32>(0.0),vec3<f32>(0.0),0.0);}
+  let jn=max(0.0,-(1.0+restitution)*vn/knn);
+  let friction_budget=max(jn,support_load);
+  let rolling_velocity=relative_omega-n*dot(relative_omega,n);
+  let rolling_speed=length(rolling_velocity);
+  let rolling_axis=rolling_velocity/max(rolling_speed,1.0e-8);
+  let rolling_mass=dot(rolling_axis,contact_angular_delta(i,ri,vec3<f32>(0.0),rolling_axis,first_enabled)+
+    contact_angular_delta(j,rj,vec3<f32>(0.0),rolling_axis,second_enabled));
+  let rolling_magnitude=-min(rolling_speed/max(rolling_mass,1.0e-8),params.material.z*contact_radius*friction_budget);
+  let rolling_impulse=rolling_axis*rolling_magnitude;
+  let normal_impulse=n*jn;
+  let velocity_after=relative+contact_linear_delta(i,ri,normal_impulse,rolling_impulse,first_enabled)+
+    contact_linear_delta(j,rj,normal_impulse,rolling_impulse,second_enabled);
+  let angular_after=relative_omega+contact_angular_delta(i,ri,normal_impulse,rolling_impulse,first_enabled)+
+    contact_angular_delta(j,rj,normal_impulse,rolling_impulse,second_enabled);
+  let tangent_velocity=velocity_after-n*dot(velocity_after,n);
+  let tangent_speed=length(tangent_velocity);
+  if(tangent_speed<=1.0e-8&&abs(dot(angular_after,n))<=1.0e-8)
+    {return ContactImpulse(normal_impulse,rolling_impulse,jn);}
+  let fallback=select(vec3<f32>(1.0,0.0,0.0),vec3<f32>(0.0,1.0,0.0),abs(n.x)>0.8);
+  let t=select(normalize(cross(n,fallback)),tangent_velocity/max(tangent_speed,1.0e-8),tangent_speed>1.0e-8);
+  let a=contact_matrix_component(i,ri,t,t,first_enabled)+contact_matrix_component(j,rj,t,t,second_enabled);
+  let b=dot(t,contact_linear_delta(i,ri,vec3<f32>(0.0),n,first_enabled)+
+    contact_linear_delta(j,rj,vec3<f32>(0.0),n,second_enabled));
+  let c=dot(n,contact_angular_delta(i,ri,t,vec3<f32>(0.0),first_enabled)+
+    contact_angular_delta(j,rj,t,vec3<f32>(0.0),second_enabled));
+  let d=dot(n,contact_angular_delta(i,ri,vec3<f32>(0.0),n,first_enabled)+
+    contact_angular_delta(j,rj,vec3<f32>(0.0),n,second_enabled));
+  let determinant=a*d-b*c;
+  if(determinant<=1.0e-8){return ContactImpulse(normal_impulse,rolling_impulse,jn);}
+  let tangent_speed_after=dot(velocity_after,t);
+  let spin_speed_after=dot(angular_after,n);
+  var jt=-(d*tangent_speed_after-b*spin_speed_after)/determinant;
+  var js=-(a*spin_speed_after-c*tangent_speed_after)/determinant;
+  let static_spin=min(params.material.w,params.material.y)*contact_radius*friction_budget;
+  if(abs(jt)>params.material.y*friction_budget||abs(js)>static_spin){
+    jt=clamp(jt,-params.grass.z*friction_budget,params.grass.z*friction_budget);
+    let dynamic_spin=static_spin*params.grass.z/max(params.material.y,1.0e-8);
+    js=clamp(js,-dynamic_spin,dynamic_spin);
+  }
+  return ContactImpulse(normal_impulse+t*jt,rolling_impulse+n*js,jn);
+}
 fn support(i:u32,n:vec3<f32>)->f32{
-  let b=bodies[i]; var best=-1.0e10;
-  for(var k=0u;k<params.counts.w;k++){best=max(best,dot(rotated_geometry[i*params.counts.w+k].xyz,n));}
+  var best=-1.0e10;
+  if(params.counts.y==0u){for(var k=0u;k<params.counts.w;k++){best=max(best,dot(rotated_geometry[i*params.counts.w+k].xyz,n));}}
+  else{let group_base=params.counts.x*(params.counts.w+3u)+i*params.counts.y;
+    for(var group=0u;group<params.counts.y;group++){
+      let bound=rotated_geometry[group_base+group];
+      if(dot(bound.xyz,n)+bound.w+1.0e-6<=best){continue;}
+      for(var lane=0u;lane<8u;lane++){best=max(best,dot(rotated_geometry[i*params.counts.w+group*8u+lane].xyz,n));}
+    }
+  }
   return best;
 }
 fn support_point(i:u32,n:vec3<f32>)->vec3<f32>{
-  let b=bodies[i];var best=-1.0e10;var point=vec3<f32>(0.0);
-  for(var k=0u;k<params.counts.w;k++){let p=rotated_geometry[i*params.counts.w+k].xyz;let projection=dot(p,n);if(projection>best){best=projection;point=p;}}
+  var best=-1.0e10;var point=vec3<f32>(0.0);
+  if(params.counts.y==0u){for(var k=0u;k<params.counts.w;k++){let p=rotated_geometry[i*params.counts.w+k].xyz;let projection=dot(p,n);if(projection>best){best=projection;point=p;}}}
+  else{let group_base=params.counts.x*(params.counts.w+3u)+i*params.counts.y;
+    for(var group=0u;group<params.counts.y;group++){
+      let bound=rotated_geometry[group_base+group];
+      if(dot(bound.xyz,n)+bound.w+1.0e-6<=best){continue;}
+      for(var lane=0u;lane<8u;lane++){let p=rotated_geometry[i*params.counts.w+group*8u+lane].xyz;let projection=dot(p,n);if(projection>best){best=projection;point=p;}}
+    }
+  }
   return point;
 }
 @compute @workgroup_size(1)
 fn place_held(){if(params.held.x>=0.0&&u32(params.held.x)<params.counts.x){let i=u32(params.held.x);bodies[i].info.w=0.0;bodies[i].p.z=params.held.y;bodies[i].v=vec4<f32>(0.0);bodies[i].w=vec4<f32>(0.0);}}
 fn inverse_mass(i:u32)->f32 {if(f32(i)==params.held.x){return 0.0;} return 1.0/bodies[i].info.x;}
 fn contact_velocity(b:Body,r:vec3<f32>)->vec3<f32>{return b.v.xyz+cross(b.w.xyz,r);}
-fn grounded_sleeping(i:u32)->bool{
-  let up=vec3<f32>(0.0,0.0,1.0);
-  return bodies[i].info.w>0.5&&bodies[i].p.z-support(i,-up)<0.01;
-}
-fn supported_breakaway_impulse(i:u32)->f32{
-  // A settled body transfers a short collision pulse into its infinite-mass
-  // floor contact. Wake it only after that contact's Coulomb capacity is
-  // exceeded; otherwise a small stone unrealistically launches a large one.
-  let support_horizon=0.20;
-  return bodies[i].info.x*(0.22+params.material.y*length(params.gravity_dt.xyz)*support_horizon);
-}
-fn impulse_body(i:u32,r:vec3<f32>,j:vec3<f32>){
+fn impulse_body_general(i:u32,r:vec3<f32>,linear:vec3<f32>,angular:vec3<f32>){
   if(inverse_mass(i)==0.0){return;}
-  if(dot(j,j)>1.0e-8){bodies[i].info.w=0.0;}
-  bodies[i].v=vec4<f32>(bodies[i].v.xyz+j*inverse_mass(i),bodies[i].v.w);
-  bodies[i].w=vec4<f32>(bodies[i].w.xyz+cross(r,j)/bodies[i].info.y,bodies[i].w.w);
+  if(dot(linear,linear)+dot(angular,angular)>1.0e-8){bodies[i].info.w=0.0;}
+  bodies[i].v=vec4<f32>(bodies[i].v.xyz+linear*inverse_mass(i),bodies[i].v.w);
+  bodies[i].w=vec4<f32>(bodies[i].w.xyz+inverse_inertia_world(i,cross(r,linear)+angular),bodies[i].w.w);
 }
 struct SweepWindow { enter:f32, exit:f32, normal:vec3<f32>, valid:u32 };
 fn sweep_axis(i:u32,j:u32,raw:vec3<f32>,start:vec3<f32>,travel:vec3<f32>,window:SweepWindow)->SweepWindow{
@@ -104,28 +175,20 @@ fn resolve_swept_pair(i:u32,j:u32){
   let end_i=bodies[i].p.xyz;let end_j=bodies[j].p.xyz;
   bodies[i].p=vec4<f32>(mix(start_i,end_i,window.enter),0.0);
   bodies[j].p=vec4<f32>(mix(start_j,end_j,window.enter),0.0);
-  let ri=support_point(i,n);let rj=support_point(j,-n);
+  let surface_i=support_point(i,n);let surface_j=support_point(j,-n);
+  let contact=0.5*(bodies[i].p.xyz+surface_i+bodies[j].p.xyz+surface_j);
+  let ri=contact-bodies[i].p.xyz;let rj=contact-bodies[j].p.xyz;
   let im=inverse_mass(i);let jm=inverse_mass(j);
-  var solve_im=select(im,0.0,grounded_sleeping(i));
-  var solve_jm=select(jm,0.0,grounded_sleeping(j));
+  let solve_im=im;let solve_jm=jm;
   let relative=contact_velocity(bodies[j],rj)-contact_velocity(bodies[i],ri);
   let vn=dot(relative,n);
   if(vn<0.0&&solve_im+solve_jm>0.0){
-    let li=cross(ri,n);let lj=cross(rj,n);
-    let anchored_denominator=solve_im+solve_jm+select(dot(li,li)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj,lj)/bodies[j].info.y,0.0,solve_jm==0.0);
-    let candidate=-(1.0+select(0.0,params.material.x,vn < -0.3))*vn/anchored_denominator;
-    if(solve_im==0.0&&im>0.0&&candidate>supported_breakaway_impulse(i)){solve_im=im;bodies[i].info.w=0.0;}
-    if(solve_jm==0.0&&jm>0.0&&candidate>supported_breakaway_impulse(j)){solve_jm=jm;bodies[j].info.w=0.0;}
     let total=solve_im+solve_jm;
     if(total>0.0){
-      let denominator=total+select(dot(li,li)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj,lj)/bodies[j].info.y,0.0,solve_jm==0.0);
-      let jn=-(1.0+select(0.0,params.material.x,vn < -0.3))*vn/denominator;
-      let tangent=relative-vn*n;let speed=length(tangent);let tangent_direction=tangent/max(speed,1.0e-8);
-      let li_tangent=cross(ri,tangent_direction);let lj_tangent=cross(rj,tangent_direction);
-      let tangent_mass=total+select(dot(li_tangent,li_tangent)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj_tangent,lj_tangent)/bodies[j].info.y,0.0,solve_jm==0.0);
-      let jt=min(params.material.y*jn,speed/tangent_mass);let impulse=n*jn-tangent_direction*jt;
-      if(solve_im>0.0){impulse_body(i,ri,-impulse);}
-      if(solve_jm>0.0){impulse_body(j,rj,impulse);}
+      let impulse=rigid_contact_impulse(i,j,ri,rj,n,relative,bodies[j].w.xyz-bodies[i].w.xyz,
+        solve_im>0.0,solve_jm>0.0,select(0.0,params.material.x,vn < -0.3),min(bodies[i].info.z,bodies[j].info.z),0.0);
+      if(solve_im>0.0){impulse_body_general(i,ri,-impulse.linear,-impulse.angular);}
+      if(solve_jm>0.0){impulse_body_general(j,rj,impulse.linear,impulse.angular);}
     }
   }
   let remaining=params.gravity_dt.w*(1.0-window.enter);
@@ -147,7 +210,16 @@ fn advance_bodies(){
   }
 }
 @compute @workgroup_size(64)
-fn rotate_support(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i<params.counts.x*params.counts.w){rotated_geometry[i]=vec4<f32>(rotate(bodies[i/params.counts.w].q,geometry[i].xyz),0.0);}}
+fn rotate_support(@builtin(global_invocation_id) gid:vec3<u32>){
+  let i=gid.x;let hull_total=params.counts.x*params.counts.w;
+  if(i<hull_total){rotated_geometry[i]=vec4<f32>(rotate(bodies[i/params.counts.w].q,geometry[i].xyz),0.0);}
+  else{let group_index=i-hull_total;
+    if(params.counts.y>0u&&group_index<params.counts.x*params.counts.y){
+      let source=hull_total+params.counts.x*3u+group_index;
+      rotated_geometry[source]=vec4<f32>(rotate(bodies[group_index/params.counts.y].q,geometry[source].xyz),geometry[source].w);
+    }
+  }
+}
 @compute @workgroup_size(1)
 fn rigid_step(){
   for(var iteration=0u;iteration<3u;iteration++){
@@ -155,22 +227,15 @@ fn rigid_step(){
       let im=inverse_mass(i);let up=vec3<f32>(0.0,0.0,1.0);let ground_point=support_point(i,-up);
       let depth=dot(ground_point,-up)-bodies[i].p.z;
       if(depth>-0.0005){bodies[i].w.w=1.0;}
-      if(depth>0.0&&im>0.0&&bodies[i].info.w<0.5){
-        bodies[i].p.z+=depth;
+      if(depth>-0.0005&&im>0.0&&bodies[i].info.w<0.5){
+        bodies[i].p.z+=max(depth,0.0);
         let r=ground_point;let cv=contact_velocity(bodies[i],r);
-        if(cv.z<0.0){
-          let lever=cross(r,up);let jn=-(1.0+select(0.0,params.material.x,cv.z < -0.3))*cv.z/(im+dot(lever,lever)/bodies[i].info.y);
-          let tangent=vec3<f32>(cv.x,cv.y,0.0);let speed=length(tangent);let tangent_direction=tangent/max(speed,1.0e-8);
-          let tangent_lever=cross(r,tangent_direction);let jt=min(params.material.y*jn,speed/(im+dot(tangent_lever,tangent_lever)/bodies[i].info.y));
-          impulse_body(i,r,up*jn-tangent_direction*jt);
-          // Stone rolling and spin resistance are bounded contact moments,
-          // not arbitrary frame damping or a positional pin.
-          var angular=bodies[i].w.xyz;let spin_velocity=dot(angular,up);let rolling=angular-up*spin_velocity;let rolling_speed=length(rolling);
-          let rolling_delta=min(rolling_speed,params.material.z*jn*bodies[i].info.z/bodies[i].info.y);
-          angular-=rolling/max(rolling_speed,1.0e-8)*rolling_delta;
-          let spin_delta=min(abs(spin_velocity),params.material.w*jn*bodies[i].info.z/bodies[i].info.y);
-          angular-=up*sign(spin_velocity)*spin_delta;bodies[i].w=vec4<f32>(angular,bodies[i].w.w);
-        }
+        // Each of the three contact iterations carries one third of the
+        // floor's gravity reaction, including at zero normal velocity.
+        let support_load=bodies[i].info.x*max(0.0,-dot(params.gravity_dt.xyz,up))*params.gravity_dt.w/3.0;
+        let impulse=rigid_contact_impulse(i,i,r,vec3<f32>(0.0),up,cv,bodies[i].w.xyz,true,false,
+          select(0.0,params.material.x,cv.z < -0.3),bodies[i].info.z,support_load);
+        impulse_body_general(i,r,impulse.linear,impulse.angular);
         bodies[i].w.w=1.0;
       }
       for(var j=i+1u;j<params.counts.x;j++){
@@ -179,12 +244,15 @@ fn rigid_step(){
         let delta=bodies[j].p.xyz-bodies[i].p.xyz;let distance=length(delta);
         if(distance>bodies[i].info.z+bodies[j].info.z){continue;}
         var n=select(delta/max(distance,1.0e-8),up,distance<1.0e-7);var penetration=support(i,n)+support(j,-n)-dot(delta,n);
+        if(penetration<=0.0){continue;}
         // A center-axis test alone spuriously collides adjacent irregular shapes.
         for(var axis=0u;axis<9u;axis++){var basis=vec3<f32>(0.0);basis[axis%3u]=1.0;var direction=basis;
           if(axis>=3u&&axis<6u){direction=rotate(bodies[i].q,basis);}if(axis>=6u){direction=rotate(bodies[j].q,basis);}
           direction=select(direction,-direction,dot(delta,direction)<0.0);
           let depth=support(i,direction)+support(j,-direction)-dot(delta,direction);if(depth<penetration){penetration=depth;n=direction;}
+          if(penetration<=0.0){break;}
         }
+        if(penetration<=0.0){continue;}
         // The nine face axes miss rotated edge-edge separation. Cross axes
         // close that SAT gap without changing the shared rigid impulse law.
         for(var ai=0u;ai<3u;ai++){var axis_i=vec3<f32>(0.0);axis_i[ai]=1.0;
@@ -193,43 +261,27 @@ fn rigid_step(){
             if(axis_length<1.0e-5){continue;}var direction=cross_axis/axis_length;
             direction=select(direction,-direction,dot(delta,direction)<0.0);
             let depth=support(i,direction)+support(j,-direction)-dot(delta,direction);if(depth<penetration){penetration=depth;n=direction;}
+            if(penetration<=0.0){break;}
           }
+          if(penetration<=0.0){break;}
         }
         if(penetration>-0.0005){bodies[i].w.w=1.0;bodies[j].w.w=1.0;}
         if(penetration<=0.0){continue;}
-        let ri=support_point(i,n);let rj=support_point(j,-n);
-        let overlap=penetration;let physical_jm=inverse_mass(j);var solve_im=select(im,0.0,grounded_sleeping(i));var solve_jm=select(physical_jm,0.0,grounded_sleeping(j));
-        let relative=contact_velocity(bodies[j],rj)-contact_velocity(bodies[i],ri);let vn=dot(relative,n);
-        // The same rigid-contact impulse decides whether a static floor
-        // contact can support the impact or must transition to sliding.
-        if(vn<0.0){
-          let anchored_total=solve_im+solve_jm;
-          if(anchored_total>0.0){
-            let li=cross(ri,n);let lj=cross(rj,n);let anchored_denominator=anchored_total+select(dot(li,li)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj,lj)/bodies[j].info.y,0.0,solve_jm==0.0);
-            let candidate=-(1.0+select(0.0,params.material.x,vn < -0.3))*vn/anchored_denominator;
-            if(solve_im==0.0&&im>0.0&&candidate>supported_breakaway_impulse(i)){solve_im=im;bodies[i].info.w=0.0;}
-            if(solve_jm==0.0&&physical_jm>0.0&&candidate>supported_breakaway_impulse(j)){solve_jm=physical_jm;bodies[j].info.w=0.0;}
-          }
-        }
+        let surface_i=support_point(i,n);let surface_j=support_point(j,-n);
+        let overlap=penetration;let solve_im=im;let solve_jm=inverse_mass(j);
         let total=solve_im+solve_jm;
         if(overlap<=0.0||total==0.0){continue;}
         if(solve_im>0.0){bodies[i].info.w=0.0;}if(solve_jm>0.0){bodies[j].info.w=0.0;}
         bodies[i].p=vec4<f32>(bodies[i].p.xyz-n*overlap*solve_im/total,0.0);
         bodies[j].p=vec4<f32>(bodies[j].p.xyz+n*overlap*solve_jm/total,0.0);
+        let contact=0.5*(bodies[i].p.xyz+surface_i+bodies[j].p.xyz+surface_j);
+        let ri=contact-bodies[i].p.xyz;let rj=contact-bodies[j].p.xyz;
+        let relative=contact_velocity(bodies[j],rj)-contact_velocity(bodies[i],ri);let vn=dot(relative,n);
         if(vn<0.0){
-          let li=cross(ri,n);let lj=cross(rj,n);let denominator=total+select(dot(li,li)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj,lj)/bodies[j].info.y,0.0,solve_jm==0.0);
-          let jn=-(1.0+select(0.0,params.material.x,vn < -0.3))*vn/denominator;
-          let tangent=relative-vn*n;let speed=length(tangent);let tangent_direction=tangent/max(speed,1.0e-8);
-          let li_tangent=cross(ri,tangent_direction);let lj_tangent=cross(rj,tangent_direction);
-          let tangent_mass=total+select(dot(li_tangent,li_tangent)/bodies[i].info.y,0.0,solve_im==0.0)+select(dot(lj_tangent,lj_tangent)/bodies[j].info.y,0.0,solve_jm==0.0);
-          let jt=min(params.material.y*jn,speed/tangent_mass);
-          let impulse=n*jn-tangent_direction*jt;
-          if(solve_im>0.0){impulse_body(i,ri,-impulse);}if(solve_jm>0.0){impulse_body(j,rj,impulse);}
-          let angular_inverse=select(1.0/bodies[i].info.y,0.0,solve_im==0.0)+select(1.0/bodies[j].info.y,0.0,solve_jm==0.0);
-          let relative_angular=bodies[j].w.xyz-bodies[i].w.xyz;let rolling=relative_angular-n*dot(relative_angular,n);let rolling_speed=length(rolling);let contact_radius=min(bodies[i].info.z,bodies[j].info.z);
-          let rolling_moment=min(params.material.z*jn*contact_radius,rolling_speed/max(angular_inverse,1.0e-8));let rolling_axis=rolling/max(rolling_speed,1.0e-8);
-          let spin_speed=dot(relative_angular,n);let spin_moment=min(params.material.w*jn*contact_radius,abs(spin_speed)/max(angular_inverse,1.0e-8));let angular_impulse=rolling_axis*rolling_moment+n*sign(spin_speed)*spin_moment;
-          if(solve_im>0.0){bodies[i].w=vec4<f32>(bodies[i].w.xyz+angular_impulse/bodies[i].info.y,bodies[i].w.w);}if(solve_jm>0.0){bodies[j].w=vec4<f32>(bodies[j].w.xyz-angular_impulse/bodies[j].info.y,bodies[j].w.w);}
+          let impulse=rigid_contact_impulse(i,j,ri,rj,n,relative,bodies[j].w.xyz-bodies[i].w.xyz,
+            solve_im>0.0,solve_jm>0.0,select(0.0,params.material.x,vn < -0.3),min(bodies[i].info.z,bodies[j].info.z),0.0);
+          if(solve_im>0.0){impulse_body_general(i,ri,-impulse.linear,-impulse.angular);}
+          if(solve_jm>0.0){impulse_body_general(j,rj,impulse.linear,impulse.angular);}
         }
         bodies[i].w.w=1.0;bodies[j].w.w=1.0;
       }
@@ -304,7 +356,10 @@ fn wind_step(@builtin(global_invocation_id) gid:vec3<u32>){
     let relative=incoming-structure_velocity;let relative_speed=length(relative);
     let normal=obstacle_normal(coordinate,object.w,owner,relative);
     let normal_speed=dot(relative,normal);
-    let parcel_length=pow(max(params.wind.y/max(params.wind.z,1.0e-6),1.0e-9),1.0/3.0);
+    // The rigid support cache is idle for wind; its vec4 slots hold four
+    // immutable Particle masses without a ninth portable storage binding.
+    let parcel_mass=rotated_geometry[i/4u][i%4u];
+    let parcel_length=pow(max(parcel_mass/max(params.wind.z,1.0e-6),1.0e-9),1.0/3.0);
     let drag_fraction=clamp(0.5*params.material.z*coverage*abs(normal_speed)*dt/parcel_length,0.0,0.82);
     let tangent_velocity=relative-normal*normal_speed;
     var outgoing_relative=relative-normal*normal_speed*drag_fraction-tangent_velocity*(drag_fraction*0.12);
@@ -316,7 +371,7 @@ fn wind_step(@builtin(global_invocation_id) gid:vec3<u32>){
     let outgoing=structure_velocity+outgoing_relative;
     p.v=vec4<f32>(outgoing,max(dt,parcel_length/max(relative_speed,0.1)));
     p.p.w=0.25;
-    let impulse=(incoming-outgoing)*params.wind.y;
+    let impulse=(incoming-outgoing)*parcel_mass;
     for(var a=0u;a<3u;a++){atomicAdd(&impulses[impacted*3u+a],i32(clamp(impulse[a]*IMPULSE_SCALE,-1.0e7,1.0e7)));}
   }
   let out=params.domain_min.xyz+params.domain_span.xyz;
@@ -347,9 +402,17 @@ fn elastic_step(@builtin(global_invocation_id) gid:vec3<u32>){
   let i=gid.x;if(i>=params.counts.z){return;}let dt=params.gravity_dt.w;
   let z=i/(params.grid.x*params.grid.y);
   if(z==0u){nodes[i]=Node(vec4<f32>(0.0),vec4<f32>(0.0));return;}
-  let force=vec3<f32>(f32(atomicLoad(&impulses[i*3u])),f32(atomicLoad(&impulses[i*3u+1u])),f32(atomicLoad(&impulses[i*3u+2u])))/(IMPULSE_SCALE*dt);
+  var force=vec3<f32>(f32(atomicLoad(&impulses[i*3u])),f32(atomicLoad(&impulses[i*3u+1u])),f32(atomicLoad(&impulses[i*3u+2u])))/(IMPULSE_SCALE*dt);
   let material=geometry[params.counts.z+i];
   let mode=material.w;if(mode<0.5){nodes[i]=Node(vec4<f32>(0.0),vec4<f32>(0.0));return;}
+  if(mode>1.5){
+    // Sub-grid grass is loaded by the same coherent air field as the parcels.
+    // Blade reconfiguration reduces projected area as wind flattens the grass.
+    let relative=air_velocity(geometry[i].xyz,params.wind.w)-nodes[i].v.xyz;
+    let speed=length(relative);
+    let projected=params.grass.x/(1.0+pow(speed/max(params.grass.y,0.1),2.0));
+    force+=0.5*params.wind.z*params.material.z*projected*speed*relative;
+  }
   let compliance=select(1.0,0.3+f32(z)/f32(params.grid.z),mode<1.5);
   let k=material.y/compliance;
   let x=i%params.grid.x;let y=(i/params.grid.x)%params.grid.y;var coupling=vec3<f32>(0.0);var neighbors=0.0;
@@ -390,8 +453,9 @@ fn elastic_step(@builtin(global_invocation_id) gid:vec3<u32>){
 
 export async function createMechanicalWorldGpu(device,world,initial,shaderSource) {
   const make=(label,data)=>{const buffer=device.createBuffer({label,size:Math.max(80,data.byteLength),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});device.queue.writeBuffer(buffer,0,data);return buffer;};
-  const buffers=[make('VKF rigid state',initial.bodies),make('VKF inlet parcels',initial.parcels),make('VKF elastic state',initial.nodes),make('VKF contact impulse ledger',new Int32Array(Math.max(3,initial.nodeCount*3))),make('VKF added collision geometry',initial.geometry),make('VKF Jacobi prior elastic state',initial.nodes),make('VKF rotated support cache',world.kind==='rigid'?initial.geometry:new Float32Array(4)),make('VKF prior rigid state',world.kind==='rigid'?initial.bodies:new Float32Array(20))];
-  const uniform=device.createBuffer({label:'VKF World properties',size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const parcelMasses=initial.parcelMasses??new Float32Array(Math.max(4,Math.ceil(initial.parcelCount/4)*4)).fill(world.properties.parcel_mass??0.002);
+  const buffers=[make('VKF rigid state',initial.bodies),make('VKF inlet parcels',initial.parcels),make('VKF elastic state',initial.nodes),make('VKF contact impulse ledger',new Int32Array(Math.max(3,initial.nodeCount*3))),make('VKF added collision geometry',initial.geometry),make('VKF Jacobi prior elastic state',initial.nodes),make(world.kind==='rigid'?'VKF rotated support cache':'VKF air parcel mass',world.kind==='rigid'?initial.geometry:parcelMasses),make('VKF prior rigid state',world.kind==='rigid'?initial.bodies:new Float32Array(20))];
+  const uniform=device.createBuffer({label:'VKF World properties',size:144,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const layout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},...buffers.map((_,i)=>({binding:i+1,visibility:GPUShaderStage.COMPUTE,buffer:{type:i===4||i===5||i===7?'read-only-storage':'storage'}}))]});
   const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},...buffers.map((buffer,i)=>({binding:i+1,resource:{buffer}}))]});
   const module=device.createShaderModule({label:'Compiled VKF World mechanical laws',code:shaderSource});
@@ -400,13 +464,14 @@ export async function createMechanicalWorldGpu(device,world,initial,shaderSource
   const entries=world.kind==='rigid'?['advance_bodies','rotate_support','rigid_step']:['clear_impulses','wind_step','elastic_step'];
   const pipelines=await Promise.all(entries.map(entryPoint=>device.createComputePipelineAsync({layout:device.createPipelineLayout({bindGroupLayouts:[layout]}),compute:{module,entryPoint}})));
   const heldPipeline=world.kind==='rigid'?await device.createComputePipelineAsync({layout:device.createPipelineLayout({bindGroupLayouts:[layout]}),compute:{module,entryPoint:'place_held'}}):null;
-  const data=new ArrayBuffer(128),f=new Float32Array(data),u=new Uint32Array(data);
+  const data=new ArrayBuffer(144),f=new Float32Array(data),u=new Uint32Array(data);
   const p=world.properties;
-  f.set([...world.gravity,world.time_step],0);u.set([initial.bodyCount,initial.parcelCount,initial.nodeCount,initial.hullCount??0],4);
+  f.set([...world.gravity,world.time_step],0);u.set([initial.bodyCount,world.kind==='rigid'?(initial.groupCount??0):initial.parcelCount,initial.nodeCount,initial.hullCount??0],4);
   f.set([p.speed??3.5,p.parcel_mass??0.002,p.density??1.225,0],8);
   f.set([...(p.domain_min??[-6,-6,0]),0],12);f.set([...(p.domain_span??[12,12,9]),0],16);
   u.set([...(p.grid??[12,12,18]),0],20);f.set([-1,0,0,0],24);
-  f.set(world.kind==='wind'?[p.turbulence_intensity??0.12,p.integral_scale??2.4,p.drag_coefficient??1.05,p.eddy_decay??0.75]:[p.restitution??0.10,p.friction??0.72,p.rolling_friction??0.08,p.spin_friction??0.035],28);
+  f.set(world.kind==='wind'?[p.turbulence_intensity??0.12,p.integral_scale??2.4,p.drag_coefficient??1.05,p.eddy_decay??0.75]:[p.restitution??0.10,p.static_friction??p.friction??0.72,p.rolling_friction??0.08,p.spin_friction??0.035],28);
+  f.set([p.grass_wind_area??0.6,p.grass_reconfiguration_speed??6,p.dynamic_friction??p.friction??0.72,0],32);
   let time=0;
   return {device,buffers,initial,
     get time(){return time;},setHeld(id,z){f[24]=id;f[25]=z;},setSpeed(speed){f[8]=Math.max(0,Math.min(20,Number.isFinite(speed)?speed:0));},
@@ -416,7 +481,7 @@ export async function createMechanicalWorldGpu(device,world,initial,shaderSource
       if(world.kind==='wind')encoder.copyBufferToBuffer(buffers[2],0,buffers[5],0,initial.nodes.byteLength);
       else encoder.copyBufferToBuffer(buffers[0],0,buffers[7],0,initial.bodies.byteLength);
       const pass=encoder.beginComputePass();pass.setBindGroup(0,group);
-      for(let i=0;i<pipelines.length;i++){pass.setPipeline(pipelines[i]);pass.dispatchWorkgroups(world.kind==='rigid'?(i===1?Math.ceil(initial.bodyCount*initial.hullCount/64):1):Math.ceil((i===0?initial.nodeCount*3:i===1?initial.parcelCount:initial.nodeCount)/64));}pass.end();},
+      for(let i=0;i<pipelines.length;i++){pass.setPipeline(pipelines[i]);pass.dispatchWorkgroups(world.kind==='rigid'?(i===1?Math.ceil(initial.bodyCount*(initial.hullCount+(initial.groupCount??0))/64):1):Math.ceil((i===0?initial.nodeCount*3:i===1?initial.parcelCount:initial.nodeCount)/64));}pass.end();},
     reset(){time=0;f[24]=-1;device.queue.writeBuffer(buffers[0],0,initial.bodies);device.queue.writeBuffer(buffers[1],0,initial.parcels);device.queue.writeBuffer(buffers[2],0,initial.nodes);},
     async readBodies(){const out=device.createBuffer({size:Math.max(80,initial.bodies.byteLength),usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffers[0],0,out,0,initial.bodies.byteLength);device.queue.submit([encoder.finish()]);await out.mapAsync(GPUMapMode.READ);const copy=new Float32Array(out.getMappedRange()).slice();out.unmap();out.destroy();return copy;},
     async inspectLeafModes(){
@@ -426,6 +491,22 @@ export async function createMechanicalWorldGpu(device,world,initial,shaderSource
       const state=new Float32Array(out.getMappedRange());let maxDisplacement=0,maxVelocity=0;const finite=state.every(Number.isFinite);
       for(let i=0;i<initial.nodeCount;i++){maxDisplacement=Math.max(maxDisplacement,Math.hypot(...state.subarray(i*8,i*8+3)));maxVelocity=Math.max(maxVelocity,Math.hypot(...state.subarray(i*8+4,i*8+7)));}
       out.unmap();out.destroy();return {finite,maxAngle:maxDisplacement,maxAngularVelocity:maxVelocity};
+    },
+    async inspectGrassWave(){
+      if(world.kind!=='wind')throw Error('Grass modes require wind World');
+      const size=initial.nodeCount*32,out=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
+      const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffers[2],0,out,0,size);device.queue.submit([encoder.finish()]);await out.mapAsync(GPUMapMode.READ);
+      const state=new Float32Array(out.getMappedRange()),grid=p.grid??[12,12,18],stride=grid[0]*grid[1];
+      let total=0,count=0,correlation=0,pairs=0,minimum=Infinity,maximum=-Infinity;
+      for(let i=stride;i<Math.min(2*stride,initial.nodeCount);i++){
+        if(initial.geometry[(initial.nodeCount+i)*4+3]!==2)continue;
+        const x=state[i*8],y=state[i*8+1],z=state[i*8+2],magnitude=Math.hypot(x,y,z);
+        total+=magnitude;count++;minimum=Math.min(minimum,x);maximum=Math.max(maximum,x);
+        const j=i+1;if(i%grid[0]===grid[0]-1||initial.geometry[(initial.nodeCount+j)*4+3]!==2)continue;
+        const xx=state[j*8],yy=state[j*8+1],zz=state[j*8+2],other=Math.hypot(xx,yy,zz);
+        if(magnitude>1e-5&&other>1e-5){correlation+=(x*xx+y*yy+z*zz)/(magnitude*other);pairs++;}
+      }
+      out.unmap();out.destroy();return {meanGrassDisplacement:total/Math.max(count,1),grassNeighborCorrelation:correlation/Math.max(pairs,1),grassSpatialRange:maximum-minimum};
     },
     async inspect(){const sizes=[initial.bodies.byteLength,initial.parcels.byteLength,initial.nodes.byteLength],total=sizes.reduce((sum,n)=>sum+n,0),out=device.createBuffer({size:total,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});const encoder=device.createCommandEncoder();let offset=0;for(let i=0;i<3;i++){encoder.copyBufferToBuffer(buffers[i],0,out,offset,sizes[i]);offset+=sizes[i];}device.queue.submit([encoder.finish()]);await out.mapAsync(GPUMapMode.READ);const data=new Float32Array(out.getMappedRange()).slice();out.unmap();out.destroy();const finite=data.every(Number.isFinite),bodyData=data.subarray(0,sizes[0]/4),parcelData=data.subarray(sizes[0]/4,(sizes[0]+sizes[1])/4),nodeData=data.subarray((sizes[0]+sizes[1])/4);let visible=0,maxDisplacement=0,maxCanopyDisplacement=0,transverseSpeed=0,streamwiseSpeed=0,maxParcelSpeed=0;for(let i=0;i<initial.parcelCount;i++){if(parcelData[i*8+3]>0)visible++;const vx=parcelData[i*8+4],vy=parcelData[i*8+5],vz=parcelData[i*8+6];streamwiseSpeed+=vx;transverseSpeed+=Math.hypot(vy,vz);maxParcelSpeed=Math.max(maxParcelSpeed,Math.hypot(vx,vy,vz));}for(let i=0;i<initial.nodeCount;i++){const d=Math.hypot(...nodeData.subarray(i*8,i*8+3));maxDisplacement=Math.max(maxDisplacement,d);const kind=initial.geometry[i*4+3];if(initial.geometry[i*4+2]>2&&(kind===1||kind===3))maxCanopyDisplacement=Math.max(maxCanopyDisplacement,d);}return {finite,time,bodyCenters:Array.from({length:initial.bodyCount},(_,i)=>Array.from(bodyData.subarray(i*20,i*20+3))),visibleParcels:visible,maxDisplacement,maxCanopyDisplacement,meanStreamwiseSpeed:streamwiseSpeed/Math.max(1,initial.parcelCount),meanTransverseSpeed:transverseSpeed/Math.max(1,initial.parcelCount),maxParcelSpeed,parcelMass:p.parcel_mass,beam:p.beam};},
     destroy(){uniform.destroy();for(const b of buffers)b.destroy();}};
