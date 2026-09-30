@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {generateTreeMeshes,TREE_SPECIES} from '../public/previews/0.6.0/live/tree/runtime/vf-tree-live-generation.mjs';
-import {prepareMechanicalInitialState} from '../public/previews/0.6.0/compiled/runtime-tree-14/vf-world-mechanical-runtime.mjs';
+import {prepareMechanicalInitialState} from '../public/previews/0.6.0/compiled/runtime-tree-15/vf-world-mechanical-runtime.mjs';
 import {createTriangleSurfaceAdmissionReference} from '../public/previews/0.6.0/live/tree/runtime/vf-stone-triangle-contact.mjs';
 
 const require=createRequire(import.meta.url);
-const bridge=require('../public/previews/0.6.0/compiled/runtime-tree-14/vf-compiled-runtime-bridge.js');
-const base=new URL('../public/previews/0.6.0/compiled/tree-air-14/',import.meta.url);
+const bridge=require('../public/previews/0.6.0/compiled/runtime-tree-15/vf-compiled-runtime-bridge.js');
+const base=new URL('../public/previews/0.6.0/compiled/tree-air-15/',import.meta.url);
 const runtime=bridge.instantiateWasmRuntime({
   bytes:await readFile(new URL('main.wasm',base)),
   manifest:JSON.parse(await readFile(new URL('manifest.json',base))),
@@ -43,9 +43,7 @@ for (let offset = 0; offset < foliage.indices.length; offset += 3) {
   const triangle = Array.from(foliage.indices.subarray(offset, offset + 3));
   const leaf = Math.floor(triangle[0] / leafVertexCount);
   assert.ok(triangle.every((index) => Math.floor(index / leafVertexCount) === leaf));
-  if (triangle.every((index) => foliage.uvs[index * 2 + 1] >= 0.16)) {
-    bladeIndicesByLeaf[leaf].push(...triangle.map((index) => index - leaf * leafVertexCount));
-  }
+  bladeIndicesByLeaf[leaf].push(...triangle.map((index) => index - leaf * leafVertexCount));
 }
 for (let first = 0; first < foliage.vertices.length / 10; first += leafVertexCount) {
   const bladeIndices = bladeIndicesByLeaf[first / leafVertexCount];
@@ -53,7 +51,7 @@ for (let first = 0; first < foliage.vertices.length / 10; first += leafVertexCou
     vertices: foliage.vertices.subarray(first * 10, (first + leafVertexCount) * 10),
     indices: new Uint32Array(bladeIndices),
   };
-  assert.equal(woodSurface.intersects(packet), null, `Leaf ${auditedLeaves} penetrates wood`);
+  assert.equal(woodSurface.intersects(packet), null, `Leaf or stalk ${auditedLeaves} penetrates wood`);
   auditedLeaves += 1;
 }
 for(const [species,profile] of Object.entries(TREE_SPECIES)){

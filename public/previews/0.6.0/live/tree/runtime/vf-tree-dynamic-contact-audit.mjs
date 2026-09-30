@@ -89,13 +89,17 @@ export async function auditDynamicTreeContact(device, world, physics, meshes, as
   const blades=Array.from({length:total},()=>[]);
   for(let offset=0;offset<foliage.indices.length;offset+=3){
     const triangle=foliage.indices.subarray(offset,offset+3),leaf=Math.floor(triangle[0]/stride);
-    if(triangle.every(index=>sourceFoliage.uvs[index*2+1]>=.16))
-      blades[leaf].push(...Array.from(triangle,index=>index-leaf*stride));
+    blades[leaf].push(...Array.from(triangle,index=>index-leaf*stride));
   }
-  let penetrations=0;
+  let penetrations=0;const contacts=[];
   for(let leaf=0;leaf<total;leaf++){
     const first=leaf*stride*10,packet={vertices:foliage.vertices.subarray(first,first+stride*10),indices:new Uint32Array(blades[leaf])};
-    if(woodSurface.intersects(packet))penetrations++;
+    const hit=woodSurface.intersects(packet);
+    if(hit){penetrations++;if(contacts.length<12){const offset=hit.candidateTriangle*3;
+      const root=[0,1,2].map(axis=>(packet.vertices[axis]+packet.vertices[10+axis])*.5);
+      contacts.push({leaf,point:hit.point,rootDistance:Math.hypot(...root.map((value,axis)=>value-hit.point[axis])),
+        uvs:Array.from(packet.indices.subarray(offset,offset+3),index=>
+          sourceFoliage.uvs[(leaf*stride+index)*2+1])});}}
   }
-  return {leaves:total,penetrations,time:physics.time,deformationLipschitzUpperBound};
+  return {leaves:total,penetrations,contacts,time:physics.time,deformationLipschitzUpperBound};
 }

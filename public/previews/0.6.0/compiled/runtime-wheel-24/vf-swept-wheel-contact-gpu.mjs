@@ -38,12 +38,14 @@ fn wheel_arc(origin:vec2<f32>,delta:f32,center:vec2<f32>,r:f32,angle:f32)->Swept
     }}
   }return best;
 }
-fn swept_wheel_motion(origin:vec2<f32>,destination:vec2<f32>,velocity:vec2<f32>,center:vec2<f32>,limit:f32,r:f32,angle:f32)->SweptMotion{
+fn swept_wheel_motion_with_surface(origin:vec2<f32>,destination:vec2<f32>,velocity:vec2<f32>,center:vec2<f32>,limit:f32,r:f32,angle:f32,angular_velocity:f32)->SweptMotion{
   var p=origin;var d=destination-origin;var v=velocity;
   for(var contact=0u;contact<8u;contact++){
     if(dot(d,d)<1.0e-18){return SweptMotion(p,v);}let hit=wheel_ray(p,d,center,limit,r,angle);
     if(hit.kind==0u){return SweptMotion(p+d,v);}p+=d*hit.time;d*=1.0-hit.time;
-    v-=hit.normal*min(0.0,dot(v,hit.normal));d-=hit.normal*min(0.0,dot(d,hit.normal));
+    let from_center=p-center;
+    let surface=select(vec2<f32>(0.0),angular_velocity*vec2<f32>(-from_center.y,from_center.x),hit.kind==2u);
+    v-=hit.normal*min(0.0,dot(v-surface,hit.normal));d-=hit.normal*min(0.0,dot(d,hit.normal));
     if(hit.kind==1u){
       let outward=normalize(p-center);let tangent=vec2<f32>(-outward.y,outward.x);let arc=dot(d,tangent)/limit;
       let next=wheel_arc(p,arc,center,r,angle);let fraction=min(1.0,next.time);let rotation=arc*fraction;
@@ -59,6 +61,9 @@ fn swept_wheel_motion(origin:vec2<f32>,destination:vec2<f32>,velocity:vec2<f32>,
   }
   // Fail closed at a singular multi-contact: never consume an unchecked tail.
   return SweptMotion(p,vec2<f32>(0.0));
+}
+fn swept_wheel_motion(origin:vec2<f32>,destination:vec2<f32>,velocity:vec2<f32>,center:vec2<f32>,limit:f32,r:f32,angle:f32)->SweptMotion{
+  return swept_wheel_motion_with_surface(origin,destination,velocity,center,limit,r,angle,0.0);
 }
 fn swept_wheel_rotation(p:vec2<f32>,v:vec2<f32>,center:vec2<f32>,r:f32,old_angle:f32,delta:f32,elapsed:f32)->SweptMotion{
   let hit=wheel_arc(p,-delta,center,r,old_angle);if(hit.kind==0u){return SweptMotion(p,v);}

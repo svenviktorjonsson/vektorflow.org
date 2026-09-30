@@ -54,11 +54,12 @@ function triangleRecords(packet, matrix) {
 const cell = (value) => Math.floor(value / CELL_SIZE);
 const cellKey = (x, y, z) => `${x}:${y}:${z}`;
 
-function triangleIndex(records) {
+function triangleIndex(records,cellSize=CELL_SIZE) {
+  const cellAt=value=>Math.floor(value/cellSize);
   const bins = new Map();
   for (const record of records) {
-    const minimum = record.minimum.map(cell);
-    const maximum = record.maximum.map(cell);
+    const minimum = record.minimum.map(cellAt);
+    const maximum = record.maximum.map(cellAt);
     for (let x = minimum[0]; x <= maximum[0]; x += 1) {
       for (let y = minimum[1]; y <= maximum[1]; y += 1) {
         for (let z = minimum[2]; z <= maximum[2]; z += 1) {
@@ -213,12 +214,13 @@ function triangleIntersection(first, second, includeCoplanar = false) {
   return null;
 }
 
-function collision(packet, matrix, supportIndex, { includeCoplanar = false } = {}) {
+function collision(packet, matrix, supportIndex, { includeCoplanar = false,cellSize=CELL_SIZE } = {}) {
+  const cellAt=value=>Math.floor(value/cellSize);
   const candidates = triangleRecords(packet, matrix);
   for (const candidate of candidates) {
     const possible = new Map();
-    const minimum = candidate.minimum.map(cell);
-    const maximum = candidate.maximum.map(cell);
+    const minimum = candidate.minimum.map(cellAt);
+    const maximum = candidate.maximum.map(cellAt);
     for (let x = minimum[0]; x <= maximum[0]; x += 1) {
       for (let y = minimum[1]; y <= maximum[1]; y += 1) {
         for (let z = minimum[2]; z <= maximum[2]; z += 1) {
@@ -253,10 +255,32 @@ function collision(packet, matrix, supportIndex, { includeCoplanar = false } = {
   return null;
 }
 
-export function createTriangleSurfaceAdmissionReference(packet) {
+export function createTriangleSurfaceAdmissionReference(packet,{cellSize=CELL_SIZE}={}) {
+  if(!(Number.isFinite(cellSize)&&cellSize>0))throw new RangeError('surface cellSize must be positive');
+  const cellAt=value=>Math.floor(value/cellSize);
   const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
-  const index=triangleIndex(triangleRecords(packet,identity));
+  const index=triangleIndex(triangleRecords(packet,identity),cellSize);
   return Object.freeze({intersects(candidate){
-    return collision(candidate,identity,index,{includeCoplanar:true});
+    return collision(candidate,identity,index,{includeCoplanar:true,cellSize});
+  },firstHit(start,end){
+    const direction=subtract(end,start),squared=dot(direction,direction);
+    if(!(squared>0))return null;
+    const minimum=[0,1,2].map(axis=>Math.min(start[axis],end[axis]));
+    const maximum=[0,1,2].map(axis=>Math.max(start[axis],end[axis]));
+    const possible=new Map();
+    for(let x=cellAt(minimum[0]);x<=cellAt(maximum[0]);x++)
+      for(let y=cellAt(minimum[1]);y<=cellAt(maximum[1]);y++)
+        for(let z=cellAt(minimum[2]);z<=cellAt(maximum[2]);z++)
+          for(const triangle of index.get(cellKey(x,y,z))??[])possible.set(triangle.id,triangle);
+    let closest=null,parameter=Infinity;
+    for(const triangle of possible.values()){
+      if([0,1,2].some(axis=>triangle.maximum[axis]<minimum[axis]
+        ||triangle.minimum[axis]>maximum[axis]))continue;
+      const point=segmentTriangle(start,end,triangle.triangle);
+      if(!point)continue;
+      const fraction=dot(subtract(point,start),direction)/squared;
+      if(fraction>1e-8&&fraction<parameter){closest={point,triangleId:triangle.id,parameter:fraction};parameter=fraction;}
+    }
+    return closest?Object.freeze(closest):null;
   }});
 }

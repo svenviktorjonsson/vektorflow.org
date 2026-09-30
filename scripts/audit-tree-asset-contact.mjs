@@ -38,9 +38,7 @@ for (let offset = 0; offset < foliage.indices.length; offset += 3) {
   const triangle = foliage.indices.subarray(offset, offset + 3);
   const leaf = Math.floor(triangle[0] / leafStride);
   assert.ok(triangle.every((index) => Math.floor(index / leafStride) === leaf));
-  if (triangle.every((index) => foliage.uvs[index * 2 + 1] >= 0.16)) {
-    blades[leaf].push(...Array.from(triangle, (index) => index - leaf * leafStride));
-  }
+  blades[leaf].push(...Array.from(triangle, (index) => index - leaf * leafStride));
 }
 let penetrations = 0;
 for (let leaf = 0; leaf < total; leaf += 1) {
@@ -52,4 +50,4 @@ for (let leaf = 0; leaf < total; leaf += 1) {
   if (surface.intersects(packet)) penetrations += 1;
 }
 console.log(JSON.stringify({asset: url.pathname, leaves: total, penetrations}));
-assert.equal(penetrations, 0, 'Live tree asset contains penetrating leaf blades');
+assert.equal(penetrations, 0, 'Live tree asset contains leaves or stalks penetrating wood');

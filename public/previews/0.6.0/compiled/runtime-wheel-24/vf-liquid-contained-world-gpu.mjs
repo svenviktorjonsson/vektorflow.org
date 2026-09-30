@@ -864,10 +864,10 @@ fn resolve_wheel_motion_at(position_input: vec2<f32>, velocity_input: vec2<f32>,
 // Exact swept capsule/rim intersections; bounded work even at high speed.
 fn resolve_wheel_motion(origin: vec2<f32>, destination: vec2<f32>, velocity: vec2<f32>, radius: f32) -> ContactResult {
   let start=resolve_wheel_motion_at(origin,velocity,radius,params.terrain.x,0.0);
-  let result=swept_wheel_motion(start.position,destination,start.velocity,params.terrain.zw,
+  let result=swept_wheel_motion_with_surface(start.position,destination,start.velocity,params.terrain.zw,
     WHEEL_RADIUS-radius-WHEEL_BAR_HALF_WIDTH-WHEEL_TRANSPORT_SKIN,
-    radius+WHEEL_BAR_HALF_WIDTH+WHEEL_TRANSPORT_SKIN,params.terrain.x);
-  return resolve_wheel_motion_at(result.position,result.velocity,radius,params.terrain.x,0.0);
+    radius+WHEEL_BAR_HALF_WIDTH+WHEEL_TRANSPORT_SKIN,params.terrain.x,params.terrain.y);
+  return resolve_wheel_motion_at(result.position,result.velocity,radius,params.terrain.x,params.terrain.y);
 }
 
 // Newtonian wall shear transfers tangential momentum into the kinematic drum.
@@ -877,14 +877,19 @@ fn apply_wheel_wall_shear(position: vec2<f32>, velocity: vec2<f32>, radius: f32)
   let offset = position - params.terrain.zw;
   let distance = length(offset);
   let gap = WHEEL_RADIUS - radius - WHEEL_BAR_HALF_WIDTH - distance;
-  if (gap >= params.fluid.z || distance < 1.0e-8) { return velocity; }
-  let tangent = vec2<f32>(-offset.y, offset.x) / distance;
-  let weight = clamp(1.0 - max(0.0, gap) / params.fluid.z, 0.0, 1.0);
   let kinematic_viscosity = params.material.w / params.material.x;
-  let rate = kinematic_viscosity * weight
-    / max(params.fluid.y * params.fluid.y, 1.0e-12);
-  let fraction = 1.0 - exp(-rate * params.fluid.x);
-  return velocity - tangent * dot(velocity, tangent) * fraction;
+  let boundary_layer = params.fluid.y * 0.5;
+  let scale = kinematic_viscosity * params.fluid.x
+    / max(boundary_layer * boundary_layer, 1.0e-12);
+  var result = velocity;
+  if (gap < params.fluid.z && distance > 1.0e-8) {
+    let tangent = vec2<f32>(-offset.y, offset.x) / distance;
+    let weight = clamp(1.0 - max(0.0, gap) / params.fluid.z, 0.0, 1.0);
+    let fraction = 1.0 - exp(-scale * weight);
+    let wall_tangent_speed = params.terrain.y * distance;
+    result = result - tangent * (dot(result, tangent) - wall_tangent_speed) * fraction;
+  }
+  return result;
 }
 
 @compute @workgroup_size(128)
@@ -1977,6 +1982,15 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
   let encodedWheelAngle = null;
   const wheelCenter = Object.freeze(options.geometry?.center ?? [0, 0.32]);
   const paramsBytes = new ArrayBuffer(LIQUID_PARTICLE_WORLD_GPU_ABI.parameterBytes);
+  // Queue writes and submissions are ordered, so one immutable-for-each-
+  // submission staging buffer can be reused without allocating every frame.
+  const wheelSweepBuffer = createBuffer(device, 'VKF reusable wheel sweep parameters',
+    LIQUID_PARTICLE_WORLD_GPU_ABI.parameterBytes * 2,
+    GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
+  const maximumMovingSteps = 16;
+  const wheelStepBuffer = createBuffer(device, 'VKF moving wheel substep parameters',
+    LIQUID_PARTICLE_WORLD_GPU_ABI.parameterBytes * maximumMovingSteps,
+    GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
   const diffuseParamsBytes = new ArrayBuffer(LIQUID_PARTICLE_WORLD_GPU_ABI.parameterBytes);
   const paramsU32 = new Uint32Array(paramsBytes);
   const paramsF32 = new Float32Array(paramsBytes);
@@ -2054,6 +2068,47 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     pass.end(); gridReady = true; frameIndex += count;
   };
   const step = (encoder, timeStep = policy.timeStep) => stepMany(encoder, 1, timeStep);
+  const stepMovingWheel = (encoder, count) => {
+    if (!Number.isInteger(count) || count < 1 || count > maximumMovingSteps) {
+      throw new RangeError('Moving wheel batch must contain one through 16 fixed steps');
+    }
+    if (encodedWheelAngle === null) encodedWheelAngle = wheelAngle;
+    const fromAngle = encodedWheelAngle;
+    const delta = wheelAngle - fromAngle;
+    const perStep = delta / count;
+    const angularVelocity = perStep / policy.timeStep;
+    updateParams(policy.timeStep);
+    updateDiffuseParams(policy.timeStep * count);
+    const stride = LIQUID_PARTICLE_WORLD_GPU_ABI.parameterBytes;
+    const substepBytes = new ArrayBuffer(stride * count);
+    const bytes = new Uint8Array(substepBytes);
+    for (let index = 0; index < count; index += 1) {
+      const offset = index * stride;
+      bytes.set(new Uint8Array(paramsBytes), offset);
+      const fields = new Float32Array(substepBytes, offset, stride / 4);
+      const oldAngle = fromAngle + perStep * index;
+      fields[24] = oldAngle + perStep;
+      fields[25] = angularVelocity;
+      fields.set([oldAngle, perStep, angularVelocity, policy.timeStep], 32);
+    }
+    device.queue.writeBuffer(wheelStepBuffer, 0, substepBytes);
+    for (let index = 0; index < count; index += 1) {
+      encoder.copyBufferToBuffer(wheelStepBuffer, index * stride, paramsBuffer, 0, stride);
+      const pass = encoder.beginComputePass({ label: 'VKF continuously moving wheel and liquid substep' });
+      dispatch(pass, 'sweep_wheel', seed.count);
+      buildGrid(pass);
+      encodeFixedStep(pass);
+      pass.end();
+    }
+    const diffuse = encoder.beginComputePass({ label: 'VKF moving liquid embedding state' });
+    diffuse.setPipeline(pipelines.update_diffuse_and_render);
+    diffuse.setBindGroup(0, diffuseBindGroup);
+    diffuse.dispatchWorkgroups(ceilDiv(policy.diffuseCapacity, 128));
+    diffuse.end();
+    gridReady = true;
+    encodedWheelAngle = wheelAngle;
+    frameIndex += count;
+  };
   const predictForces=(encoder)=>{
     const r=options.preventiveContact;if(!r)throw new Error('Preventive contact resources are required');
     // A publication uses its accepted elapsed interval. Restore this law's
@@ -2091,15 +2146,11 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     updateParams(policy.timeStep);
     const base=paramsBytes.slice(0),motion=paramsBytes.slice(0);
     new Float32Array(motion).set([encodedWheelAngle,delta,delta/elapsed,elapsed],32);
-    const staging=createBuffer(device,'VKF immutable wheel sweep parameters',base.byteLength*2,
-      GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);
-    device.queue.writeBuffer(staging,0,motion);device.queue.writeBuffer(staging,base.byteLength,base);
-    encoder.copyBufferToBuffer(staging,0,paramsBuffer,0,base.byteLength);
+    device.queue.writeBuffer(wheelSweepBuffer,0,motion);device.queue.writeBuffer(wheelSweepBuffer,base.byteLength,base);
+    encoder.copyBufferToBuffer(wheelSweepBuffer,0,paramsBuffer,0,base.byteLength);
     const pass=encoder.beginComputePass({label:'Swept rigid baffles'});dispatch(pass,'sweep_wheel',seed.count);pass.end();
     gridReady=false;
-    encoder.copyBufferToBuffer(staging,base.byteLength,paramsBuffer,0,base.byteLength);
-    // Destroy after submission, never before the encoder has consumed its copy.
-    queueMicrotask(()=>device.queue.onSubmittedWorkDone().then(()=>staging.destroy()));
+    encoder.copyBufferToBuffer(wheelSweepBuffer,base.byteLength,paramsBuffer,0,base.byteLength);
     encodedWheelAngle=wheelAngle;
   };
   const telemetryByteOffset = spatialGrid.telemetryByteOffset;
@@ -2187,6 +2238,9 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     if (!Number.isFinite(angle) || !Number.isFinite(angularVelocity)) {
       throw new TypeError('Liquid wheel state requires finite angle and angularVelocity');
     }
+    // Preserve the pose preceding the first swept update. Otherwise the
+    // first moving frame silently skips its entire baffle sweep.
+    if (encodedWheelAngle === null) encodedWheelAngle = wheelAngle;
     wheelAngle = angle;
     wheelAngularVelocity = angularVelocity;
     updateParams(policy.timeStep);
@@ -2194,7 +2248,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
   const destroy = () => {
     for (const buffer of [particleBuffer, cellCountsBuffer, cellItemsBuffer,
       diffuseBuffer, diffuseActiveBuffer, diffuseRenderBuffer, surfaceBuffer,
-      paramsBuffer, diffuseParamsBuffer]) {
+      paramsBuffer, diffuseParamsBuffer, wheelSweepBuffer, wheelStepBuffer]) {
       buffer.destroy();
     }
     pressureGeometryBuffer?.destroy();
@@ -2207,7 +2261,7 @@ export async function createLiquidParticleWorldGpuRuntime(deviceArgument, option
     solidGpuPacket, contactBoundaryStateHash: seed.boundaryPacket.stateHash,
     solidPhysicsStateHash: solidGpuPacket.stateHash,
     primaryCount: seed.count, diffuseCapacity: policy.diffuseCapacity,
-    gridCellCount, spatialGrid, pipelines: Object.freeze(pipelines), step, stepMany, sweepWheel, predictForces, publishParticles,
+    gridCellCount, spatialGrid, pipelines: Object.freeze(pipelines), step, stepMany, stepMovingWheel, sweepWheel, predictForces, publishParticles,
     telemetry: Object.freeze({ buffer: cellCountsBuffer,
       byteOffset: telemetryByteOffset, byteLength: telemetryByteLength,
       ...LIQUID_PARTICLE_WORLD_GPU_TELEMETRY }),

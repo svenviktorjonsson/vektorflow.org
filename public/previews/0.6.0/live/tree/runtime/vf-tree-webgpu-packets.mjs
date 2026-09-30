@@ -1029,8 +1029,8 @@ function leafContactBody(parameters, pose, outline) {
   for (let offset = 0; offset < builder.indices.length; offset += 6) {
     const triangle = builder.indices.slice(offset, offset + 3);
     triangles.push(triangle.map((index) => positions[index]));
-    // The short petiole is the attachment joint; only it may touch wood.
-    if (triangle.every((index) => builder.uvs[index * 2 + 1] >= 0.16)) bladeIndices.push(...triangle);
+    // The stalk is visible, so test it against wood as well as the blade.
+    bladeIndices.push(...triangle);
   }
   return {
     triangles,
@@ -1077,7 +1077,7 @@ function leafParameters(leafNode, transform, controls) {
   ];
 }
 
-function leafPose(transform, parameters, leafIndex, bend, twist) {
+function leafPose(transform, parameters, leafIndex, bend, twist, surfaceAttachment = null) {
   const origin = Array.from(transform.slice(0, 3));
   const direction = normalize(Array.from(transform.slice(3, 6)));
   const [first, second] = basis(direction);
@@ -1097,15 +1097,17 @@ function leafPose(transform, parameters, leafIndex, bend, twist) {
     scale(relaxedLongAxis, Math.cos(bend)), scale(relaxedNormal, Math.sin(bend)),
   ));
   const normal = normalize(cross(longAxis, wideAxis));
+  const petioleAxis=normalize(add(attachmentRadial,
+    scale(direction,0.24+0.06*(leafIndex%3))));
   const bladeLength = parameters[0];
   const bladeWidth = parameters[1];
   const petioleLength = parameters[4];
   const camber = parameters[5];
-  const attachment = add(
+  const attachment = surfaceAttachment ?? add(
     add(origin, scale(direction, transform[6] * parameters[6])),
     scale(attachmentRadial, transform[7] * 0.14),
   );
-  const bladeBase = add(attachment, scale(longAxis, petioleLength));
+  const bladeBase = add(attachment, scale(petioleAxis, petioleLength));
   const apex = add(
     add(bladeBase, scale(longAxis, bladeLength)),
     scale(normal, camber * 0.18),
@@ -1117,6 +1119,16 @@ function resolveLeafPose(transform, parameters, leafIndex, physics) {
   if (!physics.enabled) {
     return leafPose(transform, parameters, leafIndex, 0, 0);
   }
+  const origin=Array.from(transform.slice(0,3));
+  const direction=normalize(Array.from(transform.slice(3,6)));
+  const [first,second]=basis(direction);
+  const baseAngle=leafIndex*Math.PI*(3-Math.sqrt(5))+parameters[7];
+  const radial=add(scale(first,Math.cos(baseAngle)),scale(second,Math.sin(baseAngle)));
+  const hit=physics.woodSurface.firstHit(origin,add(origin,scale(radial,transform[7]*2)));
+  if(!hit){physics.rejectedLeaves+=1;return null;}
+  // Start the visible stalk just outside the actual bark mesh, not at the
+  // twig centreline or at a leaf-size offset that would make it float.
+  const attachment=add(hit.point,scale(radial,Math.max(0.004,transform[7]*0.005)));
   const candidates = [{ bend: 0, twist: 0, energy: 0 }];
   for (const magnitude of [0.28, 0.56, 0.86, 1.16, 1.42]) {
     for (const sign of [-1, 1]) {
@@ -1133,7 +1145,7 @@ function resolveLeafPose(transform, parameters, leafIndex, physics) {
   for (const candidate of candidates) {
     physics.candidateTests += 1;
     const pose = leafPose(
-      transform, parameters, leafIndex, candidate.bend, candidate.twist,
+      transform, parameters, leafIndex, candidate.bend, candidate.twist, attachment,
     );
     const body = leafContactBody(parameters, pose, physics.outline);
     if (leafBodyOverlaps(body, physics)) continue;
@@ -1325,7 +1337,7 @@ export function adaptTreeRenderPacketToWebGpuMeshesReference(
     enabled: leafContact === true,
     woodSurface: leafContact === true ? createTriangleSurfaceAdmissionReference({
       vertices: new Float32Array(wood.vertices), indices: new Uint32Array(wood.indices),
-    }) : null,
+    },{cellSize:0.06}) : null,
     bodies: [], cells: new Map(), candidateTests: 0, bentLeaves: 0,
     rejectedLeaves: 0, maximumBend: 0, maximumTwist: 0,
   };

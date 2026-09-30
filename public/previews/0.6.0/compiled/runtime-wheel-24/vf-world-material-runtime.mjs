@@ -42,7 +42,7 @@ export function materialInitialState(world, arena, grainRadiusOverride,
       seedMaximumX:c[0],seedMinimumY:c[1]-r*0.7,bedAtStone:c[1]-r*1.3,
       particleSpacing:p.spacing??0.009,restDensity:p.density??1000,
       viscosity:p.viscosity??1.8,timeStep:world.time_step,gravity:world.gravity,
-      densityIterations:16,maximumParticlesPerCell:192,
+      densityIterations:20,maximumParticlesPerCell:192,
       diffuseCapacity:Math.max(count,256)});
     const supportRadius=policy.particleSpacing*policy.supportScale;
     const particleMass=calibrateUniformLocalLiquidParticleMassReference({dimension:2,
@@ -118,11 +118,11 @@ export async function createMaterialWorld(device,canvas,compiled,world,arena,eng
   physics.setWheel({angle:world.geometry.rotation,angularVelocity:0});
   if(world.kind==='granular')physics.setSweepReference(world.geometry.rotation);
   const startPaused=engineeringOptions.startPaused===true;
-  return {world,physics,embedding,boundary,contact,time:0,accumulator:0,paused:startPaused,revision:0,angle:world.geometry.rotation,targetAngle:world.geometry.rotation,logicalAngle:world.geometry.rotation,
-    reset(){this.revision++;physics.reset();contact.reset();embedding.reset?.();this.pausedReferenceAngle=undefined;this.published=false;this.time=0;this.accumulator=0;this.paused=startPaused;this.angle=world.geometry.rotation;this.targetAngle=this.angle;this.logicalAngle=this.angle;
+  return {world,physics,embedding,boundary,contact,time:0,accumulator:0,paused:startPaused,revision:0,angle:world.geometry.rotation,targetAngle:world.geometry.rotation,logicalAngle:world.geometry.rotation,wheelRate:0,
+    reset(){this.revision++;physics.reset();contact.reset();embedding.reset?.();this.pausedReferenceAngle=undefined;this.published=false;this.time=0;this.accumulator=0;this.paused=startPaused;this.angle=world.geometry.rotation;this.targetAngle=this.angle;this.logicalAngle=this.angle;this.wheelRate=0;
       physics.setWheel({angle:world.geometry.rotation,angularVelocity:0});
       if(world.kind==='granular')physics.setSweepReference(world.geometry.rotation);},
-    advance(encoder,elapsed,targetAngle){
+    advance(encoder,elapsed,targetAngle,commandedOmega=0){
       this.targetAngle=targetAngle;
       if(this.paused){
         if(Math.abs(targetAngle-this.logicalAngle)<1e-7){
@@ -156,26 +156,34 @@ export async function createMaterialWorld(device,canvas,compiled,world,arena,eng
         contact.synchronizeExternalStep(this.time);
         return false;
       }
-      if(!this.paused)this.accumulator=Math.min(this.accumulator+elapsed,world.time_step*8);
-      if(Math.abs(targetAngle-this.logicalAngle)<1e-7){
-        const steps=Math.min(8,Math.floor((this.accumulator+world.time_step*1e-6)/world.time_step));
-        if(steps>0){
-          physics.setWheel({angle:this.logicalAngle,angularVelocity:0});
-          physics.stepMany(encoder,steps);
-          const advanced=steps*world.time_step;
-          this.accumulator=Math.max(0,this.accumulator-advanced);this.time+=advanced;this.angle=this.logicalAngle;
-          contact.synchronizeExternalStep(this.time);
-        }
-        return false;
+      // Keep real elapsed time as debt. Clamping it to eight substeps made
+      // simulation time freeze whenever a rotating frame took >33 ms.
+      this.accumulator+=elapsed;
+      const stepTime=world.time_step;
+      const steps=Math.min(16,Math.floor((this.accumulator+stepTime*1e-6)/stepTime));
+      const requested=targetAngle-this.logicalAngle;
+      if(Math.abs(commandedOmega)>1e-6&&Math.sign(commandedOmega)===Math.sign(requested))this.wheelRate=commandedOmega;
+      const rate=Math.min(20,Math.abs(this.wheelRate)||Math.abs(requested)/Math.max(elapsed,stepTime));
+      const duration=Math.max(steps*stepTime,stepTime);
+      const delta=Math.sign(requested)*Math.min(Math.abs(requested),rate*duration);
+      const nextAngle=this.logicalAngle+delta;
+      if(Math.abs(delta)>1e-8){
+        physics.setWheel({angle:nextAngle,angularVelocity:delta/duration});
+        if(steps>0)physics.stepMovingWheel(encoder,steps);
+        else physics.sweepWheel(encoder,Math.max(elapsed,stepTime));
+        this.angle=nextAngle;this.logicalAngle=nextAngle;
+        this.peakWheelSurfaceSpeed=Math.max(this.peakWheelSurfaceSpeed??0,
+          Math.abs(delta/duration)*world.geometry.radius);
+        device.queue.writeBuffer(contact.resources.control,4,new Float32Array([nextAngle]));
+      }else physics.setWheel({angle:this.logicalAngle,angularVelocity:0});
+      if(Math.abs(targetAngle-this.logicalAngle)<1e-7)this.wheelRate=0;
+      if(steps>0){
+        if(Math.abs(delta)<=1e-8)physics.stepMany(encoder,steps);
+        const advanced=steps*stepTime;
+        this.accumulator=Math.max(0,this.accumulator-advanced);this.time+=advanced;
       }
-      contact.beginFrame(encoder,{requestedDelta:targetAngle-this.logicalAngle,windowDuration:Math.max(elapsed,world.time_step),timeLimit:this.time+this.accumulator,paused:this.paused});
-      const budget=contact.eventBudget();
-      for(let consumed=0;consumed<budget;consumed++){if(!this.paused){contact.prepareForces(encoder);physics.predictForces(encoder);}contact.advance(encoder,{events:1});}
-      if(world.kind==='granular')physics.relaxContacts(encoder,64);
-      contact.prepareRepresentation(encoder);
-      if(physics.publishParticles)physics.publishParticles(encoder);
-      contact.finishFrame(encoder);
-      return true;
+      contact.synchronizeExternalStep(this.time);
+      return false;
     },accept(receipt){const advanced=receipt.time-this.time;this.accumulator=Math.max(0,this.accumulator-advanced);this.time=receipt.time;this.angle=receipt.angle;this.logicalAngle+=receipt.angularDelta;this.remainingTime=receipt.remainingTime;this.peakWheelSurfaceSpeed=receipt.peakWheelSurfaceSpeed;physics.setWheel({angle:this.angle,angularVelocity:0});},
     destroy(){contact.destroy();physics.destroy();embedding.destroy();boundary.destroy();}};
 }
@@ -208,7 +216,7 @@ export async function bootMaterialWorlds(compiled) {
   if(!adapter)throw new Error('No WebGPU adapter is available.');
   status.textContent='Starting compiled material World: creating GPU device…';
   const device=await adapter.requestDevice({requiredFeatures:adapter.features.has('timestamp-query')?['timestamp-query']:[]});
-  let stopped=false,visible=true,parentVisible=true,active=program.active_view,particles=program.views[program.active_view].embedding?.kind==='particles',angle=0,omega=0,drag=null,previous=null,pending=false,sandFramesInFlight=0,switching=false;
+  let stopped=false,visible=true,parentVisible=true,active=program.active_view,particles=program.views[program.active_view].embedding?.kind==='particles',angle=0,omega=0,drag=null,previous=null,programmaticInputTime=0,pending=false,sandFramesInFlight=0,liquidFramesInFlight=0,switching=false;
   const sandWorld=program.gpu_worlds.find(world=>world.kind==='granular');
   let sandWetness=0,sandRadius=sandWorld?.properties.radius??0.0075,
     sandFormation='bed';
@@ -256,7 +264,7 @@ export async function bootMaterialWorlds(compiled) {
     switching=true;drag=null;omega=0;
     for(const b of controls.querySelectorAll('button'))b.disabled=true;
     try{
-      if(pending||sandFramesInFlight>0)await device.queue.onSubmittedWorkDone();
+      if(pending||sandFramesInFlight>0||liquidFramesInFlight>0)await device.queue.onSubmittedWorkDone();
       await loader.ensure(materialLayerId(program.views[view]));
       current().targetAngle=angle;active=view;program.active_view=view;angle=current().targetAngle;previous=null;
       particles=program.views[view].embedding?.kind==='particles';errorBox.hidden=true;refreshControls();
@@ -281,7 +289,7 @@ export async function bootMaterialWorlds(compiled) {
     for(const element of controls.querySelectorAll('button,input'))element.disabled=true;
     status.textContent='Rebuilding the conserved sand formation…';
     try{
-      if(pending||sandFramesInFlight>0)await device.queue.onSubmittedWorkDone();
+      if(pending||sandFramesInFlight>0||liquidFramesInFlight>0)await device.queue.onSubmittedWorkDone();
       const old=applications.find(app=>app.world.kind==='granular');
       const arena=arenas.find(item=>item.layer.id===sandWorld.layer_id);
       const view=program.views.find(item=>item.world_id===sandWorld.world_id&&materialLayerId(item)===sandWorld.layer_id);
@@ -359,25 +367,25 @@ export async function bootMaterialWorlds(compiled) {
     if(stopped)return;
     requestAnimationFrame(frame);
     if(document.hidden||!visible||!parentVisible||switching){previous=null;return;}
-    if(pending||sandFramesInFlight>=2)return;
-    const elapsed=previous==null?0:Math.max(0,Math.min(.05,(timestamp-previous)/1000));previous=timestamp;
+    if(pending||(current().world.kind==='granular'?sandFramesInFlight>=2:liquidFramesInFlight>=3))return;
+    const elapsed=previous==null?0:Math.max(0,(timestamp-previous)/1000);previous=timestamp;
     try {
       const app=current();
       const revision=app.revision;
       const encoder=device.createCommandEncoder({label:'VKF authored material World frame'});
-      const updated=app.advance(encoder,elapsed,angle);
+      const updated=app.advance(encoder,elapsed,angle,omega);
       if(!updated){
         app.embedding.render(encoder,{time:app.time,wheelAngle:app.angle,mode:particles?'particles':app.world.kind==='liquid'?'fluid':'sand'});
         app.boundary.render(encoder,canvas.getContext('webgpu').getCurrentTexture().createView(),app.physics.policy,app.physics.wheel,app.angle);
         device.queue.submit([encoder.finish()]);
-        if(app.world.kind==='granular')sandFramesInFlight++;else pending=true;
+        if(app.world.kind==='granular')sandFramesInFlight++;else liquidFramesInFlight++;
         device.queue.onSubmittedWorkDone().then(()=>{
-          if(app.world.kind==='granular')sandFramesInFlight--;else pending=false;
+          if(app.world.kind==='granular')sandFramesInFlight--;else liquidFramesInFlight--;
           if(stopped||revision!==app.revision)return;
           refreshStatus();
           canvas.dataset.presentedFrames=String(Number(canvas.dataset.presentedFrames||0)+1);
         }).catch(error=>{
-          if(app.world.kind==='granular')sandFramesInFlight--;else pending=false;
+          if(app.world.kind==='granular')sandFramesInFlight--;else liquidFramesInFlight--;
           if(revision!==app.revision)return;fail(error);
         });
         canvas.dataset.renderedFrames=String(++frames);
@@ -403,7 +411,7 @@ export async function bootMaterialWorlds(compiled) {
     flip,
     setLayer(id,properties){const layer=program.layers.find(layer=>layer.id===id);if(!layer)throw new Error('unknown retained Layer');Object.assign(layer.properties,properties);
       const affected=applications.filter(app=>app.world.boundary_ids.includes(id));
-      if(properties.rotation!==undefined){if(!Number.isFinite(properties.rotation))throw new Error('rotation must be finite');for(const app of affected)app.targetAngle=properties.rotation;if(affected.includes(current())){angle=properties.rotation;omega=0;refreshStatus();}}},
+      if(properties.rotation!==undefined){if(!Number.isFinite(properties.rotation))throw new Error('rotation must be finite');for(const app of affected)app.targetAngle=properties.rotation;if(affected.includes(current())){const now=performance.now();const interval=programmaticInputTime>0?Math.max(1/240,(now-programmaticInputTime)/1000):1/60;omega=(properties.rotation-angle)/interval;programmaticInputTime=now;angle=properties.rotation;refreshStatus();}}},
     destroy(){stopped=true;observer.disconnect();loader.destroy();device.destroy();}};
   globalThis.__vfWorldLayerApplication=application;document.body.dataset.vfWorldLayerReady='true';
   requestAnimationFrame(frame);return application;
